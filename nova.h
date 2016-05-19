@@ -370,8 +370,9 @@ struct free_list {
  * The first block contains super blocks and reserved inodes;
  * The second block contains pointers to journal pages.
  * The third block contains pointers to inode tables.
+ * The fourth block contains snapshot timestamps.
  */
-#define	RESERVED_BLOCKS	3
+#define	RESERVED_BLOCKS	4
 
 struct inode_map {
 	struct mutex inode_table_mutex;
@@ -536,6 +537,19 @@ struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
 
 	return (struct inode_table *)((char *)nova_get_block(sb,
 		NOVA_DEF_BLOCK_SIZE_4K * 2) + cpu * CACHELINE_SIZE);
+}
+
+#define SNAPSHOT_TABLE_SIZE	512
+
+struct snapshot_table {
+	__le64 timestamp[SNAPSHOT_TABLE_SIZE];
+};
+
+static inline
+struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
+{
+	return (struct snapshot_table *)((char *)nova_get_block(sb,
+		NOVA_DEF_BLOCK_SIZE_4K * 3));
 }
 
 // BKDR String Hash Function
