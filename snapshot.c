@@ -57,6 +57,7 @@ int nova_print_snapshot_table(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, curr, count = 0;
+	u64 sec, nsec;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -72,7 +73,9 @@ int nova_print_snapshot_table(struct super_block *sb)
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		if (snapshot_table->timestamp[curr]) {
-			nova_dbg("%llu\n", snapshot_table->timestamp[curr]);
+			sec = snapshot_table->timestamp[curr] >> 32;
+			nsec = snapshot_table->timestamp[curr] & 0xFFFFFFFF;
+			nova_dbg("%d %llu.%llu\n", curr, sec, nsec);
 			count++;
 		}
 
@@ -82,6 +85,51 @@ int nova_print_snapshot_table(struct super_block *sb)
 	}
 
 	nova_dbg("%d snapshots\n", count);
+	return 0;
+}
+
+int nova_create_snapshot(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	u64 timestamp = 0;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	mutex_lock(&sbi->s_lock);
+	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
+			(CURRENT_TIME_SEC.tv_nsec);
+	snapshot_table->timestamp[sbi->curr_snapshot] = timestamp;
+	sbi->curr_snapshot++;
+	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
+		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
+	mutex_unlock(&sbi->s_lock);
+
+	return 0;
+}
+
+int nova_delete_snapshot(struct super_block *sb, int index)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
+		nova_dbg("%s: Invalid snapshot number %d\n", __func__, index);
+		return -EINVAL;
+	}
+
+	mutex_lock(&sbi->s_lock);
+	snapshot_table->timestamp[index] = 0;
+	mutex_unlock(&sbi->s_lock);
+
 	return 0;
 }
 
