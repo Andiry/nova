@@ -51,3 +51,37 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	nova_dbg("%s: failed\n", __func__);
 	return -EINVAL;
 }
+
+int nova_print_snapshot_table(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	int i, curr, count = 0;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	nova_dbg("NOVA sanpshot table:\n");
+
+	/*  Print in reverse order */
+	curr = sbi->curr_snapshot - 1;
+	if (curr < 0)
+		curr += SNAPSHOT_TABLE_SIZE;
+
+	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
+		if (snapshot_table->timestamp[curr]) {
+			nova_dbg("%llu\n", snapshot_table->timestamp[curr]);
+			count++;
+		}
+
+		curr--;
+		if (curr < 0)
+			curr += SNAPSHOT_TABLE_SIZE;
+	}
+
+	nova_dbg("%d snapshots\n", count);
+	return 0;
+}
+
