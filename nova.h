@@ -429,6 +429,8 @@ struct nova_sb_info {
 	int cpus;
 	struct proc_dir_entry *s_proc;
 
+	int curr_snapshot;
+
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
