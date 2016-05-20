@@ -1030,6 +1030,12 @@ int nova_append_link_change_entry(struct super_block *sb,
 void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
+/* snapshot.c */
+int nova_restore_snapshot_table(struct super_block *sb);
+int nova_print_snapshot_table(struct super_block *sb);
+int nova_create_snapshot(struct super_block *sb);
+int nova_delete_snapshot(struct super_block *sb, int index);
+
 /* super.c */
 extern struct super_block *nova_read_super(struct super_block *sb, void *data,
 	int silent);
