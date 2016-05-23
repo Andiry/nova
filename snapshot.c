@@ -52,7 +52,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	return -EINVAL;
 }
 
-int nova_print_snapshot_table(struct super_block *sb)
+int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
@@ -64,7 +64,7 @@ int nova_print_snapshot_table(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
-	nova_dbg("NOVA sanpshot table:\n");
+	seq_printf(seq, "========== NOVA snapshot table ==========\n");
 
 	/*  Print in reverse order */
 	curr = sbi->curr_snapshot - 1;
@@ -75,7 +75,7 @@ int nova_print_snapshot_table(struct super_block *sb)
 		if (snapshot_table->timestamp[curr]) {
 			sec = snapshot_table->timestamp[curr] >> 32;
 			nsec = snapshot_table->timestamp[curr] & 0xFFFFFFFF;
-			nova_dbg("%d %llu.%llu\n", curr, sec, nsec);
+			seq_printf(seq, "%d %llu.%llu\n", curr, sec, nsec);
 			count++;
 		}
 
@@ -84,7 +84,7 @@ int nova_print_snapshot_table(struct super_block *sb)
 			curr += SNAPSHOT_TABLE_SIZE;
 	}
 
-	nova_dbg("%d snapshots\n", count);
+	seq_printf(seq, "=========== Total %d snapshots ===========\n", count);
 	return 0;
 }
 

@@ -1031,7 +1031,7 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 
 /* snapshot.c */
 int nova_restore_snapshot_table(struct super_block *sb);
-int nova_print_snapshot_table(struct super_block *sb);
+int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq);
 int nova_create_snapshot(struct super_block *sb);
 int nova_delete_snapshot(struct super_block *sb, int index);
 
