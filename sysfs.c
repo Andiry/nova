@@ -68,6 +68,38 @@ static const struct file_operations nova_seq_timing_fops = {
 	.release	= single_release,
 };
 
+static int nova_seq_create_snapshot_show(struct seq_file *seq, void *v)
+{
+	seq_printf(seq, "Write to create a snapshot\n");
+	return 0;
+}
+
+static int nova_seq_create_snapshot_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nova_seq_create_snapshot_show,
+				PDE_DATA(inode));
+}
+
+ssize_t nova_seq_create_snapshot(struct file *filp, const char __user *buf,
+	size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = PDE_DATA(inode);
+
+	nova_create_snapshot(sb);
+	return len;
+}
+
+static const struct file_operations nova_seq_create_snapshot_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nova_seq_create_snapshot_open,
+	.read		= seq_read,
+	.write		= nova_seq_create_snapshot,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 void nova_sysfs_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -79,6 +111,8 @@ void nova_sysfs_init(struct super_block *sb)
 	if (sbi->s_proc) {
 		proc_create_data("timing_stats", S_IRUGO, sbi->s_proc,
 				 &nova_seq_timing_fops, sb);
+		proc_create_data("create_snapshot", S_IRUGO, sbi->s_proc,
+				 &nova_seq_create_snapshot_fops, sb);
 	}
 }
 
@@ -87,5 +121,6 @@ void nova_sysfs_exit(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
 	remove_proc_entry("timing_stats", sbi->s_proc);
+	remove_proc_entry("create_snapshot", sbi->s_proc);
 	remove_proc_entry(sbi->s_bdev->bd_disk->disk_name, nova_proc_root);
 }
