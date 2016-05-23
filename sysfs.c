@@ -102,6 +102,28 @@ static const struct file_operations nova_seq_create_snapshot_fops = {
 	.release	= single_release,
 };
 
+static int nova_seq_show_snapshots(struct seq_file *seq, void *v)
+{
+	struct super_block *sb = seq->private;
+
+	nova_print_snapshot_table(sb);
+	return 0;
+}
+
+static int nova_seq_show_snapshots_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nova_seq_show_snapshots,
+				PDE_DATA(inode));
+}
+
+static const struct file_operations nova_seq_show_snapshots_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nova_seq_show_snapshots_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 void nova_sysfs_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -115,6 +137,8 @@ void nova_sysfs_init(struct super_block *sb)
 				 &nova_seq_timing_fops, sb);
 		proc_create_data("create_snapshot", S_IRUGO, sbi->s_proc,
 				 &nova_seq_create_snapshot_fops, sb);
+		proc_create_data("snapshots", S_IRUGO, sbi->s_proc,
+				 &nova_seq_show_snapshots_fops, sb);
 	}
 }
 
@@ -124,5 +148,6 @@ void nova_sysfs_exit(struct super_block *sb)
 
 	remove_proc_entry("timing_stats", sbi->s_proc);
 	remove_proc_entry("create_snapshot", sbi->s_proc);
+	remove_proc_entry("snapshots", sbi->s_proc);
 	remove_proc_entry(sbi->s_bdev->bd_disk->disk_name, nova_proc_root);
 }
