@@ -46,6 +46,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		}
 
 		prev_timestamp = snapshot_table->timestamp[i];
+		sbi->latest_snapshot_time = prev_timestamp;
 	}
 
 	nova_dbg("%s: failed\n", __func__);
@@ -106,6 +107,7 @@ int nova_create_snapshot(struct super_block *sb)
 	nova_flush_buffer(&snapshot_table->timestamp[sbi->curr_snapshot],
 				CACHELINE_SIZE, 1);
 	sbi->curr_snapshot++;
+	sbi->latest_snapshot_time = timestamp;
 	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
 		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
 	mutex_unlock(&sbi->s_lock);
@@ -113,6 +115,7 @@ int nova_create_snapshot(struct super_block *sb)
 	return 0;
 }
 
+/* FIXME: 1) Snapshot hole 2) latest snapshot time update */
 int nova_delete_snapshot(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);

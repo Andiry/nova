@@ -430,6 +430,7 @@ struct nova_sb_info {
 	struct proc_dir_entry *s_proc;
 
 	int curr_snapshot;
+	u64 latest_snapshot_time;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
