@@ -336,7 +336,8 @@ void nova_invalidate_link_change_entry(struct super_block *sb,
 	if (old_link_change) {
 		addr = (void *)nova_get_block(sb, old_link_change);
 		old_entry = (struct nova_link_change_entry *)addr;
-		old_entry->invalid = 1;
+		if (old_entry_freeable(sb, old_entry->ctime))
+			old_entry->invalid = 1;
 	}
 }
 
