@@ -455,6 +455,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	int retval = -ENOMEM;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode *pidir;
+	struct nova_dentry *create_dentry = NULL, *delete_dentry;
 	u64 pidir_tail = 0, pi_tail = 0;
 	u64 old_linkc = 0;
 	int invalidate = 0;
@@ -469,7 +470,8 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
 				inode->i_ino, dir->i_ino);
-	retval = nova_remove_dentry(dentry, 0, 0, &pidir_tail);
+	retval = nova_remove_dentry(dentry, 0, 0, &pidir_tail,
+				&create_dentry, &delete_dentry);
 	if (retval)
 		goto out;
 
@@ -491,6 +493,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 					pi_tail, pidir_tail, invalidate);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
+	nova_invalidate_dentries(sb, create_dentry, delete_dentry);
 
 	NOVA_END_TIMING(unlink_t, unlink_time);
 	return 0;
@@ -602,6 +605,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	u64 old_linkc = 0;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_dentry *create_dentry = NULL, *delete_dentry;
 	int err = -ENOTEMPTY;
 	timing_t rmdir_time;
 
@@ -627,7 +631,8 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 		nova_dbg("empty directory %lu has nlink!=2 (%d), dir %lu",
 				inode->i_ino, inode->i_nlink, dir->i_ino);
 
-	err = nova_remove_dentry(dentry, -1, 0, &pidir_tail);
+	err = nova_remove_dentry(dentry, -1, 0, &pidir_tail,
+				&create_dentry, &delete_dentry);
 	if (err)
 		goto end_rmdir;
 
@@ -649,6 +654,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 						pi_tail, pidir_tail, 1);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
+	nova_invalidate_dentries(sb, create_dentry, delete_dentry);
 
 	NOVA_END_TIMING(rmdir_t, rmdir_time);
 	return err;
@@ -675,6 +681,8 @@ static int nova_rename(struct inode *old_dir,
 	u64 old_tail = 0, new_tail = 0;
 	u64 new_pi_tail = 0, old_pi_tail = 0;
 	u64 old_linkc1 = 0, old_linkc2 = 0;
+	struct nova_dentry *create_dentry1 = NULL, *delete_dentry1;
+	struct nova_dentry *create_dentry2 = NULL, *delete_dentry2;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
 	int entries = 0;
@@ -735,7 +743,8 @@ static int nova_rename(struct inode *old_dir,
 
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
-		err = nova_remove_dentry(new_dentry, 0,  0, &new_tail);
+		err = nova_remove_dentry(new_dentry, 0,  0, &new_tail,
+					&create_dentry1, &delete_dentry1);
 		if (err)
 			goto out;
 	}
@@ -752,7 +761,8 @@ static int nova_rename(struct inode *old_dir,
 	if (old_dir == new_dir)
 		old_tail = new_tail;
 
-	err = nova_remove_dentry(old_dentry, dec_link, old_tail, &old_tail);
+	err = nova_remove_dentry(old_dentry, dec_link, old_tail, &old_tail,
+					&create_dentry2, &delete_dentry2);
 	if (err)
 		goto out;
 
@@ -855,6 +865,8 @@ static int nova_rename(struct inode *old_dir,
 
 	nova_invalidate_link_change_entry(sb, old_linkc1);
 	nova_invalidate_link_change_entry(sb, old_linkc2);
+	nova_invalidate_dentries(sb, create_dentry1, delete_dentry1);
+	nova_invalidate_dentries(sb, create_dentry2, delete_dentry2);
 
 	spin_unlock(&sbi->journal_locks[cpu]);
 

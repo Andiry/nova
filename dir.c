@@ -66,7 +66,7 @@ static int nova_check_dentry_match(struct super_block *sb,
 
 static int nova_remove_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name, int namelen,
-	int replay)
+	int replay, struct nova_dentry **create_dentry)
 {
 	struct nova_dentry *entry;
 	unsigned long hash;
@@ -95,8 +95,8 @@ static int nova_remove_dir_radix_tree(struct super_block *sb,
 			return -EINVAL;
 		}
 
-		/* No need to flush */
-		entry->invalid = 1;
+		if (create_dentry)
+			*create_dentry = entry;
 	}
 
 	return 0;
@@ -309,7 +309,8 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
  * already been logged for consistency
  */
 int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
-	u64 *new_tail)
+	u64 *new_tail, struct nova_dentry **create_dentry,
+	struct nova_dentry **delete_dentry)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -335,9 +336,21 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 				dentry, loglen, tail, dec_link, &curr_tail);
 	*new_tail = curr_tail;
 
-	nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0);
+	*delete_dentry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
+	nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0,
+					create_dentry);
 	NOVA_END_TIMING(remove_dentry_t, remove_dentry_time);
 	return 0;
+}
+
+/* Create dentry and delete dentry must be invalidated together */
+void nova_invalidate_dentries(struct super_block *sb,
+	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry)
+{
+	if (create_dentry && old_entry_freeable(sb, create_dentry->mtime)) {
+		create_dentry->invalid = 1;
+		delete_dentry->invalid = 1;
+	}
 }
 
 inline int nova_replay_add_dentry(struct super_block *sb,
@@ -357,7 +370,7 @@ inline int nova_replay_remove_dentry(struct super_block *sb,
 {
 	nova_dbg_verbose("%s: remove %s\n", __func__, entry->name);
 	nova_remove_dir_radix_tree(sb, sih, entry->name,
-					entry->name_len, 1);
+					entry->name_len, 1, NULL);
 	return 0;
 }
 
