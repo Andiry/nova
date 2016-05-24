@@ -326,9 +326,24 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	NOVA_END_TIMING(link_trans_t, trans_time);
 }
 
+/* Invalidate old link change entry */
+void nova_invalidate_link_change_entry(struct super_block *sb,
+	u64 old_link_change)
+{
+	struct nova_link_change_entry *old_entry;
+	void *addr;
+
+	if (old_link_change) {
+		addr = (void *)nova_get_block(sb, old_link_change);
+		old_entry = (struct nova_link_change_entry *)addr;
+		old_entry->invalid = 1;
+	}
+}
+
 /* Returns new tail after append */
 int nova_append_link_change_entry(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail)
+	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail,
+	u64 *old_linkc)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -354,6 +369,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	entry->generation = cpu_to_le32(inode->i_generation);
 	nova_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
+	*old_linkc = sih->last_link_change;
 	sih->last_link_change = curr_p;
 
 	NOVA_END_TIMING(append_link_change_t, append_time);
@@ -382,6 +398,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode *pidir;
 	u64 pidir_tail = 0, pi_tail = 0;
+	u64 old_linkc = 0;
 	int err = -ENOMEM;
 	timing_t link_time;
 
@@ -412,7 +429,8 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	inode->i_ctime = CURRENT_TIME_SEC;
 	inc_nlink(inode);
 
-	err = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
+	err = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail,
+						&old_linkc);
 	if (err) {
 		iput(inode);
 		goto out;
@@ -421,6 +439,8 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	d_instantiate(dentry, inode);
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail, 0);
+
+	nova_invalidate_link_change_entry(sb, old_linkc);
 
 out:
 	NOVA_END_TIMING(link_t, link_time);
@@ -435,6 +455,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode *pidir;
 	u64 pidir_tail = 0, pi_tail = 0;
+	u64 old_linkc = 0;
 	int invalidate = 0;
 	timing_t unlink_time;
 
@@ -460,12 +481,15 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 		drop_nlink(inode);
 	}
 
-	retval = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
+	retval = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail,
+						&old_linkc);
 	if (retval)
 		goto out;
 
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
 					pi_tail, pidir_tail, invalidate);
+
+	nova_invalidate_link_change_entry(sb, old_linkc);
 
 	NOVA_END_TIMING(unlink_t, unlink_time);
 	return 0;
@@ -574,6 +598,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode), *pidir;
 	u64 pidir_tail = 0, pi_tail = 0;
+	u64 old_linkc = 0;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	int err = -ENOTEMPTY;
@@ -614,12 +639,15 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 
 	nova_delete_dir_tree(sb, sih);
 
-	err = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail);
+	err = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail,
+						&old_linkc);
 	if (err)
 		goto end_rmdir;
 
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
 						pi_tail, pidir_tail, 1);
+
+	nova_invalidate_link_change_entry(sb, old_linkc);
 
 	NOVA_END_TIMING(rmdir_t, rmdir_time);
 	return err;
@@ -643,7 +671,9 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_lite_journal_entry entry, entry1;
 	struct nova_dentry *father_entry = NULL;
 	char *head_addr = NULL;
-	u64 old_tail = 0, new_tail = 0, new_pi_tail = 0, old_pi_tail = 0;
+	u64 old_tail = 0, new_tail = 0;
+	u64 new_pi_tail = 0, old_pi_tail = 0;
+	u64 old_linkc1 = 0, old_linkc2 = 0;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
 	int entries = 0;
@@ -683,8 +713,8 @@ static int nova_rename(struct inode *old_dir,
 
 	old_pi = nova_get_inode(sb, old_inode);
 	old_inode->i_ctime = CURRENT_TIME;
-	err = nova_append_link_change_entry(sb, old_pi,
-						old_inode, 0, &old_pi_tail);
+	err = nova_append_link_change_entry(sb, old_pi, old_inode, 0,
+						&old_pi_tail, &old_linkc1);
 	if (err)
 		goto out;
 
@@ -740,7 +770,8 @@ static int nova_rename(struct inode *old_dir,
 			drop_nlink(new_inode);
 
 		err = nova_append_link_change_entry(sb, new_pi,
-						new_inode, 0, &new_pi_tail);
+						new_inode, 0, &new_pi_tail,
+						&old_linkc2);
 		if (err)
 			goto out;
 	}
@@ -820,6 +851,10 @@ static int nova_rename(struct inode *old_dir,
 	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
+
+	nova_invalidate_link_change_entry(sb, old_linkc1);
+	nova_invalidate_link_change_entry(sb, old_linkc2);
+
 	spin_unlock(&sbi->journal_locks[cpu]);
 
 	NOVA_END_TIMING(rename_t, rename_time);
