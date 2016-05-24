@@ -1361,7 +1361,8 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (last_setattr) {
 		addr = (void *)nova_get_block(sb, last_setattr);
 		old_entry = (struct nova_setattr_logentry *)addr;
-		old_entry->invalid = 1;
+		if (old_entry_freeable(sb, old_entry->mtime))
+			old_entry->invalid = 1;
 	}
 
 	/* Only after log entry is committed, we can truncate size */
