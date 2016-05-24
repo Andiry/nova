@@ -570,6 +570,12 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	if (nova_restore_snapshot_table(sb)) {
+		retval = -EINVAL;
+		printk(KERN_ERR "Restore snapshot table failed\n");
+		goto out;
+	}
+
 	blocksize = le32_to_cpu(super->s_blocksize);
 	nova_set_blocksize(sb, blocksize);
 
