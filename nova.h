@@ -961,7 +961,10 @@ int nova_append_dir_init_entries(struct super_block *sb,
 extern int nova_add_dentry(struct dentry *dentry, u64 ino,
 	int inc_link, u64 tail, u64 *new_tail);
 extern int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
-	u64 *new_tail);
+	u64 *new_tail, struct nova_dentry **create_dentry,
+	struct nova_dentry **delete_dentry);
+void nova_invalidate_dentries(struct super_block *sb,
+	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry);
 void nova_print_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long ino);
 void nova_delete_dir_tree(struct super_block *sb,
