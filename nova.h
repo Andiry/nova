@@ -1027,8 +1027,11 @@ extern long nova_compat_ioctl(struct file *file, unsigned int cmd,
 extern const struct inode_operations nova_dir_inode_operations;
 extern const struct inode_operations nova_special_inode_operations;
 extern struct dentry *nova_get_parent(struct dentry *child);
+void nova_invalidate_link_change_entry(struct super_block *sb,
+	u64 old_link_change);
 int nova_append_link_change_entry(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail);
+	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail,
+	u64 *old_linkc);
 void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 

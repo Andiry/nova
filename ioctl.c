@@ -40,6 +40,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return put_user(flags, (int __user *)arg);
 	case FS_IOC_SETFLAGS: {
 		unsigned int oldflags;
+		u64 old_linkc = 0;
 
 		ret = mnt_want_write_file(filp);
 		if (ret)
@@ -77,9 +78,11 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		nova_memunlock_inode(sb, pi);
 		ret = nova_append_link_change_entry(sb, pi, inode, 0,
-							&new_tail);
-		if (!ret)
+							&new_tail, &old_linkc);
+		if (!ret) {
 			nova_update_tail(pi, new_tail);
+			nova_invalidate_link_change_entry(sb, old_linkc);
+		}
 		nova_memlock_inode(sb, pi);
 		mutex_unlock(&inode->i_mutex);
 flags_out:
@@ -89,7 +92,9 @@ flags_out:
 	case FS_IOC_GETVERSION:
 		return put_user(inode->i_generation, (int __user *)arg);
 	case FS_IOC_SETVERSION: {
+		u64 old_linkc = 0;
 		__u32 generation;
+
 		if (!inode_owner_or_capable(inode))
 			return -EPERM;
 		ret = mnt_want_write_file(filp);
@@ -105,9 +110,11 @@ flags_out:
 
 		nova_memunlock_inode(sb, pi);
 		ret = nova_append_link_change_entry(sb, pi, inode, 0,
-							&new_tail);
-		if (!ret)
+							&new_tail, &old_linkc);
+		if (!ret) {
 			nova_update_tail(pi, new_tail);
+			nova_invalidate_link_change_entry(sb, old_linkc);
+		}
 		nova_memlock_inode(sb, pi);
 		mutex_unlock(&inode->i_mutex);
 setversion_out:
