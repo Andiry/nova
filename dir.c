@@ -463,14 +463,11 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			entry->name, entry->name_len,
 			le16_to_cpu(entry->de_len));
 
-		if (entry->ino > 0) {
-			if (entry->invalid == 0) {
-				/* A valid entry to add */
+		if (entry->invalid == 0) {
+			if (entry->ino > 0)
 				ret = nova_replay_add_dentry(sb, sih, entry);
-			}
-		} else {
-			/* Delete the entry */
-			ret = nova_replay_remove_dentry(sb, sih, entry);
+			else
+				ret = nova_replay_remove_dentry(sb, sih, entry);
 		}
 
 		if (ret) {
