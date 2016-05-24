@@ -228,12 +228,14 @@ struct nova_setattr_logentry {
 	__le32	mtime;
 	__le32	ctime;
 	__le64	size;
+	u8	invalid;
+	u8	paddings[7];
 } __attribute((__packed__));
 
 /* Do we need this to be 32 bytes? */
 struct nova_link_change_entry {
 	u8	entry_type;
-	u8	padding;
+	u8	invalid;
 	__le16	links;
 	__le32	ctime;
 	__le32	flags;
