@@ -1298,7 +1298,7 @@ out:
 /* Returns new tail after append */
 static u64 nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	u64 tail)
+	u64 tail, u64 *last_setattr)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -1320,6 +1320,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	/* inode is already updated with attr */
 	nova_update_setattr_entry(inode, entry, attr);
 	new_tail = curr_p + size;
+	*last_setattr = sih->last_setattr;
 	sih->last_setattr = curr_p;
 
 	NOVA_END_TIMING(append_setattr_t, append_time);
@@ -1333,8 +1334,11 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_setattr_logentry *old_entry;
+	void *addr;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
+	u64 last_setattr = 0;
 	loff_t oldsize = inode->i_size;
 	u64 new_tail;
 	timing_t setattr_time;
@@ -1362,9 +1366,17 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		return ret;
 
 	/* We are holding i_mutex so OK to append the log */
-	new_tail = nova_append_setattr_entry(sb, pi, inode, attr, 0);
+	new_tail = nova_append_setattr_entry(sb, pi, inode, attr, 0,
+						&last_setattr);
 
 	nova_update_tail(pi, new_tail);
+
+	/* Invalidate old setattr entry */
+	if (last_setattr) {
+		addr = (void *)nova_get_block(sb, last_setattr);
+		old_entry = (struct nova_setattr_logentry *)addr;
+		old_entry->invalid = 1;
+	}
 
 	/* Only after log entry is committed, we can truncate size */
 	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != oldsize ||
