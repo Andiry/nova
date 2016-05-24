@@ -103,6 +103,8 @@ int nova_create_snapshot(struct super_block *sb)
 	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
 			(CURRENT_TIME_SEC.tv_nsec);
 	snapshot_table->timestamp[sbi->curr_snapshot] = timestamp;
+	nova_flush_buffer(&snapshot_table->timestamp[sbi->curr_snapshot],
+				CACHELINE_SIZE, 1);
 	sbi->curr_snapshot++;
 	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
 		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
@@ -128,6 +130,8 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 
 	mutex_lock(&sbi->s_lock);
 	snapshot_table->timestamp[index] = 0;
+	nova_flush_buffer(&snapshot_table->timestamp[index],
+				CACHELINE_SIZE, 1);
 	mutex_unlock(&sbi->s_lock);
 
 	return 0;
