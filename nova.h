@@ -560,6 +560,7 @@ struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 		NOVA_DEF_BLOCK_SIZE_4K * SNAPSHOT_TABLE_START));
 }
 
+/* Old entry is freeable if it is appended after the latest snapshot */
 static inline int old_entry_freeable(struct super_block *sb, u32 timestamp)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
