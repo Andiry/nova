@@ -146,8 +146,11 @@ void nova_sysfs_exit(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	remove_proc_entry("timing_stats", sbi->s_proc);
-	remove_proc_entry("create_snapshot", sbi->s_proc);
-	remove_proc_entry("snapshots", sbi->s_proc);
-	remove_proc_entry(sbi->s_bdev->bd_disk->disk_name, nova_proc_root);
+	if (sbi->s_proc) {
+		remove_proc_entry("timing_stats", sbi->s_proc);
+		remove_proc_entry("create_snapshot", sbi->s_proc);
+		remove_proc_entry("snapshots", sbi->s_proc);
+		remove_proc_entry(sbi->s_bdev->bd_disk->disk_name,
+					nova_proc_root);
+	}
 }
