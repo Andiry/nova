@@ -513,8 +513,11 @@ int nova_assign_write_entry(struct super_block *sb,
 			old_entry = radix_tree_deref_slot(pentry);
 			old_nvmm = get_nvmm(sb, sih, old_entry, curr_pgoff);
 			if (free) {
-				old_entry->invalid_pages++;
-				nova_free_data_blocks(sb, pi, old_nvmm, 1);
+				if (old_entry_freeable(sb, old_entry->mtime)) {
+					old_entry->invalid_pages++;
+					nova_free_data_blocks(sb, pi,
+								old_nvmm, 1);
+				}
 				pi->i_blocks--;
 			}
 			radix_tree_replace_slot(pentry, entry);
