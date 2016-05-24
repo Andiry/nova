@@ -1577,6 +1577,8 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	struct nova_setattr_logentry *setattr_entry;
 	struct nova_file_write_entry *entry;
 	struct nova_dentry *dentry;
+	struct nova_setattr_logentry *setattr_entry;
+	struct nova_link_change_entry *linkc_entry;
 	void *addr;
 	u8 type;
 	bool ret = true;
@@ -1585,7 +1587,8 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	type = nova_get_entry_type(addr);
 	switch (type) {
 		case SET_ATTR:
-			if (sih->last_setattr == curr_p)
+			setattr_entry = (struct nova_setattr_logentry *)addr;
+			if (setattr_entry->invalid == 0)
 				ret = false;
 			/* Do not invalidate setsize entries */
 			setattr_entry = (struct nova_setattr_logentry *)addr;
@@ -1594,7 +1597,8 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 			*length = sizeof(struct nova_setattr_logentry);
 			break;
 		case LINK_CHANGE:
-			if (sih->last_link_change == curr_p)
+			linkc_entry = (struct nova_link_change_entry *)addr;
+			if (linkc_entry->invalid == 0)
 				ret = false;
 			*length = sizeof(struct nova_link_change_entry);
 			break;
