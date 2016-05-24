@@ -1580,7 +1580,7 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 			break;
 		case DIR_LOG:
 			dentry = (struct nova_dentry *)addr;
-			if (dentry->ino && dentry->invalid == 0)
+			if (dentry->invalid == 0)
 				ret = false;
 			*length = le16_to_cpu(dentry->de_len);
 			break;
