@@ -792,6 +792,9 @@ void nova_init_header(struct super_block *sb,
 	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
 	INIT_RADIX_TREE(&sih->cache_tree, GFP_ATOMIC);
 	sih->i_mode = i_mode;
+	sih->valid_bytes = 0;
+	sih->last_setattr = 0;
+	sih->last_link_change = 0;
 }
 
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
