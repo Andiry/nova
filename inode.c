@@ -555,7 +555,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	ino = inode->i_ino;
 
 	/* check if the inode is active. */
-	if (inode->i_mode == 0) {
+	if (inode->i_mode == 0 || pi->deleted == 1) {
 		/* this inode is deleted */
 		ret = -ESTALE;
 		goto bad_inode;
@@ -782,6 +782,8 @@ static int nova_free_inode(struct inode *inode,
 	NOVA_START_TIMING(free_inode_t, free_time);
 
 	pi = nova_get_inode(sb, inode);
+
+	pi->deleted = 1;
 
 	if (pi->valid) {
 		nova_dbg("%s: inode %lu still valid\n",
@@ -1084,6 +1086,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->log_head = 0;
 	pi->log_tail = 0;
 	pi->nova_ino = ino;
+	pi->deleted = 0;
 	pi->i_create_time = CURRENT_TIME_SEC.tv_sec;
 	nova_memlock_inode(sb, pi);
 

@@ -78,8 +78,9 @@
  */
 struct nova_inode {
 	/* first 48 bytes */
-	__le16	i_rsvd;		/* reserved. used to be checksum */
+	u8	i_rsvd;		/* reserved. used to be checksum */
 	u8	valid;		/* Is this inode valid? */
+	u8	deleted;	/* Is this inode deleted? */
 	u8	i_blk_type;	/* data block size this inode uses */
 	__le32	i_flags;	/* Inode flags */
 	__le64	i_size;		/* Size of data in bytes */
@@ -92,7 +93,7 @@ struct nova_inode {
 	/*
 	 * Blocks count. This field is updated in-place;
 	 * We just make sure it is consistent upon clean umount,
-	 * and it is recovered in DFS recovery if power failure occurs.
+	 * and it is recovered in failure recovery if power failure occurs.
 	 */
 	__le64	i_blocks;
 	__le64	i_xattr;	/* Extended attribute block */
