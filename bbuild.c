@@ -808,6 +808,9 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	if (!pi)
 		NOVA_ASSERT(0);
 
+	if (pi->deleted == 1)
+		return -EINVAL;
+
 	nova_ino = pi->nova_ino;
 
 	nova_dbgv("%s: inode %lu, addr 0x%llx, valid %d, "
@@ -1066,7 +1069,7 @@ static int nova_recover_inode_pages(struct super_block *sb,
 	if (!pi)
 		NOVA_ASSERT(0);
 
-	if (pi->valid == 0)
+	if (pi->deleted == 1)
 		return 0;
 
 	nova_ino = pi->nova_ino;
@@ -1231,7 +1234,7 @@ static int failure_thread_func(void *data)
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
 			pi = nova_get_block(sb, pi_addr);
-			if (pi->valid) {
+			if (pi->deleted == 0) {
 				nova_recover_inode_pages(sb, &sih, ring,
 						pi_addr, global_bm[cpuid]);
 				nova_failure_update_inodetree(sb, pi,
