@@ -24,8 +24,8 @@ int nova_restore_snapshot_table(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	int i;
-	u64 prev_timestamp;
+	int i, index;
+	u64 prev_timestamp, recover_timestamp;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -37,18 +37,44 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		/* Find first unused slot */
 		if (snapshot_table->timestamp[i] == 0) {
 			sbi->curr_snapshot = i;
-			return 0;
+			break;
 		}
 
 		if (snapshot_table->timestamp[i] < prev_timestamp) {
 			sbi->curr_snapshot = i;
-			return 0;
+			break;
 		}
 
 		prev_timestamp = snapshot_table->timestamp[i];
 		sbi->latest_snapshot_time = prev_timestamp;
 	}
 
+	if (i == SNAPSHOT_TABLE_SIZE)
+		goto fail;
+
+	if (sbi->recover_snapshot) {
+		index = sbi->recover_snapshot_index;
+		if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
+			nova_dbg("%s: recover invalid snapshot %d\n",
+					__func__, index);
+			sbi->recover_snapshot = 0;
+			goto fail;
+		}
+
+		recover_timestamp = snapshot_table->timestamp[index];
+		if (recover_timestamp == 0) {
+			nova_dbg("%s: recover invalid snapshot %d\n",
+					__func__, index);
+			sbi->recover_snapshot = 0;
+			goto fail;
+		}
+
+		sbi->recover_snapshot_time = recover_timestamp;
+		nova_dbg("recover snapshot %d\n", index);
+	}
+
+	return 0;
+fail:
 	nova_dbg("%s: failed\n", __func__);
 	return -EINVAL;
 }

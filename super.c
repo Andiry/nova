@@ -144,7 +144,7 @@ static loff_t nova_max_size(int bits)
 }
 
 enum {
-	Opt_bpi, Opt_init, Opt_mode, Opt_uid,
+	Opt_bpi, Opt_init, Opt_snapshot, Opt_mode, Opt_uid,
 	Opt_gid, Opt_blocksize, Opt_wprotect,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
 	Opt_dbgmask, Opt_err
@@ -153,6 +153,7 @@ enum {
 static const match_table_t tokens = {
 	{ Opt_bpi,	     "bpi=%u"		  },
 	{ Opt_init,	     "init"		  },
+	{ Opt_snapshot,	     "snapshot=%u"	  },
 	{ Opt_mode,	     "mode=%o"		  },
 	{ Opt_uid,	     "uid=%u"		  },
 	{ Opt_gid,	     "gid=%u"		  },
@@ -209,6 +210,12 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 			if (remount)
 				goto bad_opt;
 			set_opt(sbi->s_mount_opt, FORMAT);
+			break;
+		case Opt_snapshot:
+			if (match_int(&args[0], &option))
+				goto bad_val;
+			sbi->recover_snapshot = 1;
+			sbi->recover_snapshot_index = option;
 			break;
 		case Opt_err_panic:
 			clear_opt(sbi->s_mount_opt, ERRORS_CONT);

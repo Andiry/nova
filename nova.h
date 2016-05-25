@@ -432,6 +432,10 @@ struct nova_sb_info {
 	int curr_snapshot;
 	u64 latest_snapshot_time;
 
+	int recover_snapshot;
+	int recover_snapshot_index;
+	u64 recover_snapshot_time;
+
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
