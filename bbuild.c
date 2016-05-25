@@ -1234,7 +1234,7 @@ static int failure_thread_func(void *data)
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
 			pi = nova_get_block(sb, pi_addr);
-			if (pi->deleted == 0) {
+			if (pi->i_mode && pi->deleted == 0) {
 				nova_recover_inode_pages(sb, &sih, ring,
 						pi_addr, global_bm[cpuid]);
 				nova_failure_update_inodetree(sb, pi,
