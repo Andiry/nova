@@ -577,6 +577,16 @@ static inline int old_entry_freeable(struct super_block *sb, u32 timestamp)
 	return 0;
 }
 
+static inline int pass_recover_snapshot(struct super_block *sb, u32 timestamp)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (timestamp > (sbi->recover_snapshot_time >> 32))
+		return 1;
+
+	return 0;
+}
+
 // BKDR String Hash Function
 static inline unsigned long BKDRHash(const char *str, int length)
 {
@@ -1055,6 +1065,8 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
 /* snapshot.c */
+int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
+	u8 type);
 int nova_restore_snapshot_table(struct super_block *sb);
 int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq);
 int nova_create_snapshot(struct super_block *sb);

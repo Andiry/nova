@@ -2201,6 +2201,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
@@ -2239,6 +2240,12 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 		addr = (void *)nova_get_block(sb, curr_p);
 		type = nova_get_entry_type(addr);
+
+		if (sbi->recover_snapshot) {
+			if (nova_encounter_recover_snapshot(sb, addr, type))
+				break;
+		}
+
 		switch (type) {
 			case SET_ATTR:
 				attr_entry =
