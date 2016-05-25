@@ -888,6 +888,7 @@ unsigned long nova_get_last_blocknr(struct super_block *sb,
 void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -903,6 +904,10 @@ void nova_evict_inode(struct inode *inode)
 		NOVA_ASSERT(0);
 		goto out;
 	}
+
+	/* This inode exists in at least one snapshot. Don't delete it yet. */
+	if (pi->i_create_time <= (sbi->latest_snapshot_time >> 32))
+		goto out;
 
 	NOVA_START_TIMING(evict_inode_t, evict_time);
 	nova_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
@@ -1079,6 +1084,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->log_head = 0;
 	pi->log_tail = 0;
 	pi->nova_ino = ino;
+	pi->i_create_time = CURRENT_TIME_SEC.tv_sec;
 	nova_memlock_inode(sb, pi);
 
 	si = NOVA_I(inode);
