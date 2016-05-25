@@ -101,7 +101,7 @@ struct nova_inode {
 	__le32	i_uid;		/* Owner Uid */
 	__le32	i_gid;		/* Group Id */
 	__le32	i_generation;	/* File version (for NFS) */
-	__le32	padding;
+	__le32	i_create_time;	/* Create time */
 	__le64	nova_ino;	/* nova inode number */
 
 	__le64	log_head;	/* Log head pointer */
