@@ -20,6 +20,43 @@
 
 #include "nova.h"
 
+int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
+	u8 type)
+{
+	struct nova_dentry *dentry;
+	struct nova_setattr_logentry *attr_entry;
+	struct nova_link_change_entry *linkc_entry;
+	struct nova_file_write_entry *fw_entry;
+	int ret = 0;
+
+	switch (type) {
+		case SET_ATTR:
+			attr_entry = (struct nova_setattr_logentry *)addr;
+			if (pass_recover_snapshot(sb, attr_entry->mtime))
+				ret = 1;
+			break;
+		case LINK_CHANGE:
+			linkc_entry = (struct nova_link_change_entry *)addr;
+			if (pass_recover_snapshot(sb, linkc_entry->ctime))
+				ret = 1;
+			break;
+		case DIR_LOG:
+			dentry = (struct nova_dentry *)addr;
+			if (pass_recover_snapshot(sb, dentry->mtime))
+				ret = 1;
+			break;
+		case FILE_WRITE:
+			fw_entry = (struct nova_file_write_entry *)addr;
+			if (pass_recover_snapshot(sb, fw_entry->mtime))
+				ret = 1;
+			break;
+		default:
+			break;
+	}
+
+	return ret;
+}
+
 int nova_restore_snapshot_table(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
