@@ -663,6 +663,8 @@ out:
 		sbi->inode_maps = NULL;
 	}
 
+	nova_sysfs_exit(sb);
+
 	kfree(sbi);
 	return retval;
 }
