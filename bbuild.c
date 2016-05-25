@@ -808,9 +808,6 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	if (!pi)
 		NOVA_ASSERT(0);
 
-	if (pi->valid == 0)
-		return -EINVAL;
-
 	nova_ino = pi->nova_ino;
 
 	nova_dbgv("%s: inode %lu, addr 0x%llx, valid %d, "

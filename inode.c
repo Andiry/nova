@@ -555,7 +555,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	ino = inode->i_ino;
 
 	/* check if the inode is active. */
-	if (inode->i_mode == 0 || pi->valid == 0) {
+	if (inode->i_mode == 0) {
 		/* this inode is deleted */
 		ret = -ESTALE;
 		goto bad_inode;
