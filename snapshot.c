@@ -157,8 +157,10 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 int nova_create_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_super_block *super = nova_get_super(sb);
 	struct snapshot_table *snapshot_table;
 	u64 timestamp = 0;
+	u64 trans_id;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -166,8 +168,10 @@ int nova_create_snapshot(struct super_block *sb)
 		return -EINVAL;
 
 	mutex_lock(&sbi->s_lock);
+	trans_id = atomic64_read(&super->s_trans_id);
 	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
 			(CURRENT_TIME_SEC.tv_nsec);
+	snapshot_table->entries[sbi->curr_snapshot].trans_id = trans_id;
 	snapshot_table->entries[sbi->curr_snapshot].timestamp = timestamp;
 	nova_flush_buffer(&snapshot_table->entries[sbi->curr_snapshot],
 				CACHELINE_SIZE, 1);
@@ -197,6 +201,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	}
 
 	mutex_lock(&sbi->s_lock);
+	snapshot_table->entries[index].trans_id = 0;
 	snapshot_table->entries[index].timestamp = 0;
 	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
