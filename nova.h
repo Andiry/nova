@@ -441,7 +441,7 @@ struct nova_sb_info {
 
 	int recover_snapshot;
 	int recover_snapshot_index;
-	u64 recover_snapshot_time;
+	u64 recover_snapshot_trans_id;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
@@ -609,11 +609,11 @@ static inline int old_entry_freeable(struct super_block *sb, u64 trans_id)
 	return 0;
 }
 
-static inline int pass_recover_snapshot(struct super_block *sb, u32 timestamp)
+static inline int pass_recover_snapshot(struct super_block *sb, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (timestamp > (sbi->recover_snapshot_time >> 32))
+	if (trans_id > sbi->recover_snapshot_trans_id)
 		return 1;
 
 	return 0;
