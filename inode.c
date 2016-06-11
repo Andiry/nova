@@ -1316,6 +1316,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_setattr_logentry *entry;
 	u64 curr_p, new_tail = 0;
+	u64 trans_id;
 	int extended = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
@@ -1328,6 +1329,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	if (curr_p == 0)
 		BUG();
 
+	trans_id = nova_get_trans_id(sb);
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
 	nova_update_setattr_entry(inode, entry, attr);
@@ -1587,7 +1589,6 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_p, size_t *length)
 {
-	struct nova_setattr_logentry *setattr_entry;
 	struct nova_file_write_entry *entry;
 	struct nova_dentry *dentry;
 	struct nova_setattr_logentry *setattr_entry;
