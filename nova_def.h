@@ -108,6 +108,8 @@ struct nova_inode {
 	__le64	log_head;	/* Log head pointer */
 	__le64	log_tail;	/* Log tail pointer */
 
+	__le64	create_trans_id;	/* Transaction ID when create */
+
 	struct {
 		__le32 rdev;	/* major/minor # */
 	} dev;			/* device inode */

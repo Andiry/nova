@@ -141,7 +141,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
 	inode = nova_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
-					0, 0, &dentry->d_name);
+					0, 0, &dentry->d_name, trans_id);
 	if (IS_ERR(inode))
 		goto out_err;
 
@@ -189,7 +189,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto out_err;
 
 	inode = nova_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, ino, mode,
-					0, rdev, &dentry->d_name);
+					0, rdev, &dentry->d_name, trans_id);
 	if (IS_ERR(inode))
 		goto out_err;
 
@@ -245,7 +245,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 
 	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino,
 					S_IFLNK|S_IRWXUGO, len, 0,
-					&dentry->d_name);
+					&dentry->d_name, trans_id);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out_fail1;
@@ -547,7 +547,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	inode = nova_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino,
 					S_IFDIR | mode, sb->s_blocksize,
-					0, &dentry->d_name);
+					0, &dentry->d_name, trans_id);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out_err;

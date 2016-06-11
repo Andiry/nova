@@ -1017,7 +1017,7 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
-	size_t size, dev_t rdev, const struct qstr *qstr)
+	size_t size, dev_t rdev, const struct qstr *qstr, u64 trans_id)
 {
 	struct super_block *sb;
 	struct nova_sb_info *sbi;
@@ -1095,6 +1095,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->nova_ino = ino;
 	pi->deleted = 0;
 	pi->i_create_time = CURRENT_TIME_SEC.tv_sec;
+	pi->create_trans_id = trans_id;
 	nova_memlock_inode(sb, pi);
 
 	si = NOVA_I(inode);
