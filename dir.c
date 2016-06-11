@@ -206,7 +206,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 
 /* Append . and .. entries */
 int nova_append_dir_init_entries(struct super_block *sb,
-	struct nova_inode *pi, u64 self_ino, u64 parent_ino)
+	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id)
 {
 	int allocated;
 	u64 new_block;
@@ -230,6 +230,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
 	de_entry->entry_type = DIR_LOG;
+	de_entry->trans_id = trans_id;
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(NOVA_DIR_LOG_REC_LEN(1));
@@ -244,6 +245,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	de_entry = (struct nova_dentry *)((char *)de_entry +
 					le16_to_cpu(de_entry->de_len));
 	de_entry->entry_type = DIR_LOG;
+	de_entry->trans_id = trans_id;
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(NOVA_DIR_LOG_REC_LEN(2));

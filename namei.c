@@ -556,7 +556,8 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 	pi = nova_get_inode(sb, inode);
-	nova_append_dir_init_entries(sb, pi, inode->i_ino, dir->i_ino);
+	nova_append_dir_init_entries(sb, pi, inode->i_ino, dir->i_ino,
+					trans_id);
 
 	/* Build the dir tree */
 	si = NOVA_I(inode);
