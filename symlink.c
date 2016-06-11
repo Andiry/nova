@@ -25,7 +25,7 @@
 
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, u64 log_block,
-	unsigned long name_blocknr, const char *symname, int len)
+	unsigned long name_blocknr, const char *symname, int len, u64 trans_id)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_inode_info *si = NOVA_I(inode);
@@ -48,6 +48,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, block);
 
 	entry->entry_type = FILE_WRITE;
+	entry->trans_id = trans_id;
 	entry->pgoff = 0;
 	entry->num_pages = cpu_to_le32(1);
 	entry->invalid_pages = 0;

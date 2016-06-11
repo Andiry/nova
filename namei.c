@@ -268,7 +268,8 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 
 	pi->i_blocks = 2;
 	nova_block_symlink(sb, pi, inode, log_block, name_blocknr,
-				symname, len);
+				symname, len, trans_id);
+
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
