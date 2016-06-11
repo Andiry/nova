@@ -173,6 +173,7 @@ struct nova_file_write_entry {
 	/* For both ctime and mtime */
 	__le32	mtime;
 	__le64	size;
+	__le64	trans_id;
 } __attribute((__packed__));
 
 struct nova_inode_page_tail {
@@ -205,14 +206,16 @@ struct nova_dentry {
 	__le16	de_len;                 /* length of this dentry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */
+	__le32	padding;
 	__le64	ino;                    /* inode no pointed to by this entry */
 	__le64	size;
+	__le64	trans_id;
 	char	name[NOVA_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
 #define NOVA_DIR_PAD			8	/* Align to 8 bytes boundary */
 #define NOVA_DIR_ROUND			(NOVA_DIR_PAD - 1)
-#define NOVA_DIR_LOG_REC_LEN(name_len)	(((name_len) + 29 + NOVA_DIR_ROUND) & \
+#define NOVA_DIR_LOG_REC_LEN(name_len)	(((name_len) + 40 + NOVA_DIR_ROUND) & \
 				      ~NOVA_DIR_ROUND)
 
 /* Struct of inode attributes change log (setattr) */
@@ -228,6 +231,7 @@ struct nova_setattr_logentry {
 	__le64	size;
 	u8	invalid;
 	u8	paddings[7];
+	__le64	trans_id;
 } __attribute((__packed__));
 
 /* Do we need this to be 32 bytes? */
@@ -238,7 +242,8 @@ struct nova_link_change_entry {
 	__le32	ctime;
 	__le32	flags;
 	__le32	generation;
-	__le64	paddings[2];
+	__le64	trans_id;
+	__le64	padding;
 } __attribute((__packed__));
 
 enum alloc_type {
