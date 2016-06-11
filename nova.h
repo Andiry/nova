@@ -437,7 +437,7 @@ struct nova_sb_info {
 	struct proc_dir_entry *s_proc;
 
 	int curr_snapshot;
-	u64 latest_snapshot_time;
+	u64 latest_snapshot_trans_id;
 
 	int recover_snapshot;
 	int recover_snapshot_index;
@@ -599,11 +599,11 @@ struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 }
 
 /* Old entry is freeable if it is appended after the latest snapshot */
-static inline int old_entry_freeable(struct super_block *sb, u32 timestamp)
+static inline int old_entry_freeable(struct super_block *sb, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (timestamp > (sbi->latest_snapshot_time >> 32))
+	if (trans_id > sbi->latest_snapshot_trans_id)
 		return 1;
 
 	return 0;
