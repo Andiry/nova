@@ -517,6 +517,17 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 		return &sbi->shared_free_list;
 }
 
+static inline u64 nova_get_trans_id(struct super_block *sb)
+{
+	struct nova_super_block *super = nova_get_super(sb);
+	u64 ret;
+
+	ret = atomic64_inc_return(&super->s_trans_id);
+	nova_flush_buffer(&super->s_trans_id, CACHELINE_SIZE, 1);
+
+	return ret;
+}
+
 struct ptr_pair {
 	__le64 journal_head;
 	__le64 journal_tail;

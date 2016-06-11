@@ -303,6 +303,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
 	u64 temp_tail, begin_tail = 0;
+	u64 trans_id;
 	u32 time;
 
 	if (len == 0)
@@ -342,6 +343,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	nova_dbgv("%s: inode %lu, offset %lld, count %lu\n",
 			__func__, inode->i_ino,	pos, count);
 
+	trans_id = nova_get_trans_id(sb);
 	temp_tail = pi->log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(pi) - 1);
@@ -536,6 +538,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	loff_t offset;
 	int status = 0;
 	u64 temp_tail, begin_tail = 0;
+	u64 trans_id;
 	u32 time;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
@@ -552,6 +555,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		__func__, inode->i_ino, pos >> sb->s_blocksize_bits,
 		(unsigned long)offset, count);
 
+	trans_id = nova_get_trans_id(sb);
 	temp_tail = *end;
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(pi) - 1);
