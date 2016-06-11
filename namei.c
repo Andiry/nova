@@ -134,7 +134,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (ino == 0)
 		goto out_err;
 
-	err = nova_add_dentry(dentry, ino, 0, 0, &tail);
+	err = nova_add_dentry(dentry, ino, 0, 0, &tail, trans_id);
 	if (err)
 		goto out_err;
 
@@ -184,7 +184,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
-	err = nova_add_dentry(dentry, ino, 0, 0, &tail);
+	err = nova_add_dentry(dentry, ino, 0, 0, &tail, trans_id);
 	if (err)
 		goto out_err;
 
@@ -239,7 +239,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	nova_dbgv("%s: name %s, symname %s\n", __func__,
 				dentry->d_name.name, symname);
 	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
-	err = nova_add_dentry(dentry, ino, 0, 0, &tail);
+	err = nova_add_dentry(dentry, ino, 0, 0, &tail, trans_id);
 	if (err)
 		goto out_fail1;
 
@@ -430,7 +430,8 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 			dentry->d_name.name, dest_dentry->d_name.name);
 	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
 			inode->i_ino, dir->i_ino);
-	err = nova_add_dentry(dentry, inode->i_ino, 0, 0, &pidir_tail);
+	err = nova_add_dentry(dentry, inode->i_ino, 0, 0, &pidir_tail,
+				trans_id);
 	if (err) {
 		iput(inode);
 		goto out;
@@ -482,7 +483,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
 				inode->i_ino, dir->i_ino);
 	retval = nova_remove_dentry(dentry, 0, 0, &pidir_tail,
-				&create_dentry, &delete_dentry);
+				&create_dentry, &delete_dentry, trans_id);
 	if (retval)
 		goto out;
 
@@ -540,7 +541,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	nova_dbgv("%s: name %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %llu, dir %lu, link %d\n", __func__,
 				ino, dir->i_ino, dir->i_nlink);
-	err = nova_add_dentry(dentry, ino, 1, 0, &tail);
+	err = nova_add_dentry(dentry, ino, 1, 0, &tail, trans_id);
 	if (err) {
 		nova_dbg("failed to add dir entry\n");
 		goto out_err;
@@ -647,7 +648,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 
 	trans_id = nova_get_trans_id(sb);
 	err = nova_remove_dentry(dentry, -1, 0, &pidir_tail,
-				&create_dentry, &delete_dentry);
+				&create_dentry, &delete_dentry, trans_id);
 	if (err)
 		goto end_rmdir;
 
@@ -761,14 +762,15 @@ static int nova_rename(struct inode *old_dir,
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
 		err = nova_remove_dentry(new_dentry, 0,  0, &new_tail,
-					&create_dentry1, &delete_dentry1);
+					&create_dentry1, &delete_dentry1,
+					trans_id);
 		if (err)
 			goto out;
 	}
 
 	/* link into the new directory. */
 	err = nova_add_dentry(new_dentry, old_inode->i_ino,
-				inc_link, new_tail, &new_tail);
+				inc_link, new_tail, &new_tail, trans_id);
 	if (err)
 		goto out;
 
@@ -779,7 +781,8 @@ static int nova_rename(struct inode *old_dir,
 		old_tail = new_tail;
 
 	err = nova_remove_dentry(old_dentry, dec_link, old_tail, &old_tail,
-					&create_dentry2, &delete_dentry2);
+					&create_dentry2, &delete_dentry2,
+					trans_id);
 	if (err)
 		goto out;
 

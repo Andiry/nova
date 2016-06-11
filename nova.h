@@ -1000,10 +1000,10 @@ extern const struct file_operations nova_dir_operations;
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino);
 extern int nova_add_dentry(struct dentry *dentry, u64 ino,
-	int inc_link, u64 tail, u64 *new_tail);
+	int inc_link, u64 tail, u64 *new_tail, u64 trans_id);
 extern int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 	u64 *new_tail, struct nova_dentry **create_dentry,
-	struct nova_dentry **delete_dentry);
+	struct nova_dentry **delete_dentry, u64 trans_id);
 void nova_invalidate_dentries(struct super_block *sb,
 	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry);
 void nova_print_dir_tree(struct super_block *sb,
