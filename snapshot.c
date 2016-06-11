@@ -121,7 +121,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, curr, count = 0;
-	u64 timestamp;
+	u64 trans_id, timestamp;
 	u64 sec, nsec;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -130,6 +130,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 		return -EINVAL;
 
 	seq_printf(seq, "========== NOVA snapshot table ==========\n");
+	seq_printf(seq, "Index\tTrans ID\tTime\n");
 
 	/*  Print in reverse order */
 	curr = sbi->curr_snapshot - 1;
@@ -138,10 +139,12 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		if (snapshot_table->entries[curr].timestamp) {
+			trans_id = snapshot_table->entries[curr].trans_id;
 			timestamp = snapshot_table->entries[curr].timestamp;
 			sec = timestamp >> 32;
 			nsec = timestamp & 0xFFFFFFFF;
-			seq_printf(seq, "%d %llu.%llu\n", curr, sec, nsec);
+			seq_printf(seq, "%d\t%llu\t\t%llu.%llu\n", curr,
+					trans_id, sec, nsec);
 			count++;
 		}
 
