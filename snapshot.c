@@ -72,17 +72,17 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	prev_timestamp = 0;
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		/* Find first unused slot */
-		if (snapshot_table->timestamp[i] == 0) {
+		if (snapshot_table->entries[i].timestamp == 0) {
 			sbi->curr_snapshot = i;
 			break;
 		}
 
-		if (snapshot_table->timestamp[i] < prev_timestamp) {
+		if (snapshot_table->entries[i].timestamp < prev_timestamp) {
 			sbi->curr_snapshot = i;
 			break;
 		}
 
-		prev_timestamp = snapshot_table->timestamp[i];
+		prev_timestamp = snapshot_table->entries[i].timestamp;
 		sbi->latest_snapshot_time = prev_timestamp;
 	}
 
@@ -98,7 +98,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 			goto fail;
 		}
 
-		recover_timestamp = snapshot_table->timestamp[index];
+		recover_timestamp = snapshot_table->entries[index].timestamp;
 		if (recover_timestamp == 0) {
 			nova_dbg("%s: recover invalid snapshot %d\n",
 					__func__, index);
@@ -121,6 +121,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, curr, count = 0;
+	u64 timestamp;
 	u64 sec, nsec;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -136,9 +137,10 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 		curr += SNAPSHOT_TABLE_SIZE;
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		if (snapshot_table->timestamp[curr]) {
-			sec = snapshot_table->timestamp[curr] >> 32;
-			nsec = snapshot_table->timestamp[curr] & 0xFFFFFFFF;
+		if (snapshot_table->entries[curr].timestamp) {
+			timestamp = snapshot_table->entries[curr].timestamp;
+			sec = timestamp >> 32;
+			nsec = timestamp & 0xFFFFFFFF;
 			seq_printf(seq, "%d %llu.%llu\n", curr, sec, nsec);
 			count++;
 		}
@@ -166,8 +168,8 @@ int nova_create_snapshot(struct super_block *sb)
 	mutex_lock(&sbi->s_lock);
 	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
 			(CURRENT_TIME_SEC.tv_nsec);
-	snapshot_table->timestamp[sbi->curr_snapshot] = timestamp;
-	nova_flush_buffer(&snapshot_table->timestamp[sbi->curr_snapshot],
+	snapshot_table->entries[sbi->curr_snapshot].timestamp = timestamp;
+	nova_flush_buffer(&snapshot_table->entries[sbi->curr_snapshot],
 				CACHELINE_SIZE, 1);
 	sbi->curr_snapshot++;
 	sbi->latest_snapshot_time = timestamp;
@@ -195,8 +197,8 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	}
 
 	mutex_lock(&sbi->s_lock);
-	snapshot_table->timestamp[index] = 0;
-	nova_flush_buffer(&snapshot_table->timestamp[index],
+	snapshot_table->entries[index].timestamp = 0;
+	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
 	mutex_unlock(&sbi->s_lock);
 
