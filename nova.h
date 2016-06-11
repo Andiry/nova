@@ -1087,7 +1087,7 @@ void nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change);
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail,
-	u64 *old_linkc);
+	u64 *old_linkc, u64 trans_id);
 void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
