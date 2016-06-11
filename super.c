@@ -292,6 +292,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u64 trans_id;
 	timing_t init_time;
 
 	NOVA_START_TIMING(new_init_t, init_time);
@@ -337,6 +338,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
 	atomic64_set(&super->s_trans_id, 0);
+	trans_id = nova_get_trans_id(sb);
 
 	nova_init_blockmap(sb, 0);
 
@@ -387,7 +389,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	nova_flush_buffer(root_i, sizeof(*root_i), false);
 
 	nova_append_dir_init_entries(sb, root_i, NOVA_ROOT_INO,
-					NOVA_ROOT_INO);
+					NOVA_ROOT_INO, trans_id);
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
