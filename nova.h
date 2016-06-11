@@ -166,14 +166,14 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 }
 
 struct nova_file_write_entry {
-	/* ret of find_nvmm_block, the lowest byte is entry type */
+	u8	entry_type;
+	u8	padding[3];
+	__le32	num_pages;
 	__le64	block;
 	__le64	pgoff;
-	__le32	num_pages;
 	__le32	invalid_pages;
 	/* For both ctime and mtime */
 	__le32	mtime;
-	__le32	padding;
 	__le64	size;
 } __attribute((__packed__));
 

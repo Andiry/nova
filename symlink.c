@@ -47,6 +47,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	block = log_block;
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, block);
 
+	entry->entry_type = FILE_WRITE;
 	entry->pgoff = 0;
 	entry->num_pages = cpu_to_le32(1);
 	entry->invalid_pages = 0;
@@ -54,8 +55,6 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 							NOVA_BLOCK_TYPE_4K));
 	time = CURRENT_TIME_SEC.tv_sec;
 	entry->mtime = cpu_to_le32(time);
-	/* Set entry type after set block */
-	nova_set_entry_type(entry, FILE_WRITE);
 	entry->size = cpu_to_le64(len + 1);
 	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
 
