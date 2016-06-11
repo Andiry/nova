@@ -530,6 +530,17 @@ static inline u64 nova_get_trans_id(struct super_block *sb)
 	return ret;
 }
 
+static inline void nova_print_curr_trans_id(struct super_block *sb)
+{
+	struct nova_super_block *super = nova_get_super(sb);
+	u64 ret;
+
+	ret = atomic64_read(&super->s_trans_id);
+	nova_dbg("Current transaction id: %llu\n", ret);
+
+	return;
+}
+
 struct ptr_pair {
 	__le64 journal_head;
 	__le64 journal_tail;
