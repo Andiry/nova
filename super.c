@@ -772,6 +772,8 @@ static void nova_put_super(struct super_block *sb)
 	struct inode_map *inode_map;
 	int i;
 
+	nova_print_curr_trans_id(sb);
+
 	/* It's unmount time, so unmap the nova memory */
 //	nova_print_free_lists(sb);
 	if (sbi->virt_addr) {
