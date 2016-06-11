@@ -32,22 +32,22 @@ int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	switch (type) {
 		case SET_ATTR:
 			attr_entry = (struct nova_setattr_logentry *)addr;
-			if (pass_recover_snapshot(sb, attr_entry->mtime))
+			if (pass_recover_snapshot(sb, attr_entry->trans_id))
 				ret = 1;
 			break;
 		case LINK_CHANGE:
 			linkc_entry = (struct nova_link_change_entry *)addr;
-			if (pass_recover_snapshot(sb, linkc_entry->ctime))
+			if (pass_recover_snapshot(sb, linkc_entry->trans_id))
 				ret = 1;
 			break;
 		case DIR_LOG:
 			dentry = (struct nova_dentry *)addr;
-			if (pass_recover_snapshot(sb, dentry->mtime))
+			if (pass_recover_snapshot(sb, dentry->trans_id))
 				ret = 1;
 			break;
 		case FILE_WRITE:
 			fw_entry = (struct nova_file_write_entry *)addr;
-			if (pass_recover_snapshot(sb, fw_entry->mtime))
+			if (pass_recover_snapshot(sb, fw_entry->trans_id))
 				ret = 1;
 			break;
 		default:
@@ -62,7 +62,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, index;
-	u64 prev_trans_id, recover_timestamp;
+	u64 prev_trans_id, recover_trans_id;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -98,15 +98,15 @@ int nova_restore_snapshot_table(struct super_block *sb)
 			goto fail;
 		}
 
-		recover_timestamp = snapshot_table->entries[index].timestamp;
-		if (recover_timestamp == 0) {
+		recover_trans_id = snapshot_table->entries[index].trans_id;
+		if (recover_trans_id == 0) {
 			nova_dbg("%s: recover invalid snapshot %d\n",
 					__func__, index);
 			sbi->recover_snapshot = 0;
 			goto fail;
 		}
 
-		sbi->recover_snapshot_time = recover_timestamp;
+		sbi->recover_snapshot_trans_id = recover_trans_id;
 		nova_dbg("recover snapshot %d\n", index);
 	}
 
