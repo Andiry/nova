@@ -513,7 +513,7 @@ int nova_assign_write_entry(struct super_block *sb,
 			old_entry = radix_tree_deref_slot(pentry);
 			old_nvmm = get_nvmm(sb, sih, old_entry, curr_pgoff);
 			if (free) {
-				if (old_entry_freeable(sb, old_entry->mtime)) {
+				if (old_entry_freeable(sb, old_entry->trans_id)) {
 					old_entry->invalid_pages++;
 					nova_free_data_blocks(sb, pi,
 								old_nvmm, 1);
@@ -908,7 +908,7 @@ void nova_evict_inode(struct inode *inode)
 	}
 
 	/* This inode exists in at least one snapshot. Don't delete it yet. */
-	if (pi->i_create_time <= (sbi->latest_snapshot_time >> 32))
+	if (pi->create_trans_id <= sbi->latest_snapshot_trans_id)
 		goto out;
 
 	NOVA_START_TIMING(evict_inode_t, evict_time);
@@ -1377,7 +1377,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (last_setattr) {
 		addr = (void *)nova_get_block(sb, last_setattr);
 		old_entry = (struct nova_setattr_logentry *)addr;
-		if (old_entry_freeable(sb, old_entry->mtime))
+		if (old_entry_freeable(sb, old_entry->trans_id))
 			old_entry->invalid = 1;
 	}
 

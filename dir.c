@@ -351,7 +351,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 void nova_invalidate_dentries(struct super_block *sb,
 	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry)
 {
-	if (create_dentry && old_entry_freeable(sb, create_dentry->mtime)) {
+	if (create_dentry && old_entry_freeable(sb, create_dentry->trans_id)) {
 		create_dentry->invalid = 1;
 		delete_dentry->invalid = 1;
 	}

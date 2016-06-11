@@ -62,28 +62,28 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, index;
-	u64 prev_timestamp, recover_timestamp;
+	u64 prev_trans_id, recover_timestamp;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
 	if (!snapshot_table)
 		return -EINVAL;
 
-	prev_timestamp = 0;
+	prev_trans_id = 0;
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		/* Find first unused slot */
-		if (snapshot_table->entries[i].timestamp == 0) {
+		if (snapshot_table->entries[i].trans_id == 0) {
 			sbi->curr_snapshot = i;
 			break;
 		}
 
-		if (snapshot_table->entries[i].timestamp < prev_timestamp) {
+		if (snapshot_table->entries[i].trans_id < prev_trans_id) {
 			sbi->curr_snapshot = i;
 			break;
 		}
 
-		prev_timestamp = snapshot_table->entries[i].timestamp;
-		sbi->latest_snapshot_time = prev_timestamp;
+		prev_trans_id = snapshot_table->entries[i].trans_id;
+		sbi->latest_snapshot_trans_id = prev_trans_id;
 	}
 
 	if (i == SNAPSHOT_TABLE_SIZE)
@@ -179,7 +179,7 @@ int nova_create_snapshot(struct super_block *sb)
 	nova_flush_buffer(&snapshot_table->entries[sbi->curr_snapshot],
 				CACHELINE_SIZE, 1);
 	sbi->curr_snapshot++;
-	sbi->latest_snapshot_time = timestamp;
+	sbi->latest_snapshot_trans_id = trans_id;
 	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
 		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
 	mutex_unlock(&sbi->s_lock);
@@ -187,7 +187,7 @@ int nova_create_snapshot(struct super_block *sb)
 	return 0;
 }
 
-/* FIXME: 1) Snapshot hole 2) latest snapshot time update */
+/* FIXME: 1) Snapshot hole 2) latest snapshot trans ID update */
 int nova_delete_snapshot(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
