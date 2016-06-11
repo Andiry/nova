@@ -349,7 +349,7 @@ void nova_invalidate_link_change_entry(struct super_block *sb,
 /* Returns new tail after append */
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail,
-	u64 *old_linkc)
+	u64 *old_linkc, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -369,6 +369,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
 	entry->entry_type = LINK_CHANGE;
+	entry->trans_id = trans_id;
 	entry->links = cpu_to_le16(inode->i_nlink);
 	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->flags = cpu_to_le32(inode->i_flags);
@@ -438,7 +439,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	inc_nlink(inode);
 
 	err = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail,
-						&old_linkc);
+						&old_linkc, trans_id);
 	if (err) {
 		iput(inode);
 		goto out;
@@ -494,7 +495,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	}
 
 	retval = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail,
-						&old_linkc);
+						&old_linkc, trans_id);
 	if (retval)
 		goto out;
 
@@ -659,7 +660,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	nova_delete_dir_tree(sb, sih);
 
 	err = nova_append_link_change_entry(sb, pi, inode, 0, &pi_tail,
-						&old_linkc);
+						&old_linkc, trans_id);
 	if (err)
 		goto end_rmdir;
 
@@ -738,7 +739,7 @@ static int nova_rename(struct inode *old_dir,
 	old_pi = nova_get_inode(sb, old_inode);
 	old_inode->i_ctime = CURRENT_TIME;
 	err = nova_append_link_change_entry(sb, old_pi, old_inode, 0,
-						&old_pi_tail, &old_linkc1);
+					&old_pi_tail, &old_linkc1, trans_id);
 	if (err)
 		goto out;
 
@@ -797,7 +798,7 @@ static int nova_rename(struct inode *old_dir,
 
 		err = nova_append_link_change_entry(sb, new_pi,
 						new_inode, 0, &new_pi_tail,
-						&old_linkc2);
+						&old_linkc2, trans_id);
 		if (err)
 			goto out;
 	}

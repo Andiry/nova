@@ -382,6 +382,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		entry_data.entry_type = FILE_WRITE;
+		entry_data.trans_id = trans_id;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
@@ -585,6 +586,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		NOVA_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		entry_data.entry_type = FILE_WRITE;
+		entry_data.trans_id = trans_id;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;

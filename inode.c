@@ -1226,7 +1226,7 @@ int nova_getattr(struct vfsmount *mnt, struct dentry *dentry,
 }
 
 static void nova_update_setattr_entry(struct inode *inode,
-	struct nova_setattr_logentry *entry, struct iattr *attr)
+	struct nova_setattr_logentry *entry, struct iattr *attr, u64 trans_id)
 {
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 
@@ -1242,6 +1242,7 @@ static void nova_update_setattr_entry(struct inode *inode,
 	entry->atime	= cpu_to_le32(inode->i_atime.tv_sec);
 	entry->ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
+	entry->trans_id = trans_id;
 
 	if (ia_valid & ATTR_SIZE)
 		entry->size = cpu_to_le64(attr->ia_size);
@@ -1318,7 +1319,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	trans_id = nova_get_trans_id(sb);
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
-	nova_update_setattr_entry(inode, entry, attr);
+	nova_update_setattr_entry(inode, entry, attr, trans_id);
 	new_tail = curr_p + size;
 	*last_setattr = sih->last_setattr;
 	sih->last_setattr = curr_p;
