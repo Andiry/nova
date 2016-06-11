@@ -133,21 +133,23 @@ struct nova_inode {
 struct nova_super_block {
 	/* static fields. they never change after file system creation.
 	 * checksum only validates up to s_start_dynamic field below */
-	__le16		s_sum;              /* checksum of this sb */
+	__le16		s_sum;			/* checksum of this sb */
 	__le16		s_padding16;
-	__le32		s_magic;            /* magic signature */
+	__le32		s_magic;		/* magic signature */
 	__le32		s_padding32;
-	__le32		s_blocksize;        /* blocksize in bytes */
-	__le64		s_size;             /* total size of fs in bytes */
-	char		s_volume_name[16];  /* volume name */
+	__le32		s_blocksize;		/* blocksize in bytes */
+	__le64		s_size;			/* total size of fs in bytes */
+	char		s_volume_name[16];	/* volume name */
 
 	__le64		s_start_dynamic;
 
 	/* all the dynamic fields should go here */
+	atomic64_t	s_trans_id;		/* Transaction ID */
+
 	/* s_mtime and s_wtime should be together and their order should not be
 	 * changed. we use an 8 byte write to update both of them atomically */
-	__le32		s_mtime;            /* mount time */
-	__le32		s_wtime;            /* write time */
+	__le32		s_mtime;		/* mount time */
+	__le32		s_wtime;		/* write time */
 	/* fields for fast mount support. Always keep them together */
 	__le64		s_num_free_blocks;
 } __attribute((__packed__));
