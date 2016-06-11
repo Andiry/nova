@@ -641,8 +641,10 @@ setup_sb:
 	}
 
 	clear_opt(sbi->s_mount_opt, MOUNTING);
-	retval = 0;
 
+	nova_print_curr_trans_id(sb);
+
+	retval = 0;
 	NOVA_END_TIMING(mount_t, mount_time);
 	return retval;
 out:
