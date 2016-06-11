@@ -151,7 +151,7 @@ void nova_delete_dir_tree(struct super_block *sb,
 static u64 nova_append_dir_inode_entry(struct super_block *sb,
 	struct nova_inode *pidir, struct inode *dir,
 	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
-	int link_change, u64 *curr_tail)
+	int link_change, u64 *curr_tail, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(dir);
 	struct nova_inode_info_header *sih = &si->header;
@@ -170,6 +170,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 
 	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 	entry->entry_type = DIR_LOG;
+	entry->trans_id = trans_id;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
@@ -262,7 +263,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	u64 tail, u64 *new_tail)
+	u64 tail, u64 *new_tail, u64 trans_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -296,7 +297,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	loglen = NOVA_DIR_LOG_REC_LEN(namelen);
 	curr_entry = nova_append_dir_inode_entry(sb, pidir, dir, ino,
 				dentry,	loglen, tail, inc_link,
-				&curr_tail);
+				&curr_tail, trans_id);
 
 	direntry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
 	ret = nova_insert_dir_radix_tree(sb, sih, name, namelen, direntry);
@@ -310,7 +311,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
  */
 int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 	u64 *new_tail, struct nova_dentry **create_dentry,
-	struct nova_dentry **delete_dentry)
+	struct nova_dentry **delete_dentry, u64 trans_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -333,7 +334,8 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 
 	loglen = NOVA_DIR_LOG_REC_LEN(entry->len);
 	curr_entry = nova_append_dir_inode_entry(sb, pidir, dir, 0,
-				dentry, loglen, tail, dec_link, &curr_tail);
+				dentry, loglen, tail, dec_link, &curr_tail,
+				trans_id);
 	*new_tail = curr_tail;
 
 	*delete_dentry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
