@@ -578,10 +578,15 @@ struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
 		cpu * CACHELINE_SIZE);
 }
 
-#define SNAPSHOT_TABLE_SIZE	512
+struct snapshot_entry {
+	__le64 trans_id;
+	__le64 timestamp;
+};
+
+#define SNAPSHOT_TABLE_SIZE	256
 
 struct snapshot_table {
-	__le64 timestamp[SNAPSHOT_TABLE_SIZE];
+	struct snapshot_entry entries[SNAPSHOT_TABLE_SIZE];
 };
 
 static inline
