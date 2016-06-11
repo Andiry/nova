@@ -381,14 +381,13 @@ ssize_t nova_cow_file_write(struct file *filp,
 						buf, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+		entry_data.entry_type = FILE_WRITE;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
 		entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,
 							pi->i_blk_type));
 		entry_data.mtime = cpu_to_le32(time);
-		/* Set entry type after set block */
-		nova_set_entry_type((void *)&entry_data, FILE_WRITE);
 
 		if (pos + copied > inode->i_size)
 			entry_data.size = cpu_to_le64(pos + copied);
@@ -585,6 +584,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 							kmem);
 		NOVA_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
+		entry_data.entry_type = FILE_WRITE;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
@@ -592,8 +592,6 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 							pi->i_blk_type));
 		/* FIXME: should we use the page cache write time? */
 		entry_data.mtime = cpu_to_le32(time);
-		/* Set entry type after set block */
-		nova_set_entry_type((void *)&entry_data, FILE_WRITE);
 
 		entry_data.size = cpu_to_le64(inode->i_size);
 
