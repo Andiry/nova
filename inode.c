@@ -488,6 +488,24 @@ done:
 	return blocks;
 }
 
+static unsigned int nova_process_old_entry(struct super_block *sb,
+	struct nova_inode *pi,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry,
+	unsigned long pgoff, unsigned int num_free)
+{
+	unsigned long old_nvmm;
+
+	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
+	if (old_entry_freeable(sb, entry->trans_id)) {
+		entry->invalid_pages += num_free;
+		nova_free_data_blocks(sb, pi, old_nvmm, num_free);
+	}
+	pi->i_blocks -= num_free;
+
+	return num_free;
+}
+
 int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
@@ -495,10 +513,12 @@ int nova_assign_write_entry(struct super_block *sb,
 	bool free)
 {
 	struct nova_file_write_entry *old_entry;
+	struct nova_file_write_entry *start_old_entry = NULL;
 	void **pentry;
-	unsigned long old_nvmm;
 	unsigned long start_pgoff = entry->pgoff;
+	unsigned long start_old_pgoff = 0;
 	unsigned int num = entry->num_pages;
+	unsigned int num_free = 0;
 	unsigned long curr_pgoff;
 	int i;
 	int ret;
@@ -511,15 +531,20 @@ int nova_assign_write_entry(struct super_block *sb,
 		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
 		if (pentry) {
 			old_entry = radix_tree_deref_slot(pentry);
-			old_nvmm = get_nvmm(sb, sih, old_entry, curr_pgoff);
-			if (free) {
-				if (old_entry_freeable(sb, old_entry->trans_id)) {
-					old_entry->invalid_pages++;
-					nova_free_data_blocks(sb, pi,
-								old_nvmm, 1);
-				}
-				pi->i_blocks--;
+
+			if (old_entry != start_old_entry) {
+				if (start_old_entry && free)
+					nova_process_old_entry(sb, pi, sih,
+							start_old_entry,
+							start_old_pgoff,
+							num_free);
+				start_old_entry = old_entry;
+				start_old_pgoff = curr_pgoff;
+				num_free = 1;
+			} else {
+				num_free++;
 			}
+
 			radix_tree_replace_slot(pentry, entry);
 		} else {
 			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
@@ -529,6 +554,10 @@ int nova_assign_write_entry(struct super_block *sb,
 			}
 		}
 	}
+
+	if (start_old_entry && free)
+		nova_process_old_entry(sb, pi, sih, start_old_entry,
+					start_old_pgoff, num_free);
 
 out:
 	NOVA_END_TIMING(assign_t, assign_time);
