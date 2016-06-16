@@ -169,46 +169,6 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	return 0;
 }
 
-static inline int nova_free_contiguous_data_blocks(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_inode *pi,
-	struct nova_file_write_entry *entry, unsigned long pgoff,
-	unsigned long num_pages, unsigned long *start_blocknr,
-	unsigned long *num_free)
-{
-	int freed = 0;
-	unsigned long nvmm;
-
-	if (entry->num_pages < entry->invalid_pages + num_pages) {
-		nova_err(sb, "%s: inode %lu, entry pgoff %llu, %llu pages, "
-				"invalid %llu, try to free %lu, pgoff %lu\n",
-				__func__, sih->ino, entry->pgoff,
-				entry->num_pages, entry->invalid_pages,
-				num_pages, pgoff);
-		return freed;
-	}
-
-	entry->invalid_pages += num_pages;
-	nvmm = get_nvmm(sb, sih, entry, pgoff);
-
-	if (*start_blocknr == 0) {
-		*start_blocknr = nvmm;
-		*num_free = num_pages;
-	} else {
-		if (nvmm == *start_blocknr + *num_free) {
-			(*num_free) += num_pages;
-		} else {
-			/* A new start */
-			nova_free_data_blocks(sb, pi, *start_blocknr,
-						*num_free);
-			freed = *num_free;
-			*start_blocknr = nvmm;
-			*num_free = num_pages;
-		}
-	}
-
-	return freed;
-}
-
 static int nova_free_contiguous_log_blocks(struct super_block *sb,
 	struct nova_inode *pi, u64 head)
 {
@@ -314,17 +274,38 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
+static unsigned int nova_process_old_entry(struct super_block *sb,
+	struct nova_inode *pi,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry,
+	unsigned long pgoff, unsigned int num_free)
+{
+	unsigned long old_nvmm;
+
+	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
+	if (old_entry_freeable(sb, entry->trans_id)) {
+		entry->invalid_pages += num_free;
+		nova_dbgv("%s: pgoff %lu, free %u blocks\n",
+				__func__, pgoff, num_free);
+		nova_free_data_blocks(sb, pi, old_nvmm, num_free);
+	}
+	pi->i_blocks -= num_free;
+
+	return num_free;
+}
 
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap)
 {
 	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *old_entry = NULL;
 	struct nova_file_write_entry *entries[1];
 	struct nova_inode *pi;
-	unsigned long free_blocknr = 0, num_free = 0;
 	unsigned long pgoff = start_blocknr;
+	unsigned long old_pgoff = 0;
 	timing_t delete_time;
+	unsigned int num_free = 0;
 	int freed = 0;
 	int nr_entries;
 	void *ret;
@@ -346,10 +327,19 @@ int nova_delete_file_tree(struct super_block *sb,
 		if (entry) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
 			BUG_ON(!ret || ret != entry);
-			if (delete_nvmm)
-				freed += nova_free_contiguous_data_blocks(sb,
-						sih, pi, entry, pgoff, 1,
-						&free_blocknr, &num_free);
+			if (entry != old_entry) {
+				if (old_entry && delete_nvmm) {
+					nova_process_old_entry(sb, pi, sih,
+							old_entry, old_pgoff,
+							num_free);
+					freed += num_free;
+				}
+				old_entry = entry;
+				old_pgoff = pgoff;
+				num_free = 1;
+			} else {
+				num_free++;
+			}
 			pgoff++;
 		} else {
 			/* We are finding a hole. Jump to the next entry. */
@@ -363,8 +353,9 @@ int nova_delete_file_tree(struct super_block *sb,
 		}
 	}
 
-	if (free_blocknr) {
-		nova_free_data_blocks(sb, pi, free_blocknr, num_free);
+	if (old_entry && delete_nvmm) {
+		nova_process_old_entry(sb, pi, sih, old_entry,
+					old_pgoff, num_free);
 		freed += num_free;
 	}
 
@@ -486,24 +477,6 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 	}
 done:
 	return blocks;
-}
-
-static unsigned int nova_process_old_entry(struct super_block *sb,
-	struct nova_inode *pi,
-	struct nova_inode_info_header *sih,
-	struct nova_file_write_entry *entry,
-	unsigned long pgoff, unsigned int num_free)
-{
-	unsigned long old_nvmm;
-
-	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
-	if (old_entry_freeable(sb, entry->trans_id)) {
-		entry->invalid_pages += num_free;
-		nova_free_data_blocks(sb, pi, old_nvmm, num_free);
-	}
-	pi->i_blocks -= num_free;
-
-	return num_free;
 }
 
 int nova_assign_write_entry(struct super_block *sb,
