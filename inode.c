@@ -274,7 +274,7 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-static unsigned int nova_process_old_entry(struct super_block *sb,
+static unsigned int nova_free_old_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
@@ -329,7 +329,7 @@ int nova_delete_file_tree(struct super_block *sb,
 			BUG_ON(!ret || ret != entry);
 			if (entry != old_entry) {
 				if (old_entry && delete_nvmm) {
-					nova_process_old_entry(sb, pi, sih,
+					nova_free_old_entry(sb, pi, sih,
 							old_entry, old_pgoff,
 							num_free);
 					freed += num_free;
@@ -354,7 +354,7 @@ int nova_delete_file_tree(struct super_block *sb,
 	}
 
 	if (old_entry && delete_nvmm) {
-		nova_process_old_entry(sb, pi, sih, old_entry,
+		nova_free_old_entry(sb, pi, sih, old_entry,
 					old_pgoff, num_free);
 		freed += num_free;
 	}
@@ -507,7 +507,7 @@ int nova_assign_write_entry(struct super_block *sb,
 
 			if (old_entry != start_old_entry) {
 				if (start_old_entry && free)
-					nova_process_old_entry(sb, pi, sih,
+					nova_free_old_entry(sb, pi, sih,
 							start_old_entry,
 							start_old_pgoff,
 							num_free);
@@ -529,7 +529,7 @@ int nova_assign_write_entry(struct super_block *sb,
 	}
 
 	if (start_old_entry && free)
-		nova_process_old_entry(sb, pi, sih, start_old_entry,
+		nova_free_old_entry(sb, pi, sih, start_old_entry,
 					start_old_pgoff, num_free);
 
 out:
