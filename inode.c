@@ -282,6 +282,9 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 {
 	unsigned long old_nvmm;
 
+	if (!entry)
+		return 0;
+
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
 	if (old_entry_freeable(sb, entry->trans_id)) {
 		entry->invalid_pages += num_free;
