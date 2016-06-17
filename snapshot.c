@@ -20,6 +20,51 @@
 
 #include "nova.h"
 
+int nova_alloc_snapshot_info(struct super_block *sb, u64 trans_id)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_info *snapshot_info;
+	struct snapshot_list *snapshot_list;
+	int i;
+
+	snapshot_info = kzalloc(sizeof(struct snapshot_info), GFP_KERNEL);
+	if (!snapshot_info)
+		return -ENOMEM;
+
+	snapshot_info->trans_id = trans_id;
+	snapshot_info->lists = kzalloc(sbi->cpus * sizeof(struct snapshot_list),
+							GFP_KERNEL);
+
+	if (!snapshot_info->lists) {
+		kfree(snapshot_info);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < sbi->cpus; i++) {
+		snapshot_list = &snapshot_info->lists[i];
+		mutex_init(&snapshot_list->list_mutex);
+		snapshot_list->head = (unsigned long)kmalloc(PAGE_SIZE,
+							GFP_KERNEL);
+		if (!snapshot_list->head)
+			goto fail;
+		snapshot_list->tail = snapshot_list->head;
+		snapshot_list->num_pages = 1;
+	}
+
+	return 0;
+
+fail:
+	for (i = 0; i < sbi->cpus; i++) {
+		snapshot_list = &snapshot_info->lists[i];
+		if (snapshot_list->head)
+			kfree((void *)snapshot_list->head);
+	}
+
+	kfree(snapshot_info->lists);
+	kfree(snapshot_info);
+	return -ENOMEM;
+}
+
 int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	u8 type)
 {
