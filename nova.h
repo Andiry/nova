@@ -589,6 +589,20 @@ struct snapshot_table {
 	struct snapshot_entry entries[SNAPSHOT_TABLE_SIZE];
 };
 
+struct snapshot_list {
+	struct mutex list_mutex;
+	unsigned int num_pages;
+	unsigned long head;
+	unsigned long tail;
+};
+
+struct snapshot_info {
+	u64	trans_id;
+
+	/* Per-CPU snapshot list */
+	struct snapshot_list *lists;
+};
+
 static inline
 struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 {
