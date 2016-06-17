@@ -45,7 +45,8 @@ int nova_alloc_snapshot_info(struct super_block *sb, u64 trans_id)
 		mutex_init(&snapshot_list->list_mutex);
 		snapshot_list->head = (unsigned long)kmalloc(PAGE_SIZE,
 							GFP_KERNEL);
-		if (!snapshot_list->head)
+		/* Aligned to PAGE_SIZE */
+		if (!snapshot_list->head || ENTRY_LOC(snapshot_list->head))
 			goto fail;
 		snapshot_list->tail = snapshot_list->head;
 		snapshot_list->num_pages = 1;
