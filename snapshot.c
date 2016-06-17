@@ -66,6 +66,72 @@ fail:
 	return -ENOMEM;
 }
 
+static inline u64 next_list_page(u64 curr_p)
+{
+	void *curr_addr = (void *)curr_p;
+	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+					+ LAST_ENTRY;
+	return ((struct nova_inode_page_tail *)page_tail)->next_page;
+}
+
+/* Reuse the inode log page structure */
+static inline void nova_set_next_link_page_address(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, u64 next_page)
+{
+	curr_page->page_tail.next_page = next_page;
+}
+
+int nova_append_snapshot_list_entry(struct super_block *sb,
+	struct snapshot_info *info, size_t size)
+{
+	struct snapshot_list *list;
+	struct nova_inode_log_page *curr_page;
+	u64 curr_block;
+	int cpuid;
+	u64 curr_p;
+	u64 new_page = 0;
+
+	cpuid = smp_processor_id();
+	list = &info->lists[cpuid];
+
+retry:
+	mutex_lock(&list->list_mutex);
+	curr_p = list->tail;
+
+	if (new_page) {
+		/* Link prev block and newly allocated page */
+		curr_block = BLOCK_OFF(curr_p);
+		curr_page = (struct nova_inode_log_page *)curr_block;
+		nova_set_next_link_page_address(sb, curr_page, new_page);
+		list->num_pages++;
+	}
+
+	if ((is_last_entry(curr_p, size) && next_list_page(curr_p) == 0)) {
+		nova_set_entry_type((void *)curr_p, NEXT_PAGE);
+		if (new_page == 0) {
+			mutex_unlock(&list->list_mutex);
+			new_page = (unsigned long)kmalloc(PAGE_SIZE,
+						GFP_KERNEL);
+			if (!new_page) {
+				nova_err(sb, "%s: ERROR: allocation failed\n",
+						__func__);
+				return -ENOMEM;
+			}
+			goto retry;
+		}
+	}
+
+	if (is_last_entry(curr_p, size)) {
+		nova_set_entry_type((void *)curr_p, NEXT_PAGE);
+		curr_p = next_list_page(curr_p);
+	}
+
+//	nova_write_list_entry(curr_p, entry);
+	mutex_unlock(&list->list_mutex);
+
+	return 0;
+}
+
 int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	u8 type)
 {
