@@ -20,11 +20,27 @@
 
 #include "nova.h"
 
+static inline u64 next_list_page(u64 curr_p)
+{
+	void *curr_addr = (void *)curr_p;
+	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+					+ LAST_ENTRY;
+	return ((struct nova_inode_page_tail *)page_tail)->next_page;
+}
+
+/* Reuse the inode log page structure */
+static inline void nova_set_next_link_page_address(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, u64 next_page)
+{
+	curr_page->page_tail.next_page = next_page;
+}
+
 int nova_alloc_snapshot_info(struct super_block *sb, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *snapshot_info;
 	struct snapshot_list *snapshot_list;
+	unsigned long new_page = 0;
 	int i;
 
 	snapshot_info = kzalloc(sizeof(struct snapshot_info), GFP_KERNEL);
@@ -43,18 +59,20 @@ int nova_alloc_snapshot_info(struct super_block *sb, u64 trans_id)
 	for (i = 0; i < sbi->cpus; i++) {
 		snapshot_list = &snapshot_info->lists[i];
 		mutex_init(&snapshot_list->list_mutex);
-		snapshot_list->head = (unsigned long)kmalloc(PAGE_SIZE,
+		new_page = (unsigned long)kmalloc(PAGE_SIZE,
 							GFP_KERNEL);
 		/* Aligned to PAGE_SIZE */
-		if (!snapshot_list->head || ENTRY_LOC(snapshot_list->head))
+		if (!new_page || ENTRY_LOC(new_page))
 			goto fail;
-		snapshot_list->tail = snapshot_list->head;
+		nova_set_next_link_page_address(sb, (void *)new_page, 0);
+		snapshot_list->tail = snapshot_list->head = new_page;
 		snapshot_list->num_pages = 1;
 	}
 
 	return 0;
 
 fail:
+	kfree((void *)new_page);
 	for (i = 0; i < sbi->cpus; i++) {
 		snapshot_list = &snapshot_info->lists[i];
 		if (snapshot_list->head)
@@ -64,21 +82,6 @@ fail:
 	kfree(snapshot_info->lists);
 	kfree(snapshot_info);
 	return -ENOMEM;
-}
-
-static inline u64 next_list_page(u64 curr_p)
-{
-	void *curr_addr = (void *)curr_p;
-	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
-					+ LAST_ENTRY;
-	return ((struct nova_inode_page_tail *)page_tail)->next_page;
-}
-
-/* Reuse the inode log page structure */
-static inline void nova_set_next_link_page_address(struct super_block *sb,
-	struct nova_inode_log_page *curr_page, u64 next_page)
-{
-	curr_page->page_tail.next_page = next_page;
 }
 
 static void nova_write_list_entry(struct super_block *sb,
@@ -125,11 +128,14 @@ retry:
 			mutex_unlock(&list->list_mutex);
 			new_page = (unsigned long)kmalloc(PAGE_SIZE,
 						GFP_KERNEL);
-			if (!new_page) {
+			if (!new_page || ENTRY_LOC(new_page)) {
+				kfree((void *)new_page);
 				nova_err(sb, "%s: allocation failed\n",
 						__func__);
 				return -ENOMEM;
 			}
+			nova_set_next_link_page_address(sb,
+						(void *)new_page, 0);
 			goto retry;
 		}
 	}
