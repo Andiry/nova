@@ -386,11 +386,33 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 	return 0;
 }
 
+static int nova_delete_snapshot_list_pages(struct super_block *sb,
+	struct snapshot_list *list)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 curr_block = list->head;
+	int freed = 0;
+
+	while (curr_block) {
+		if (curr_block & INVALID_MASK) {
+			nova_dbg("%s: ERROR: invalid block %llu\n",
+					__func__, curr_block);
+			break;
+		}
+		curr_page = (struct nova_inode_log_page *)curr_block;
+		curr_block = curr_page->page_tail.next_page;
+		kfree(curr_page);
+		freed++;
+	}
+
+	return freed;
+}
+
 static int nova_delete_snapshot_list(struct super_block *sb,
 	struct snapshot_list *list)
 {
 	nova_delete_snapshot_list_entries(sb, list);
-//	nova_delete_snapshot_list_pages(sb, list);
+	nova_delete_snapshot_list_pages(sb, list);
 	return 0;
 }
 
