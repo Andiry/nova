@@ -605,6 +605,22 @@ struct snapshot_info {
 	struct snapshot_list *lists;
 };
 
+struct snapshot_inode_entry {
+	u8	type;
+	u8	padding[7];
+	u64	padding64;
+	u64	ino;
+	u64	delete_trans_id;
+} __attribute((__packed__));
+
+struct snapshot_file_write_entry {
+	u8	type;
+	u8	padding[7];
+	u64	pgoff;
+	u64	num_pages;
+	u64	delete_trans_id;
+} __attribute((__packed__));
+
 static inline
 struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 {

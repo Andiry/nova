@@ -81,8 +81,21 @@ static inline void nova_set_next_link_page_address(struct super_block *sb,
 	curr_page->page_tail.next_page = next_page;
 }
 
+static void nova_write_list_entry(struct super_block *sb,
+	struct snapshot_list *list, u64 curr_p, void *entry, size_t size)
+{
+	if (is_last_entry(curr_p, size)) {
+		nova_err(sb, "%s: write to page end? curr 0x%llx, size %lu\n",
+				__func__, curr_p, size);
+		return;
+	}
+
+	memcpy((void *)curr_p, entry, size);
+	list->tail = curr_p + size;
+}
+
 int nova_append_snapshot_list_entry(struct super_block *sb,
-	struct snapshot_info *info, size_t size)
+	struct snapshot_info *info, void *entry, size_t size)
 {
 	struct snapshot_list *list;
 	struct nova_inode_log_page *curr_page;
@@ -113,7 +126,7 @@ retry:
 			new_page = (unsigned long)kmalloc(PAGE_SIZE,
 						GFP_KERNEL);
 			if (!new_page) {
-				nova_err(sb, "%s: ERROR: allocation failed\n",
+				nova_err(sb, "%s: allocation failed\n",
 						__func__);
 				return -ENOMEM;
 			}
@@ -126,7 +139,7 @@ retry:
 		curr_p = next_list_page(curr_p);
 	}
 
-//	nova_write_list_entry(curr_p, entry);
+	nova_write_list_entry(sb, list, curr_p, entry, size);
 	mutex_unlock(&list->list_mutex);
 
 	return 0;
