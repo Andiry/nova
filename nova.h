@@ -626,10 +626,10 @@ struct snapshot_file_write_entry {
 } __attribute((__packed__));
 
 struct snapshot_nvmm_list {
-	unsigned long padding;
-	unsigned long num_pages;
-	unsigned long head;
-	unsigned long tail;
+	__le64 padding;
+	__le64 num_pages;
+	__le64 head;
+	__le64 tail;
 };
 
 /* Support up to 128 CPUs */
