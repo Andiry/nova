@@ -593,7 +593,7 @@ struct snapshot_table {
 
 struct snapshot_list {
 	struct mutex list_mutex;
-	unsigned int num_pages;
+	unsigned long num_pages;
 	unsigned long head;
 	unsigned long tail;
 };
