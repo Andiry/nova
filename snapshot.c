@@ -549,6 +549,7 @@ int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 	struct snapshot_nvmm_list *nvmm_list;
 	unsigned long num_pages;
 	int i;
+	u64 nvmm_page_addr;
 	u64 new_block;
 	int allocated;
 
@@ -556,13 +557,15 @@ int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 	fake_pi.i_blk_type = 0;
 
 	/* Support up to 128 CPUs */
-	allocated = nova_allocate_inode_log_pages(sb, &fake_pi, 1, &new_block);
+	allocated = nova_allocate_inode_log_pages(sb, &fake_pi, 1,
+							&nvmm_page_addr);
 	if (allocated != 1) {
 		nova_dbg("Error allocating NVMM info page\n");
 		return -ENOMEM;
 	}
 
-	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb, new_block);
+	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
+							nvmm_page_addr);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
@@ -577,7 +580,7 @@ int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 		nova_copy_snapshot_list(sb, list, nvmm_list, new_block);
 	}
 
-	nvmm_info->nvmm_page_addr = new_block;
+	nvmm_info->nvmm_page_addr = nvmm_page_addr;
 	nvmm_info->trans_id = info->trans_id;
 	nova_flush_buffer(nvmm_info, sizeof(struct snapshot_nvmm_info), 1);
 
