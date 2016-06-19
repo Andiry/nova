@@ -540,7 +540,7 @@ static int nova_copy_snapshot_list(struct super_block *sb,
 }
 
 void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
-	struct snapshot_nvmm_table *nvmm_table)
+	struct snapshot_nvmm_page *nvmm_page)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode fake_pi;
@@ -564,7 +564,7 @@ void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 			nova_dbg("Error saving snapshot list: %d\n", allocated);
 			return;
 		}
-		nvmm_list = &nvmm_table->lists[i];
+		nvmm_list = &nvmm_page->lists[i];
 		nova_copy_snapshot_list(sb, list, nvmm_list, new_block);
 	}
 

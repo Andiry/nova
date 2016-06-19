@@ -376,12 +376,14 @@ struct free_list {
  * The second block contains pointers to journal pages.
  * The third block contains pointers to inode tables.
  * The fourth block contains snapshot timestamps.
+ * The fifth block contains snapshot infos upon umount.
  */
-#define	RESERVED_BLOCKS		4
+#define	RESERVED_BLOCKS		5
 
 #define	JOURNAL_START		1
 #define	INODE_TABLE_START	2
 #define	SNAPSHOT_TABLE_START	3
+#define	SNAPSHOT_INFO_START	4
 
 struct inode_map {
 	struct mutex inode_table_mutex;
@@ -633,8 +635,17 @@ struct snapshot_nvmm_list {
 };
 
 /* Support up to 128 CPUs */
-struct snapshot_nvmm_table {
+struct snapshot_nvmm_page {
 	struct snapshot_nvmm_list lists[128];
+};
+
+struct snapshot_nvmm_info {
+	__le64	trans_id;
+	__le64 	nvmm_page_addr;
+};
+
+struct snapshot_info_table {
+	struct snapshot_nvmm_info infos[SNAPSHOT_TABLE_SIZE];
 };
 
 static inline
@@ -642,6 +653,13 @@ struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 {
 	return (struct snapshot_table *)((char *)nova_get_block(sb,
 		NOVA_DEF_BLOCK_SIZE_4K * SNAPSHOT_TABLE_START));
+}
+
+static inline
+struct snapshot_info_table *nova_get_snapshot_info_table(struct super_block *sb)
+{
+	return (struct snapshot_info_table *)((char *)nova_get_block(sb,
+		NOVA_DEF_BLOCK_SIZE_4K * SNAPSHOT_INFO_START));
 }
 
 /* Old entry is freeable if it is appended after the latest snapshot */
