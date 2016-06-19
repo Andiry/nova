@@ -644,7 +644,7 @@ struct snapshot_nvmm_info {
 	__le64 	nvmm_page_addr;
 };
 
-struct snapshot_info_table {
+struct snapshot_nvmm_info_table {
 	struct snapshot_nvmm_info infos[SNAPSHOT_TABLE_SIZE];
 };
 
@@ -656,9 +656,9 @@ struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 }
 
 static inline
-struct snapshot_info_table *nova_get_snapshot_info_table(struct super_block *sb)
+struct snapshot_nvmm_info_table *nova_get_nvmm_info_table(struct super_block *sb)
 {
-	return (struct snapshot_info_table *)((char *)nova_get_block(sb,
+	return (struct snapshot_nvmm_info_table *)((char *)nova_get_block(sb,
 		NOVA_DEF_BLOCK_SIZE_4K * SNAPSHOT_INFO_START));
 }
 
