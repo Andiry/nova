@@ -247,47 +247,6 @@ fail:
 	return -EINVAL;
 }
 
-int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_table *snapshot_table;
-	int i, curr, count = 0;
-	u64 trans_id, timestamp;
-	u64 sec, nsec;
-
-	snapshot_table = nova_get_snapshot_table(sb);
-
-	if (!snapshot_table)
-		return -EINVAL;
-
-	seq_printf(seq, "========== NOVA snapshot table ==========\n");
-	seq_printf(seq, "Index\tTrans ID\tTime\n");
-
-	/*  Print in reverse order */
-	curr = sbi->curr_snapshot - 1;
-	if (curr < 0)
-		curr += SNAPSHOT_TABLE_SIZE;
-
-	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		if (snapshot_table->entries[curr].timestamp) {
-			trans_id = snapshot_table->entries[curr].trans_id;
-			timestamp = snapshot_table->entries[curr].timestamp;
-			sec = timestamp >> 32;
-			nsec = timestamp & 0xFFFFFFFF;
-			seq_printf(seq, "%d\t%llu\t\t%llu.%llu\n", curr,
-					trans_id, sec, nsec);
-			count++;
-		}
-
-		curr--;
-		if (curr < 0)
-			curr += SNAPSHOT_TABLE_SIZE;
-	}
-
-	seq_printf(seq, "=========== Total %d snapshots ===========\n", count);
-	return 0;
-}
-
 int nova_create_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -583,6 +542,74 @@ int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 	nvmm_info->nvmm_page_addr = nvmm_page_addr;
 	nvmm_info->trans_id = info->trans_id;
 	nova_flush_buffer(nvmm_info, sizeof(struct snapshot_nvmm_info), 1);
+
+	return 0;
+}
+
+int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	int i, curr, count = 0;
+	u64 trans_id, timestamp;
+	u64 sec, nsec;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	seq_printf(seq, "========== NOVA snapshot table ==========\n");
+	seq_printf(seq, "Index\tTrans ID\tTime\n");
+
+	/*  Print in reverse order */
+	curr = sbi->curr_snapshot - 1;
+	if (curr < 0)
+		curr += SNAPSHOT_TABLE_SIZE;
+
+	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
+		if (snapshot_table->entries[curr].timestamp) {
+			trans_id = snapshot_table->entries[curr].trans_id;
+			timestamp = snapshot_table->entries[curr].timestamp;
+			sec = timestamp >> 32;
+			nsec = timestamp & 0xFFFFFFFF;
+			seq_printf(seq, "%d\t%llu\t\t%llu.%llu\n", curr,
+					trans_id, sec, nsec);
+			count++;
+		}
+
+		curr--;
+		if (curr < 0)
+			curr += SNAPSHOT_TABLE_SIZE;
+	}
+
+	seq_printf(seq, "=========== Total %d snapshots ===========\n", count);
+	return 0;
+}
+
+int nova_save_snapshots(struct super_block *sb)
+{
+	struct snapshot_table *snapshot_table;
+	struct snapshot_info_table *info_table;
+	struct snapshot_info *info;
+	struct snapshot_nvmm_info *nvmm_info;
+	int i;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	info_table = nova_get_snapshot_info_table(sb);
+	memset(info_table, '0', PAGE_SIZE);
+
+	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
+		if (snapshot_table->entries[i].timestamp) {
+			nvmm_info = &info_table->infos[i];
+			nova_save_snapshot_info(sb, info, nvmm_info);
+		}
+
+	}
 
 	return 0;
 }
