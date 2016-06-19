@@ -540,11 +540,12 @@ static int nova_copy_snapshot_list(struct super_block *sb,
 }
 
 void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
-	struct snapshot_nvmm_page *nvmm_page)
+	struct snapshot_nvmm_info *nvmm_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode fake_pi;
 	struct snapshot_list *list;
+	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_list *nvmm_list;
 	unsigned long num_pages;
 	int i;
@@ -555,6 +556,15 @@ void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 	fake_pi.i_blk_type = 0;
 
 	/* Support up to 128 CPUs */
+	allocated = nova_allocate_inode_log_pages(sb, &fake_pi, 1, &new_block);
+	if (allocated != 1) {
+		nova_dbg("Error allocating NVMM info page\n");
+		return;
+	}
+
+	nvmm_info->nvmm_page_addr = new_block;
+	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb, new_block);
+
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
 		num_pages = list->num_pages;
