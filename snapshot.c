@@ -539,7 +539,7 @@ static int nova_copy_snapshot_list(struct super_block *sb,
 	return 0;
 }
 
-void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
+int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 	struct snapshot_nvmm_info *nvmm_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -559,10 +559,9 @@ void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 	allocated = nova_allocate_inode_log_pages(sb, &fake_pi, 1, &new_block);
 	if (allocated != 1) {
 		nova_dbg("Error allocating NVMM info page\n");
-		return;
+		return -ENOMEM;
 	}
 
-	nvmm_info->nvmm_page_addr = new_block;
 	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb, new_block);
 
 	for (i = 0; i < sbi->cpus; i++) {
@@ -572,11 +571,16 @@ void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 					num_pages, &new_block);
 		if (allocated != num_pages) {
 			nova_dbg("Error saving snapshot list: %d\n", allocated);
-			return;
+			return -ENOMEM;
 		}
 		nvmm_list = &nvmm_page->lists[i];
 		nova_copy_snapshot_list(sb, list, nvmm_list, new_block);
 	}
 
+	nvmm_info->nvmm_page_addr = new_block;
+	nvmm_info->trans_id = info->trans_id;
+	nova_flush_buffer(nvmm_info, sizeof(struct snapshot_nvmm_info), 1);
+
+	return 0;
 }
 
