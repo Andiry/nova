@@ -436,6 +436,7 @@ struct nova_sb_info {
 	int cpus;
 	struct proc_dir_entry *s_proc;
 
+	int num_snapshots;
 	int curr_snapshot;
 	u64 latest_snapshot_trans_id;
 
