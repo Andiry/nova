@@ -469,6 +469,7 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 		mutex_unlock(&prev_list->list_mutex);
 	}
 
+	/* FIXME: Start a background thread to free freeable items */
 	return 0;
 }
 
@@ -496,5 +497,60 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	mutex_unlock(&sbi->s_lock);
 
 	return 0;
+}
+
+static void nova_copy_snapshot_list(struct super_block *sb,
+	struct snapshot_list *list, u64 new_block)
+{
+	struct nova_inode_log_page *nvmm_page, *dram_page;
+	void *curr_nvmm_addr;
+	u64 curr_nvmm_block;
+	u64 prev_nvmm_block;
+	u64 curr_dram_addr;
+	unsigned long i;
+
+	curr_dram_addr = list->head;
+	curr_nvmm_block = new_block;
+	curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
+
+	for (i = 0; i < list->num_pages; i++) {
+		/* Leave next_page field alone */
+		memcpy_to_pmem_nocache(curr_nvmm_addr, (void *)curr_dram_addr,
+						LAST_ENTRY);
+
+		nvmm_page = (struct nova_inode_log_page *)curr_nvmm_addr;
+		dram_page = (struct nova_inode_log_page *)curr_dram_addr;
+		prev_nvmm_block = curr_nvmm_block;
+		curr_nvmm_block = nvmm_page->page_tail.next_page;
+		curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
+		curr_dram_addr = dram_page->page_tail.next_page;
+	}
+}
+
+void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode fake_pi;
+	struct snapshot_list *list;
+	unsigned long num_pages;
+	int i;
+	u64 new_block;
+	int allocated;
+
+	fake_pi.nova_ino = 0;
+	fake_pi.i_blk_type = 0;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+		num_pages = list->num_pages;
+		allocated = nova_allocate_inode_log_pages(sb, &fake_pi,
+					num_pages, &new_block);
+		if (allocated != num_pages) {
+			nova_dbg("Error saving snapshot list: %d\n", allocated);
+			return;
+		}
+		nova_copy_snapshot_list(sb, list, new_block);
+	}
+
 }
 
