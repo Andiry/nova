@@ -625,6 +625,18 @@ struct snapshot_file_write_entry {
 	u64	delete_trans_id;
 } __attribute((__packed__));
 
+struct snapshot_nvmm_list {
+	unsigned long padding;
+	unsigned long num_pages;
+	unsigned long head;
+	unsigned long tail;
+};
+
+/* Support up to 128 CPUs */
+struct snapshot_nvmm_table {
+	struct snapshot_nvmm_list lists[128];
+};
+
 static inline
 struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 {
