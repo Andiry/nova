@@ -501,8 +501,9 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	return 0;
 }
 
-static void nova_copy_snapshot_list(struct super_block *sb,
-	struct snapshot_list *list, u64 new_block)
+static int nova_copy_snapshot_list(struct super_block *sb,
+	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list,
+	u64 new_block)
 {
 	struct nova_inode_log_page *nvmm_page, *dram_page;
 	void *curr_nvmm_addr;
@@ -512,6 +513,7 @@ static void nova_copy_snapshot_list(struct super_block *sb,
 	unsigned long i;
 
 	curr_dram_addr = list->head;
+	prev_nvmm_block = new_block;
 	curr_nvmm_block = new_block;
 	curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
 
@@ -527,13 +529,23 @@ static void nova_copy_snapshot_list(struct super_block *sb,
 		curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
 		curr_dram_addr = dram_page->page_tail.next_page;
 	}
+
+	nvmm_list->num_pages = list->num_pages;
+	nvmm_list->tail = prev_nvmm_block + ENTRY_LOC(list->tail);
+	nvmm_list->head = new_block;
+
+	nova_flush_buffer(nvmm_list, sizeof(struct snapshot_nvmm_list), 1);
+
+	return 0;
 }
 
-void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info)
+void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
+	struct snapshot_nvmm_table *nvmm_table)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode fake_pi;
 	struct snapshot_list *list;
+	struct snapshot_nvmm_list *nvmm_list;
 	unsigned long num_pages;
 	int i;
 	u64 new_block;
@@ -542,6 +554,7 @@ void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info)
 	fake_pi.nova_ino = 0;
 	fake_pi.i_blk_type = 0;
 
+	/* Support up to 128 CPUs */
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
 		num_pages = list->num_pages;
@@ -551,7 +564,8 @@ void nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info)
 			nova_dbg("Error saving snapshot list: %d\n", allocated);
 			return;
 		}
-		nova_copy_snapshot_list(sb, list, new_block);
+		nvmm_list = &nvmm_table->lists[i];
+		nova_copy_snapshot_list(sb, list, nvmm_list, new_block);
 	}
 
 }
