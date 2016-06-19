@@ -375,15 +375,16 @@ static int nova_delete_snapshot_list_pages(struct super_block *sb,
 }
 
 static int nova_delete_snapshot_list(struct super_block *sb,
-	struct snapshot_list *list)
+	struct snapshot_list *list, int delete_entries)
 {
-	nova_delete_snapshot_list_entries(sb, list);
+	if (delete_entries)
+		nova_delete_snapshot_list_entries(sb, list);
 	nova_delete_snapshot_list_pages(sb, list);
 	return 0;
 }
 
 static int nova_delete_snapshot_info(struct super_block *sb,
-	struct snapshot_info *info)
+	struct snapshot_info *info, int delete_entries)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_list *list;
@@ -392,12 +393,11 @@ static int nova_delete_snapshot_info(struct super_block *sb,
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
 		mutex_lock(&list->list_mutex);
-		nova_delete_snapshot_list(sb, list);
+		nova_delete_snapshot_list(sb, list, delete_entries);
 		mutex_unlock(&list->list_mutex);
 	}
 
 	kfree(info->lists);
-	kfree(info);
 	return 0;
 }
 
@@ -611,9 +611,13 @@ int nova_save_snapshots(struct super_block *sb)
 			info = &info_table->infos[i];
 			nvmm_info = &nvmm_info_table->infos[i];
 			nova_save_snapshot_info(sb, info, nvmm_info);
+			nova_delete_snapshot_info(sb, info, 0);
 		}
 
 	}
+
+	kfree(sbi->snapshot_info_table);
+	sbi->snapshot_info_table = NULL;
 
 	return 0;
 }
