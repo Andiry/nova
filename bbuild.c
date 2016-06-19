@@ -467,7 +467,7 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 
 void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 {
-	struct nova_inode *pi =  nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super;
 	struct free_list *free_list;

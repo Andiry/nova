@@ -441,6 +441,36 @@ static int nova_delete_snapshot_info(struct super_block *sb,
 	return 0;
 }
 
+static int nova_link_to_next_snapshot(struct super_block *sb,
+	struct snapshot_info *prev_info, struct snapshot_info *next_info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_list *prev_list, *next_list;
+	struct nova_inode_log_page *curr_page;
+	u64 curr_block;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		prev_list = &prev_info->lists[i];
+		next_list = &next_info->lists[i];
+
+		mutex_lock(&prev_list->list_mutex);
+		mutex_lock(&next_list->list_mutex);
+
+		/* Link the prev lists to the head of next lists */
+		curr_block = BLOCK_OFF(prev_list->tail);
+		curr_page = (struct nova_inode_log_page *)curr_block;
+		nova_set_next_link_page_address(sb, curr_page, next_list->head);
+
+		next_list->head = prev_list->head;
+		next_list->num_pages += prev_list->num_pages;
+
+		mutex_unlock(&next_list->list_mutex);
+		mutex_unlock(&prev_list->list_mutex);
+	}
+
+	return 0;
+}
 
 /* FIXME: 1) Snapshot hole 2) latest snapshot trans ID update */
 int nova_delete_snapshot(struct super_block *sb, int index)
