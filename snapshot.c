@@ -191,7 +191,8 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, index;
-	u64 prev_trans_id, recover_trans_id;
+	u64 recover_trans_id;
+	u64 trans_id;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -221,26 +222,18 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		return 0;
 	}
 
-	prev_trans_id = 0;
+	sbi->curr_snapshot = 0;
+	sbi->latest_snapshot_trans_id = 0;
+
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		/* Find first unused slot */
-		if (snapshot_table->entries[i].trans_id == 0) {
+		trans_id = snapshot_table->entries[i].trans_id;
+
+		/* FIXME */
+		if (trans_id == 0)
 			sbi->curr_snapshot = i;
-			break;
-		}
 
-		if (snapshot_table->entries[i].trans_id < prev_trans_id) {
-			sbi->curr_snapshot = i;
-			break;
-		}
-
-		prev_trans_id = snapshot_table->entries[i].trans_id;
-		sbi->latest_snapshot_trans_id = prev_trans_id;
-	}
-
-	if (i == SNAPSHOT_TABLE_SIZE) {
-		nova_dbg("%s: failed\n", __func__);
-		return -EINVAL;
+		if (trans_id > sbi->latest_snapshot_trans_id)
+			sbi->latest_snapshot_trans_id = trans_id;
 	}
 
 	return 0;
