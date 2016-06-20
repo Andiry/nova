@@ -198,6 +198,29 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
+	/* No need to rebuild the snapshots if we are recovering a snapshot */
+	if (sbi->recover_snapshot) {
+		index = sbi->recover_snapshot_index;
+		if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
+			nova_dbg("%s: recover invalid snapshot %d\n",
+					__func__, index);
+			sbi->recover_snapshot = 0;
+			return -EINVAL;
+		}
+
+		recover_trans_id = snapshot_table->entries[index].trans_id;
+		if (recover_trans_id == 0) {
+			nova_dbg("%s: recover invalid snapshot %d\n",
+					__func__, index);
+			sbi->recover_snapshot = 0;
+			return -EINVAL;
+		}
+
+		sbi->recover_snapshot_trans_id = recover_trans_id;
+		nova_dbg("recover snapshot %d\n", index);
+		return 0;
+	}
+
 	prev_trans_id = 0;
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		/* Find first unused slot */
@@ -215,34 +238,12 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		sbi->latest_snapshot_trans_id = prev_trans_id;
 	}
 
-	if (i == SNAPSHOT_TABLE_SIZE)
-		goto fail;
-
-	if (sbi->recover_snapshot) {
-		index = sbi->recover_snapshot_index;
-		if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
-			nova_dbg("%s: recover invalid snapshot %d\n",
-					__func__, index);
-			sbi->recover_snapshot = 0;
-			goto fail;
-		}
-
-		recover_trans_id = snapshot_table->entries[index].trans_id;
-		if (recover_trans_id == 0) {
-			nova_dbg("%s: recover invalid snapshot %d\n",
-					__func__, index);
-			sbi->recover_snapshot = 0;
-			goto fail;
-		}
-
-		sbi->recover_snapshot_trans_id = recover_trans_id;
-		nova_dbg("recover snapshot %d\n", index);
+	if (i == SNAPSHOT_TABLE_SIZE) {
+		nova_dbg("%s: failed\n", __func__);
+		return -EINVAL;
 	}
 
 	return 0;
-fail:
-	nova_dbg("%s: failed\n", __func__);
-	return -EINVAL;
 }
 
 int nova_create_snapshot(struct super_block *sb)
