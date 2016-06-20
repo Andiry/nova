@@ -186,6 +186,30 @@ int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	return ret;
 }
 
+static int nova_restore_snapshot_info(struct super_block *sb, int index)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	struct snapshot_info_table *info_table;
+	struct snapshot_nvmm_info_table *nvmm_info_table;
+	struct snapshot_info *info;
+	struct snapshot_nvmm_info *nvmm_info;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	info_table = sbi->snapshot_info_table;
+	nvmm_info_table = nova_get_nvmm_info_table(sb);
+
+	info = &info_table->infos[index];
+	nvmm_info = &nvmm_info_table->infos[index];
+//	nova_save_snapshot_info(sb, info, nvmm_info);
+
+	return 0;
+}
+
 int nova_restore_snapshot_table(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -231,6 +255,8 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		/* FIXME */
 		if (trans_id == 0)
 			sbi->curr_snapshot = i;
+		else
+			nova_restore_snapshot_info(sb, i);
 
 		if (trans_id > sbi->latest_snapshot_trans_id)
 			sbi->latest_snapshot_trans_id = trans_id;
