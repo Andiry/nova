@@ -35,38 +35,37 @@ static inline void nova_set_next_link_page_address(struct super_block *sb,
 	curr_page->page_tail.next_page = next_page;
 }
 
-int nova_alloc_snapshot_info(struct super_block *sb, u64 trans_id)
+int nova_initialize_snapshot_info(struct super_block *sb,
+	int index, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_info *snapshot_info;
-	struct snapshot_list *snapshot_list;
+	struct snapshot_info_table *info_table;
+	struct snapshot_info *info;
+	struct snapshot_list *list;
 	unsigned long new_page = 0;
 	int i;
 
-	snapshot_info = kzalloc(sizeof(struct snapshot_info), GFP_KERNEL);
-	if (!snapshot_info)
-		return -ENOMEM;
+	info_table = sbi->snapshot_info_table;
+	info = &info_table->infos[index];
 
-	snapshot_info->trans_id = trans_id;
-	snapshot_info->lists = kzalloc(sbi->cpus * sizeof(struct snapshot_list),
+	info->trans_id = trans_id;
+	info->lists = kzalloc(sbi->cpus * sizeof(struct snapshot_list),
 							GFP_KERNEL);
 
-	if (!snapshot_info->lists) {
-		kfree(snapshot_info);
+	if (!info->lists)
 		return -ENOMEM;
-	}
 
 	for (i = 0; i < sbi->cpus; i++) {
-		snapshot_list = &snapshot_info->lists[i];
-		mutex_init(&snapshot_list->list_mutex);
+		list = &info->lists[i];
+		mutex_init(&list->list_mutex);
 		new_page = (unsigned long)kmalloc(PAGE_SIZE,
 							GFP_KERNEL);
 		/* Aligned to PAGE_SIZE */
 		if (!new_page || ENTRY_LOC(new_page))
 			goto fail;
 		nova_set_next_link_page_address(sb, (void *)new_page, 0);
-		snapshot_list->tail = snapshot_list->head = new_page;
-		snapshot_list->num_pages = 1;
+		list->tail = list->head = new_page;
+		list->num_pages = 1;
 	}
 
 	return 0;
@@ -74,13 +73,12 @@ int nova_alloc_snapshot_info(struct super_block *sb, u64 trans_id)
 fail:
 	kfree((void *)new_page);
 	for (i = 0; i < sbi->cpus; i++) {
-		snapshot_list = &snapshot_info->lists[i];
-		if (snapshot_list->head)
-			kfree((void *)snapshot_list->head);
+		list = &info->lists[i];
+		if (list->head)
+			kfree((void *)list->head);
 	}
 
-	kfree(snapshot_info->lists);
-	kfree(snapshot_info);
+	kfree(info->lists);
 	return -ENOMEM;
 }
 
@@ -252,8 +250,10 @@ int nova_create_snapshot(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super = nova_get_super(sb);
 	struct snapshot_table *snapshot_table;
+	int index;
 	u64 timestamp = 0;
 	u64 trans_id;
+	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -264,6 +264,7 @@ int nova_create_snapshot(struct super_block *sb)
 	trans_id = atomic64_read(&super->s_trans_id);
 	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
 			(CURRENT_TIME_SEC.tv_nsec);
+	index = sbi->curr_snapshot;
 	snapshot_table->entries[sbi->curr_snapshot].trans_id = trans_id;
 	snapshot_table->entries[sbi->curr_snapshot].timestamp = timestamp;
 	nova_flush_buffer(&snapshot_table->entries[sbi->curr_snapshot],
@@ -275,7 +276,9 @@ int nova_create_snapshot(struct super_block *sb)
 		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
 	mutex_unlock(&sbi->s_lock);
 
-	return 0;
+	ret = nova_initialize_snapshot_info(sb, index, trans_id);
+
+	return ret;
 }
 
 static inline bool goto_next_list_page(struct super_block *sb, u64 curr_p)
