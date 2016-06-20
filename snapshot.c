@@ -186,6 +186,40 @@ int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	return ret;
 }
 
+static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
+	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list)
+{
+	struct nova_inode_log_page *nvmm_page, *dram_page;
+	void *curr_nvmm_addr;
+	u64 curr_nvmm_block;
+	u64 prev_dram_addr;
+	u64 curr_dram_addr;
+	unsigned long i;
+
+	curr_dram_addr = list->head;
+	prev_dram_addr = list->head;
+	curr_nvmm_block = nvmm_list->head;
+	curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
+
+	for (i = 0; i < nvmm_list->num_pages; i++) {
+		/* Leave next_page field alone */
+		memcpy((void *)curr_dram_addr, curr_nvmm_addr,
+						LAST_ENTRY);
+
+		nvmm_page = (struct nova_inode_log_page *)curr_nvmm_addr;
+		dram_page = (struct nova_inode_log_page *)curr_dram_addr;
+		prev_dram_addr = curr_dram_addr;
+		curr_nvmm_block = nvmm_page->page_tail.next_page;
+		curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
+		curr_dram_addr = dram_page->page_tail.next_page;
+	}
+
+	list->num_pages = nvmm_list->num_pages;
+	list->tail = prev_dram_addr + ENTRY_LOC(nvmm_list->tail);
+
+	return 0;
+}
+
 static int nova_restore_snapshot_info(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -483,7 +517,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	return 0;
 }
 
-static int nova_copy_snapshot_list(struct super_block *sb,
+static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list,
 	u64 new_block)
 {
@@ -559,7 +593,7 @@ int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
 			return -ENOMEM;
 		}
 		nvmm_list = &nvmm_page->lists[i];
-		nova_copy_snapshot_list(sb, list, nvmm_list, new_block);
+		nova_copy_snapshot_list_to_nvmm(sb, list, nvmm_list, new_block);
 	}
 
 	nvmm_info->nvmm_page_addr = nvmm_page_addr;
