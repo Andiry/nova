@@ -220,6 +220,63 @@ static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
 	return 0;
 }
 
+static int nova_delete_snapshot_list_pages(struct super_block *sb,
+	struct snapshot_list *list)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 curr_block = list->head;
+	int freed = 0;
+
+	while (curr_block) {
+		if (curr_block & INVALID_MASK) {
+			nova_dbg("%s: ERROR: invalid block %llu\n",
+					__func__, curr_block);
+			break;
+		}
+		curr_page = (struct nova_inode_log_page *)curr_block;
+		curr_block = curr_page->page_tail.next_page;
+		kfree(curr_page);
+		freed++;
+	}
+
+	return freed;
+}
+
+static int nova_allocate_snapshot_list_pages(struct super_block *sb,
+	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list)
+{
+	unsigned long prev_page = 0;
+	unsigned long new_page = 0;
+	unsigned long i;
+
+	for (i = 0; i < nvmm_list->num_pages; i++) {
+		new_page = (unsigned long)kmalloc(PAGE_SIZE,
+							GFP_KERNEL);
+
+		if (!new_page) {
+			nova_dbg("%s ERROR: fail to allocate list pages\n",
+					__func__);
+			goto fail;
+		}
+
+		nova_set_next_link_page_address(sb, (void *)new_page, 0);
+
+		if (i == 0)
+			list->head = new_page;
+
+		if (prev_page)
+			nova_set_next_link_page_address(sb, (void *)prev_page,
+							new_page);
+		prev_page = new_page;
+	}
+
+	return 0;
+
+fail:
+	nova_delete_snapshot_list_pages(sb, list);
+	return -ENOMEM;
+}
+
 static int nova_restore_snapshot_info(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -407,28 +464,6 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 	}
 
 	return 0;
-}
-
-static int nova_delete_snapshot_list_pages(struct super_block *sb,
-	struct snapshot_list *list)
-{
-	struct nova_inode_log_page *curr_page;
-	u64 curr_block = list->head;
-	int freed = 0;
-
-	while (curr_block) {
-		if (curr_block & INVALID_MASK) {
-			nova_dbg("%s: ERROR: invalid block %llu\n",
-					__func__, curr_block);
-			break;
-		}
-		curr_page = (struct nova_inode_log_page *)curr_block;
-		curr_block = curr_page->page_tail.next_page;
-		kfree(curr_page);
-		freed++;
-	}
-
-	return freed;
 }
 
 static int nova_delete_snapshot_list(struct super_block *sb,
