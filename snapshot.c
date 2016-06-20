@@ -28,11 +28,134 @@ static inline u64 next_list_page(u64 curr_p)
 	return ((struct nova_inode_page_tail *)page_tail)->next_page;
 }
 
+static inline bool goto_next_list_page(struct super_block *sb, u64 curr_p)
+{
+	void *addr;
+	u8 type;
+
+	/* Each kind of entry takes at least 32 bytes */
+	if (ENTRY_LOC(curr_p) + 32 > LAST_ENTRY)
+		return true;
+
+	addr = (void *)curr_p;
+	type = nova_get_entry_type(addr);
+	if (type == NEXT_PAGE)
+		return true;
+
+	return false;
+}
+
 /* Reuse the inode log page structure */
 static inline void nova_set_next_link_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page)
 {
 	curr_page->page_tail.next_page = next_page;
+}
+
+static int nova_delete_snapshot_list_entries(struct super_block *sb,
+	struct snapshot_list *list)
+{
+	struct snapshot_file_write_entry *w_entry = NULL;
+	struct snapshot_inode_entry *i_entry = NULL;
+	struct nova_inode fake_pi;
+	void *addr;
+	u64 curr_p;
+	u8 type;
+
+	fake_pi.nova_ino = 0;
+	fake_pi.i_blk_type = 0;
+
+	curr_p = list->head;
+	nova_dbg_verbose("Snapshot list head 0x%llx, tail 0x%lx\n",
+				curr_p, list->tail);
+	if (curr_p == 0 && list->tail == 0)
+		return 0;
+
+	while (curr_p != list->tail) {
+		if (goto_next_list_page(sb, curr_p))
+			curr_p = next_list_page(curr_p);
+
+		if (curr_p == 0) {
+			nova_err(sb, "Snapshot list is NULL!\n");
+			BUG();
+		}
+
+		addr = (void *)curr_p;
+		type = nova_get_entry_type(addr);
+
+		switch (type) {
+			case SS_INODE:
+				i_entry = (struct snapshot_inode_entry *)addr;
+//				nova_delete_dead_inode(sb, i_entry->nova_ino);
+				curr_p += sizeof(struct snapshot_inode_entry);
+				continue;
+			case SS_FILE_WRITE:
+				w_entry =
+					(struct snapshot_file_write_entry *)addr;
+				nova_free_data_blocks(sb, &fake_pi,
+							w_entry->nvmm,
+							w_entry->num_pages);
+				curr_p += sizeof(struct snapshot_file_write_entry);
+				continue;
+			default:
+				nova_err(sb, "unknown type %d, 0x%llx\n",
+							type, curr_p);
+				NOVA_ASSERT(0);
+				curr_p += sizeof(struct snapshot_file_write_entry);
+				continue;
+		}
+	}
+
+	return 0;
+}
+
+static int nova_delete_snapshot_list_pages(struct super_block *sb,
+	struct snapshot_list *list)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 curr_block = list->head;
+	int freed = 0;
+
+	while (curr_block) {
+		if (curr_block & INVALID_MASK) {
+			nova_dbg("%s: ERROR: invalid block %llu\n",
+					__func__, curr_block);
+			break;
+		}
+		curr_page = (struct nova_inode_log_page *)curr_block;
+		curr_block = curr_page->page_tail.next_page;
+		kfree(curr_page);
+		freed++;
+	}
+
+	return freed;
+}
+
+static int nova_delete_snapshot_list(struct super_block *sb,
+	struct snapshot_list *list, int delete_entries)
+{
+	if (delete_entries)
+		nova_delete_snapshot_list_entries(sb, list);
+	nova_delete_snapshot_list_pages(sb, list);
+	return 0;
+}
+
+static int nova_delete_snapshot_info(struct super_block *sb,
+	struct snapshot_info *info, int delete_entries)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_list *list;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+		mutex_lock(&list->list_mutex);
+		nova_delete_snapshot_list(sb, list, delete_entries);
+		mutex_unlock(&list->list_mutex);
+	}
+
+	kfree(info->lists);
+	return 0;
 }
 
 int nova_initialize_snapshot_info(struct super_block *sb,
@@ -220,28 +343,6 @@ static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
 	return 0;
 }
 
-static int nova_delete_snapshot_list_pages(struct super_block *sb,
-	struct snapshot_list *list)
-{
-	struct nova_inode_log_page *curr_page;
-	u64 curr_block = list->head;
-	int freed = 0;
-
-	while (curr_block) {
-		if (curr_block & INVALID_MASK) {
-			nova_dbg("%s: ERROR: invalid block %llu\n",
-					__func__, curr_block);
-			break;
-		}
-		curr_page = (struct nova_inode_log_page *)curr_block;
-		curr_block = curr_page->page_tail.next_page;
-		kfree(curr_page);
-		freed++;
-	}
-
-	return freed;
-}
-
 static int nova_allocate_snapshot_list_pages(struct super_block *sb,
 	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list)
 {
@@ -284,7 +385,12 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index)
 	struct snapshot_info_table *info_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
 	struct snapshot_info *info;
+	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_info *nvmm_info;
+	struct snapshot_list *list;
+	struct snapshot_nvmm_list *nvmm_list;
+	int i;
+	int ret = 0;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -296,9 +402,25 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index)
 
 	info = &info_table->infos[index];
 	nvmm_info = &nvmm_info_table->infos[index];
-//	nova_save_snapshot_info(sb, info, nvmm_info);
+	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
+						nvmm_info->nvmm_page_addr);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+		nvmm_list = &nvmm_page->lists[i];
+		ret = nova_allocate_snapshot_list_pages(sb, list, nvmm_list);
+		if (ret) {
+			nova_dbg("%s failure\n", __func__);
+			goto fail;
+		}
+		nova_copy_snapshot_list_to_dram(sb, list, nvmm_list);
+	}
 
 	return 0;
+
+fail:
+	nova_delete_snapshot_info(sb, info, 0);
+	return ret;
 }
 
 int nova_restore_snapshot_table(struct super_block *sb)
@@ -390,107 +512,6 @@ int nova_create_snapshot(struct super_block *sb)
 	ret = nova_initialize_snapshot_info(sb, index, trans_id);
 
 	return ret;
-}
-
-static inline bool goto_next_list_page(struct super_block *sb, u64 curr_p)
-{
-	void *addr;
-	u8 type;
-
-	/* Each kind of entry takes at least 32 bytes */
-	if (ENTRY_LOC(curr_p) + 32 > LAST_ENTRY)
-		return true;
-
-	addr = (void *)curr_p;
-	type = nova_get_entry_type(addr);
-	if (type == NEXT_PAGE)
-		return true;
-
-	return false;
-}
-
-static int nova_delete_snapshot_list_entries(struct super_block *sb,
-	struct snapshot_list *list)
-{
-	struct snapshot_file_write_entry *w_entry = NULL;
-	struct snapshot_inode_entry *i_entry = NULL;
-	struct nova_inode fake_pi;
-	void *addr;
-	u64 curr_p;
-	u8 type;
-
-	fake_pi.nova_ino = 0;
-	fake_pi.i_blk_type = 0;
-
-	curr_p = list->head;
-	nova_dbg_verbose("Snapshot list head 0x%llx, tail 0x%lx\n",
-				curr_p, list->tail);
-	if (curr_p == 0 && list->tail == 0)
-		return 0;
-
-	while (curr_p != list->tail) {
-		if (goto_next_list_page(sb, curr_p))
-			curr_p = next_list_page(curr_p);
-
-		if (curr_p == 0) {
-			nova_err(sb, "Snapshot list is NULL!\n");
-			BUG();
-		}
-
-		addr = (void *)curr_p;
-		type = nova_get_entry_type(addr);
-
-		switch (type) {
-			case SS_INODE:
-				i_entry = (struct snapshot_inode_entry *)addr;
-//				nova_delete_dead_inode(sb, i_entry->nova_ino);
-				curr_p += sizeof(struct snapshot_inode_entry);
-				continue;
-			case SS_FILE_WRITE:
-				w_entry =
-					(struct snapshot_file_write_entry *)addr;
-				nova_free_data_blocks(sb, &fake_pi,
-							w_entry->nvmm,
-							w_entry->num_pages);
-				curr_p += sizeof(struct snapshot_file_write_entry);
-				continue;
-			default:
-				nova_err(sb, "unknown type %d, 0x%llx\n",
-							type, curr_p);
-				NOVA_ASSERT(0);
-				curr_p += sizeof(struct snapshot_file_write_entry);
-				continue;
-		}
-	}
-
-	return 0;
-}
-
-static int nova_delete_snapshot_list(struct super_block *sb,
-	struct snapshot_list *list, int delete_entries)
-{
-	if (delete_entries)
-		nova_delete_snapshot_list_entries(sb, list);
-	nova_delete_snapshot_list_pages(sb, list);
-	return 0;
-}
-
-static int nova_delete_snapshot_info(struct super_block *sb,
-	struct snapshot_info *info, int delete_entries)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_list *list;
-	int i;
-
-	for (i = 0; i < sbi->cpus; i++) {
-		list = &info->lists[i];
-		mutex_lock(&list->list_mutex);
-		nova_delete_snapshot_list(sb, list, delete_entries);
-		mutex_unlock(&list->list_mutex);
-	}
-
-	kfree(info->lists);
-	return 0;
 }
 
 static int nova_link_to_next_snapshot(struct super_block *sb,
