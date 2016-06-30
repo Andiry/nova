@@ -979,6 +979,41 @@ out:
 	NOVA_END_TIMING(evict_inode_t, evict_time);
 }
 
+/* First rebuild the inode tree, then free the blocks */
+int nova_delete_dead_inode(struct super_block *sb, u64 ino)
+{
+	struct nova_inode_info si;
+	struct nova_inode_info_header *sih;
+	struct nova_inode *pi;
+	u64 pi_addr = 0;
+	int err;
+
+	if (ino == 0 || ino == NOVA_ROOT_INO) {
+		nova_dbg("%s: invalid inode %llu\n", __func__, ino);
+		return -EINVAL;
+	}
+
+	err = nova_get_inode_address(sb, ino, &pi_addr, 0);
+	if (err) {
+		nova_dbg("%s: get inode %llu address failed %d\n",
+					__func__, ino, err);
+		return -EINVAL;
+	}
+
+	if (pi_addr == 0)
+		return -EACCES;
+
+	memset(&si, 0, sizeof(struct nova_inode_info));
+	err = nova_rebuild_inode(sb, &si, pi_addr);
+	if (err)
+		return err;
+
+	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
+	sih = &si.header;
+
+	return nova_free_inode_resource(sb, pi, sih);
+}
+
 /* Returns 0 on failure */
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 {
