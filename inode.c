@@ -874,6 +874,48 @@ unsigned long nova_get_last_blocknr(struct super_block *sb,
 	return last_blocknr;
 }
 
+static int nova_free_inode_resource(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih)
+{
+	unsigned long last_blocknr;
+	int ret = 0;
+	int freed = 0;
+
+	/* We need the log to free the blocks from the b-tree */
+	switch (sih->i_mode & S_IFMT) {
+	case S_IFREG:
+		last_blocknr = nova_get_last_blocknr(sb, sih);
+		nova_dbgv("%s: file ino %lu\n", __func__, sih->ino);
+		freed = nova_delete_file_tree(sb, sih, 0,
+					last_blocknr, true, true);
+		break;
+	case S_IFDIR:
+		nova_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
+		nova_delete_dir_tree(sb, sih);
+		break;
+	case S_IFLNK:
+		/* Log will be freed later */
+		nova_dbgv("%s: symlink ino %lu\n",
+				__func__, sih->ino);
+		freed = nova_delete_file_tree(sb, sih, 0, 0,
+						true, true);
+		break;
+	default:
+		nova_dbgv("%s: special ino %lu\n",
+				__func__, sih->ino);
+		break;
+	}
+
+	nova_dbg_verbose("%s: Freed %d\n", __func__, freed);
+	/* Then we can free the inode */
+	ret = nova_free_inode(sb, pi, sih);
+	if (ret)
+		nova_err(sb, "%s: free inode %lu failed\n",
+				__func__, sih->ino);
+
+	return ret;
+}
+
 void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
@@ -881,11 +923,9 @@ void nova_evict_inode(struct inode *inode)
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	unsigned long last_blocknr;
 	timing_t evict_time;
-	int err = 0;
-	int freed = 0;
 	int destroy = 0;
+	int ret;
 
 	if (!sih) {
 		nova_err(sb, "%s: ino %lu sih is NULL!\n",
@@ -917,40 +957,11 @@ void nova_evict_inode(struct inode *inode)
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
 
-		destroy = 1;
-		/* We need the log to free the blocks from the b-tree */
-		switch (inode->i_mode & S_IFMT) {
-		case S_IFREG:
-			last_blocknr = nova_get_last_blocknr(sb, sih);
-			nova_dbgv("%s: file ino %lu\n", __func__, inode->i_ino);
-			freed = nova_delete_file_tree(sb, sih, 0,
-						last_blocknr, true, true);
-			break;
-		case S_IFDIR:
-			nova_dbgv("%s: dir ino %lu\n", __func__, inode->i_ino);
-			nova_delete_dir_tree(sb, sih);
-			break;
-		case S_IFLNK:
-			/* Log will be freed later */
-			nova_dbgv("%s: symlink ino %lu\n",
-					__func__, inode->i_ino);
-			freed = nova_delete_file_tree(sb, sih, 0, 0,
-							true, true);
-			break;
-		default:
-			nova_dbgv("%s: special ino %lu\n",
-					__func__, inode->i_ino);
-			break;
-		}
-
-		nova_dbg_verbose("%s: Freed %d\n", __func__, freed);
-		/* Then we can free the inode */
-		err = nova_free_inode(sb, pi, sih);
-		if (err) {
-			nova_err(sb, "%s: free inode %lu failed\n",
-					__func__, inode->i_ino);
+		ret = nova_free_inode_resource(sb, pi, sih);
+		if (ret)
 			goto out;
-		}
+
+		destroy = 1;
 		pi = NULL; /* we no longer own the nova_inode */
 
 		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
