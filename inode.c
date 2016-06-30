@@ -768,45 +768,20 @@ block_found:
 	return ret;
 }
 
-/*
- * NOTE! When we get the inode, we're the only people
- * that have access to it, and as such there are no
- * race conditions we have to worry about. The inode
- * is not on the hash-lists, and it cannot be reached
- * through the filesystem because the directory entry
- * has been deleted earlier.
- */
-static int nova_free_inode(struct inode *inode,
+static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih)
 {
-	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi;
 	int err = 0;
 	timing_t free_time;
 
 	NOVA_START_TIMING(free_inode_t, free_time);
 
-	pi = nova_get_inode(sb, inode);
-
 	pi->deleted = 1;
 
 	if (pi->valid) {
 		nova_dbg("%s: inode %lu still valid\n",
-				__func__, inode->i_ino);
+				__func__, sih->ino);
 		pi->valid = 0;
-	}
-
-	if (pi->nova_ino != inode->i_ino) {
-		nova_err(sb, "%s: inode %lu ino does not match: %llu\n",
-				__func__, inode->i_ino, pi->nova_ino);
-		nova_dbg("inode size %llu, pi addr 0x%lx, pi head 0x%llx, "
-				"tail 0x%llx, mode %u\n",
-				inode->i_size, sih->pi_addr, pi->log_head,
-				pi->log_tail, pi->i_mode);
-		nova_dbg("sih: ino %lu, inode size %lu, mode %u, "
-				"inode mode %u\n", sih->ino, sih->i_size,
-				sih->i_mode, inode->i_mode);
-		nova_print_inode_log(sb, inode);
 	}
 
 	nova_free_inode_log(sb, pi);
@@ -912,6 +887,19 @@ void nova_evict_inode(struct inode *inode)
 		goto out;
 	}
 
+	if (pi->nova_ino != inode->i_ino) {
+		nova_err(sb, "%s: inode %lu ino does not match: %llu\n",
+				__func__, inode->i_ino, pi->nova_ino);
+		nova_dbg("inode size %llu, pi addr 0x%lx, pi head 0x%llx, "
+				"tail 0x%llx, mode %u\n",
+				inode->i_size, sih->pi_addr, pi->log_head,
+				pi->log_tail, pi->i_mode);
+		nova_dbg("sih: ino %lu, inode size %lu, mode %u, "
+				"inode mode %u\n", sih->ino, sih->i_size,
+				sih->i_mode, inode->i_mode);
+		nova_print_inode_log(sb, inode);
+	}
+
 	/* This inode exists in at least one snapshot. Don't delete it yet. */
 	if (pi->create_trans_id <= sbi->latest_snapshot_trans_id)
 		goto out;
@@ -950,7 +938,7 @@ void nova_evict_inode(struct inode *inode)
 
 		nova_dbg_verbose("%s: Freed %d\n", __func__, freed);
 		/* Then we can free the inode */
-		err = nova_free_inode(inode, sih);
+		err = nova_free_inode(sb, pi, sih);
 		if (err) {
 			nova_err(sb, "%s: free inode %lu failed\n",
 					__func__, inode->i_ino);
