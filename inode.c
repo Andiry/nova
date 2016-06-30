@@ -831,7 +831,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 		goto fail;
 	}
 
-	err = nova_rebuild_inode(sb, si, pi_addr);
+	err = nova_rebuild_inode(sb, si, pi_addr, 1);
 	if (err)
 		goto fail;
 
@@ -997,7 +997,7 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino)
 		return -EACCES;
 
 	memset(&si, 0, sizeof(struct nova_inode_info));
-	err = nova_rebuild_inode(sb, &si, pi_addr);
+	err = nova_rebuild_inode(sb, &si, pi_addr, 0);
 	if (err)
 		return err;
 
