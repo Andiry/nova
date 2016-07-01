@@ -544,6 +544,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	sbi->snapshot_info_tree = RB_ROOT;
 	sbi->snapshot_info_table = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!sbi->snapshot_info_table) {
 		retval = -ENOMEM;
