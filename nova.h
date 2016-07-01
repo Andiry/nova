@@ -436,6 +436,8 @@ struct nova_sb_info {
 	int cpus;
 	struct proc_dir_entry *s_proc;
 
+	/* Snapshot related */
+	struct rb_root	snapshot_info_tree;
 	int num_snapshots;
 	int curr_snapshot;
 	u64 latest_snapshot_trans_id;
@@ -603,6 +605,7 @@ struct snapshot_list {
 
 struct snapshot_info {
 	u64	trans_id;
+	struct rb_node node;
 
 	/* Per-CPU snapshot list */
 	struct snapshot_list *lists;
