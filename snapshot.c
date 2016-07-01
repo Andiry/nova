@@ -294,7 +294,7 @@ static int nova_initialize_snapshot_info_pages(struct super_block *sb,
 }
 
 static int nova_initialize_snapshot_info(struct super_block *sb,
-	struct snapshot_info **ret_info)
+	struct snapshot_info **ret_info, int init_pages)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info;
@@ -314,9 +314,11 @@ static int nova_initialize_snapshot_info(struct super_block *sb,
 		goto fail;
 	}
 
-	ret = nova_initialize_snapshot_info_pages(sb, info);
-	if (ret)
-		goto fail;
+	if (init_pages) {
+		ret = nova_initialize_snapshot_info_pages(sb, info);
+		if (ret)
+			goto fail;
+	}
 
 	*ret_info = info;
 	return 0;
@@ -624,7 +626,7 @@ int nova_create_snapshot(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
-	ret = nova_initialize_snapshot_info(sb, &info);
+	ret = nova_initialize_snapshot_info(sb, &info, 1);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);
