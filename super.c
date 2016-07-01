@@ -862,8 +862,7 @@ inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
 	return nova_alloc_range_node(sb);
 }
 
-static inline
-struct snapshot_info *nova_alloc_snapshot_info(struct super_block *sb)
+inline struct snapshot_info *nova_alloc_snapshot_info(struct super_block *sb)
 {
 	struct snapshot_info *p;
 	p = (struct snapshot_info *)

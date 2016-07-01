@@ -1018,7 +1018,9 @@ int nova_alloc_block_free_lists(struct super_block *sb);
 void nova_delete_free_lists(struct super_block *sb);
 inline struct nova_range_node *nova_alloc_blocknode(struct super_block *sb);
 inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb);
+inline struct snapshot_info *nova_alloc_snapshot_info(struct super_block *sb);
 inline void nova_free_range_node(struct nova_range_node *node);
+inline void nova_free_snapshot_info(struct snapshot_info *info);
 inline void nova_free_blocknode(struct super_block *sb,
 	struct nova_range_node *bnode);
 inline void nova_free_inode_node(struct super_block *sb,
