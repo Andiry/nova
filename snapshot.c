@@ -337,7 +337,7 @@ fail:
 	return -ENOMEM;
 }
 
-static void nova_write_list_entry(struct super_block *sb,
+static void nova_write_snapshot_list_entry(struct super_block *sb,
 	struct snapshot_list *list, u64 curr_p, void *entry, size_t size)
 {
 	if (is_last_entry(curr_p, size)) {
@@ -398,7 +398,7 @@ retry:
 		curr_p = next_list_page(curr_p);
 	}
 
-	nova_write_list_entry(sb, list, curr_p, entry, size);
+	nova_write_snapshot_list_entry(sb, list, curr_p, entry, size);
 	mutex_unlock(&list->list_mutex);
 
 	return 0;
