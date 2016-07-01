@@ -420,7 +420,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 		return;
 
 	freed = nova_delete_file_tree(sb, sih, first_blocknr,
-						last_blocknr, 1, 0);
+						last_blocknr, true, false);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -1326,7 +1326,7 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 			goto out;
 
 		freed = nova_delete_file_tree(sb, sih, first_blocknr,
-						last_blocknr, 0, 0);
+						last_blocknr, false, false);
 	}
 out:
 	pi->i_size	= entry->size;
