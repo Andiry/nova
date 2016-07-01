@@ -590,6 +590,8 @@ int nova_create_snapshot(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super = nova_get_super(sb);
 	struct snapshot_table *snapshot_table;
+	struct snapshot_info_table *info_table;
+	struct snapshot_info *info;
 	int index;
 	u64 timestamp = 0;
 	u64 trans_id;
@@ -617,6 +619,17 @@ int nova_create_snapshot(struct super_block *sb)
 	mutex_unlock(&sbi->s_lock);
 
 	ret = nova_initialize_snapshot_info(sb, index, trans_id);
+	if (ret) {
+		nova_dbg("%s: initialize snapshot info failed %d\n",
+				__func__, ret);
+		return ret;
+	}
+
+	info_table = sbi->snapshot_info_table;
+	info = &info_table->infos[index];
+	mutex_lock(&sbi->s_lock);
+	ret = nova_insert_snapshot_info(sb, info);
+	mutex_unlock(&sbi->s_lock);
 
 	return ret;
 }
@@ -660,6 +673,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info = NULL;
 	struct snapshot_info *prev = NULL, *next = NULL;
+	struct rb_root *tree;
 	u64 trans_id;
 	int ret;
 
@@ -680,6 +694,9 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		goto update_snapshot_table;
 	}
+
+	tree = &sbi->snapshot_info_tree;
+	rb_erase(&info->node, tree);
 
 	next = nova_find_adjacent_snapshot_info(sb, info, 1);
 	if (next) {
