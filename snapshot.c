@@ -350,7 +350,7 @@ static void nova_write_snapshot_list_entry(struct super_block *sb,
 	list->tail = curr_p + size;
 }
 
-int nova_append_snapshot_list_entry(struct super_block *sb,
+static int nova_append_snapshot_list_entry(struct super_block *sb,
 	struct snapshot_info *info, void *entry, size_t size)
 {
 	struct snapshot_list *list;
@@ -402,6 +402,32 @@ retry:
 	mutex_unlock(&list->list_mutex);
 
 	return 0;
+}
+
+int nova_append_snapshot_file_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
+	u64 delete_trans_id)
+{
+	struct snapshot_info *info = NULL;
+	struct snapshot_file_write_entry ss_entry;
+	int ret;
+
+	ret = nova_find_target_snapshot_info(sb, entry->trans_id, &info);
+	if (ret < 0 || !info) {
+		nova_dbg("%s: Snapshot info not found\n", __func__);
+		return -EINVAL;
+	}
+
+	memset(&ss_entry, 0, sizeof(struct snapshot_file_write_entry));
+	ss_entry.type = SS_FILE_WRITE;
+	ss_entry.nvmm = nvmm;
+	ss_entry.num_pages = num_pages;
+	ss_entry.delete_trans_id = delete_trans_id;
+
+	ret = nova_append_snapshot_list_entry(sb, info, &ss_entry,
+			sizeof(struct snapshot_file_write_entry));
+
+	return ret;
 }
 
 int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
