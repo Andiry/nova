@@ -45,6 +45,94 @@ static inline bool goto_next_list_page(struct super_block *sb, u64 curr_p)
 	return false;
 }
 
+static inline int nova_rbtree_compare_snapshot_info(struct snapshot_info *curr,
+	u64 trans_id)
+{
+	if (trans_id < curr->trans_id)
+		return -1;
+	if (trans_id > curr->trans_id)
+		return 1;
+
+	return 0;
+}
+
+static int nova_find_target_snapshot_info(struct super_block *sb,
+	u64 trans_id, struct snapshot_info **ret_info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct rb_root *tree;
+	struct snapshot_info *curr = NULL;
+	struct rb_node *temp;
+	int compVal;
+	int ret = 0;
+
+	tree = &sbi->snapshot_info_tree;
+	temp = tree->rb_node;
+
+	while (temp) {
+		curr = container_of(temp, struct snapshot_info, node);
+		compVal = nova_rbtree_compare_snapshot_info(curr, trans_id);
+
+		if (compVal == -1) {
+			temp = temp->rb_left;
+		} else if (compVal == 1) {
+			temp = temp->rb_right;
+		} else {
+			ret = 1;
+			break;
+		}
+	}
+
+	if (curr->trans_id < trans_id) {
+		temp = rb_next(&curr->node);
+		if (!temp) {
+			nova_dbg("%s: failed to find target snapshot info\n",
+					__func__);
+			BUG();
+			return -EINVAL;
+		}
+		curr = container_of(temp, struct snapshot_info, node);
+	}
+
+	*ret_info = curr;
+	return ret;
+}
+
+static int nova_insert_snapshot_info(struct super_block *sb,
+	struct snapshot_info *info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct rb_root *tree;
+	struct snapshot_info *curr;
+	struct rb_node **temp, *parent;
+	int compVal;
+
+	tree = &sbi->snapshot_info_tree;
+	temp = &(tree->rb_node);
+	parent = NULL;
+
+	while (*temp) {
+		curr = container_of(*temp, struct snapshot_info, node);
+		compVal = nova_rbtree_compare_snapshot_info(curr,
+						info->trans_id);
+		parent = *temp;
+
+		if (compVal == -1) {
+			temp = &((*temp)->rb_left);
+		} else if (compVal == 1) {
+			temp = &((*temp)->rb_right);
+		} else {
+			/* Do not insert snapshot with same trans ID */
+			return -EEXIST;
+		}
+	}
+
+	rb_link_node(&info->node, parent, temp);
+	rb_insert_color(&info->node, tree);
+
+	return 0;
+}
+
 /* Reuse the inode log page structure */
 static inline void nova_set_next_link_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page)
