@@ -99,18 +99,22 @@ static int nova_find_target_snapshot_info(struct super_block *sb,
 }
 
 static struct snapshot_info *
-nova_find_next_snapshot_info(struct super_block *sb,
-	struct snapshot_info *info)
+nova_find_adjacent_snapshot_info(struct super_block *sb,
+	struct snapshot_info *info, int next)
 {
-	struct snapshot_info *next = NULL;
+	struct snapshot_info *ret_info = NULL;
 	struct rb_node *temp;
 
-	temp = rb_next(&info->node);
-	if (!temp)
-		return next;
+	if (next)
+		temp = rb_next(&info->node);
+	else
+		temp = rb_prev(&info->node);
 
-	next = container_of(temp, struct snapshot_info, node);
-	return next;
+	if (!temp)
+		return ret_info;
+
+	ret_info = container_of(temp, struct snapshot_info, node);
+	return ret_info;
 }
 
 static int nova_insert_snapshot_info(struct super_block *sb,
@@ -654,6 +658,10 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
+	struct snapshot_info *info = NULL;
+	struct snapshot_info *prev = NULL, *next = NULL;
+	u64 trans_id;
+	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -666,6 +674,29 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	}
 
 	mutex_lock(&sbi->s_lock);
+	trans_id = snapshot_table->entries[index].trans_id;
+	ret = nova_find_target_snapshot_info(sb, trans_id, &info);
+	if (ret != 1 || info->trans_id != trans_id) {
+		nova_dbg("%s: Snapshot info not found\n", __func__);
+		goto update_snapshot_table;
+	}
+
+	next = nova_find_adjacent_snapshot_info(sb, info, 1);
+	if (next) {
+		nova_link_to_next_snapshot(sb, info, next);
+	} else {
+		/* Delete the last snapshot. Find the previous one. */
+		prev = nova_find_adjacent_snapshot_info(sb, info, 0);
+		if (prev)
+			sbi->latest_snapshot_trans_id = prev->trans_id;
+		else
+			sbi->latest_snapshot_trans_id = 0;
+
+		nova_delete_snapshot_info(sb, info, 1);
+	}
+
+update_snapshot_table:
+
 	snapshot_table->entries[index].trans_id = 0;
 	snapshot_table->entries[index].timestamp = 0;
 	sbi->num_snapshots--;
