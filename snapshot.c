@@ -854,33 +854,39 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 	return 0;
 }
 
+/* Support up to 256 snapshots */
 int nova_save_snapshots(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	struct snapshot_info_table *info_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
+	struct rb_root *tree;
 	struct snapshot_info *info;
 	struct snapshot_nvmm_info *nvmm_info;
-	int i;
+	struct rb_node *temp;
+	int i = 0;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
 	if (!snapshot_table)
 		return -EINVAL;
 
-	info_table = sbi->snapshot_info_table;
+	tree = &sbi->snapshot_info_tree;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	memset(nvmm_info_table, '0', PAGE_SIZE);
 
-	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		if (snapshot_table->entries[i].timestamp) {
-			info = &info_table->infos[i];
-			nvmm_info = &nvmm_info_table->infos[i];
-			nova_save_snapshot_info(sb, info, nvmm_info);
-			nova_delete_snapshot_info(sb, info, 0);
-		}
+	/* Save in increasing order */
+	temp = rb_first(tree);
+	while (temp) {
+		info = container_of(temp, struct snapshot_info, node);
+		nvmm_info = &nvmm_info_table->infos[i];
+		nova_save_snapshot_info(sb, info, nvmm_info);
+		nova_delete_snapshot_info(sb, info, 0);
 
+		i++;
+		temp = rb_next(temp);
+		rb_erase(&info->node, tree);
+		nova_free_snapshot_info(info);
 	}
 
 	kfree(sbi->snapshot_info_table);
