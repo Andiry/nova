@@ -448,8 +448,6 @@ struct nova_sb_info {
 	int recover_snapshot_index;
 	u64 recover_snapshot_trans_id;
 
-	struct snapshot_info_table *snapshot_info_table;
-
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
@@ -611,10 +609,6 @@ struct snapshot_info {
 
 	/* Per-CPU snapshot list */
 	struct snapshot_list *lists;
-} __attribute((__packed__));
-
-struct snapshot_info_table {
-	struct snapshot_info infos[SNAPSHOT_TABLE_SIZE];
 };
 
 enum nova_snapshot_entry_type {

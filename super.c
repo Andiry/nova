@@ -546,11 +546,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	sbi->snapshot_info_tree = RB_ROOT;
-	sbi->snapshot_info_table = kzalloc(PAGE_SIZE, GFP_KERNEL);
-	if (!sbi->snapshot_info_table) {
-		retval = -ENOMEM;
-		goto out;
-	}
 
 	if (nova_parse_options(data, sbi, 0))
 		goto out;
@@ -659,11 +654,6 @@ out:
 	if (sbi->zeroed_page) {
 		kfree(sbi->zeroed_page);
 		sbi->zeroed_page = NULL;
-	}
-
-	if (sbi->snapshot_info_table) {
-		kfree(sbi->snapshot_info_table);
-		sbi->snapshot_info_table = NULL;
 	}
 
 	if (sbi->free_lists) {
