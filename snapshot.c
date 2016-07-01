@@ -265,14 +265,42 @@ static int nova_delete_snapshot_info(struct super_block *sb,
 	return 0;
 }
 
-int nova_initialize_snapshot_info(struct super_block *sb,
+static int nova_initialize_snapshot_info_pages(struct super_block *sb,
+	struct snapshot_info *info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_list *list;
+	unsigned long new_page = 0;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+		mutex_init(&list->list_mutex);
+		new_page = (unsigned long)kmalloc(PAGE_SIZE,
+							GFP_KERNEL);
+		/* Aligned to PAGE_SIZE */
+		if (!new_page || ENTRY_LOC(new_page)) {
+			nova_dbg("%s: failed\n", __func__);
+			kfree((void *)new_page);
+			return -ENOMEM;
+		}
+
+		nova_set_next_link_page_address(sb, (void *)new_page, 0);
+		list->tail = list->head = new_page;
+		list->num_pages = 1;
+	}
+
+	return 0;
+}
+
+static int nova_initialize_snapshot_info(struct super_block *sb,
 	struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info;
 	struct snapshot_list *list;
-	unsigned long new_page = 0;
 	int i;
+	int ret;
 
 	info = nova_alloc_snapshot_info(sb);
 	if (!info)
@@ -286,24 +314,14 @@ int nova_initialize_snapshot_info(struct super_block *sb,
 		goto fail;
 	}
 
-	for (i = 0; i < sbi->cpus; i++) {
-		list = &info->lists[i];
-		mutex_init(&list->list_mutex);
-		new_page = (unsigned long)kmalloc(PAGE_SIZE,
-							GFP_KERNEL);
-		/* Aligned to PAGE_SIZE */
-		if (!new_page || ENTRY_LOC(new_page))
-			goto fail;
-		nova_set_next_link_page_address(sb, (void *)new_page, 0);
-		list->tail = list->head = new_page;
-		list->num_pages = 1;
-	}
+	ret = nova_initialize_snapshot_info_pages(sb, info);
+	if (ret)
+		goto fail;
 
 	*ret_info = info;
 	return 0;
 
 fail:
-	kfree((void *)new_page);
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
 		if (list->head)
