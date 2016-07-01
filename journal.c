@@ -32,7 +32,6 @@
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include "nova.h"
-#include "journal.h"
 
 /**************************** Lite journal ******************************/
 

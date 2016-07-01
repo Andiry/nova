@@ -44,6 +44,7 @@
 #include "nova_def.h"
 #include "journal.h"
 #include "stats.h"
+#include "snapshot.h"
 
 #define PAGE_SHIFT_2M 21
 #define PAGE_SHIFT_1G 30
@@ -583,74 +584,7 @@ struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
 		cpu * CACHELINE_SIZE);
 }
 
-struct snapshot_entry {
-	__le64 trans_id;
-	__le64 timestamp;
-};
-
-#define SNAPSHOT_TABLE_SIZE	256
-
-struct snapshot_table {
-	struct snapshot_entry entries[SNAPSHOT_TABLE_SIZE];
-};
-
-struct snapshot_list {
-	struct mutex list_mutex;
-	unsigned long num_pages;
-	unsigned long head;
-	unsigned long tail;
-};
-
-struct snapshot_info {
-	u64	trans_id;
-	struct rb_node node;
-
-	/* Per-CPU snapshot list */
-	struct snapshot_list *lists;
-};
-
-enum nova_snapshot_entry_type {
-	SS_INODE = 1,
-	SS_FILE_WRITE,
-};
-
-struct snapshot_inode_entry {
-	u8	type;
-	u8	padding[7];
-	u64	padding64;
-	u64	nova_ino;
-	u64	delete_trans_id;
-} __attribute((__packed__));
-
-struct snapshot_file_write_entry {
-	u8	type;
-	u8	padding[7];
-	u64	nvmm;
-	u64	num_pages;
-	u64	delete_trans_id;
-} __attribute((__packed__));
-
-struct snapshot_nvmm_list {
-	__le64 padding;
-	__le64 num_pages;
-	__le64 head;
-	__le64 tail;
-};
-
-/* Support up to 128 CPUs */
-struct snapshot_nvmm_page {
-	struct snapshot_nvmm_list lists[128];
-};
-
-struct snapshot_nvmm_info {
-	__le64	trans_id;
-	__le64 	nvmm_page_addr;
-};
-
-struct snapshot_nvmm_info_table {
-	struct snapshot_nvmm_info infos[SNAPSHOT_TABLE_SIZE];
-};
-
+/* Snapshot methods */
 static inline
 struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
 {
@@ -685,6 +619,7 @@ static inline int pass_recover_snapshot(struct super_block *sb, u64 trans_id)
 
 	return 0;
 }
+
 
 // BKDR String Hash Function
 static inline unsigned long BKDRHash(const char *str, int length)
