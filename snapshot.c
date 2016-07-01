@@ -913,9 +913,6 @@ int nova_save_snapshots(struct super_block *sb)
 		nova_free_snapshot_info(info);
 	}
 
-	kfree(sbi->snapshot_info_table);
-	sbi->snapshot_info_table = NULL;
-
 	return 0;
 }
 
