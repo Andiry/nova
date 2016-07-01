@@ -86,7 +86,7 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 		switch (type) {
 			case SS_INODE:
 				i_entry = (struct snapshot_inode_entry *)addr;
-//				nova_delete_dead_inode(sb, i_entry->nova_ino);
+				nova_delete_dead_inode(sb, i_entry->nova_ino);
 				curr_p += sizeof(struct snapshot_inode_entry);
 				continue;
 			case SS_FILE_WRITE:
