@@ -514,9 +514,8 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	struct snapshot_info_table *info_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
-	struct snapshot_info *info;
+	struct snapshot_info *info = NULL;
 	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_info *nvmm_info;
 	struct snapshot_list *list;
@@ -529,10 +528,15 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index)
 	if (!snapshot_table)
 		return -EINVAL;
 
-	info_table = sbi->snapshot_info_table;
-	nvmm_info_table = nova_get_nvmm_info_table(sb);
+	/* Allocate list pages on demand later */
+	ret = nova_initialize_snapshot_info(sb, &info, 0);
+	if (ret) {
+		nova_dbg("%s: initialize snapshot info failed %d\n",
+				__func__, ret);
+		goto fail;
+	}
 
-	info = &info_table->infos[index];
+	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	nvmm_info = &nvmm_info_table->infos[index];
 	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
 						nvmm_info->nvmm_page_addr);
