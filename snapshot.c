@@ -266,24 +266,25 @@ static int nova_delete_snapshot_info(struct super_block *sb,
 }
 
 int nova_initialize_snapshot_info(struct super_block *sb,
-	int index, u64 trans_id)
+	struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_info_table *info_table;
 	struct snapshot_info *info;
 	struct snapshot_list *list;
 	unsigned long new_page = 0;
 	int i;
 
-	info_table = sbi->snapshot_info_table;
-	info = &info_table->infos[index];
+	info = nova_alloc_snapshot_info(sb);
+	if (!info)
+		return -ENOMEM;
 
-	info->trans_id = trans_id;
 	info->lists = kzalloc(sbi->cpus * sizeof(struct snapshot_list),
 							GFP_KERNEL);
 
-	if (!info->lists)
-		return -ENOMEM;
+	if (!info->lists) {
+		nova_free_snapshot_info(info);
+		goto fail;
+	}
 
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
@@ -298,6 +299,7 @@ int nova_initialize_snapshot_info(struct super_block *sb,
 		list->num_pages = 1;
 	}
 
+	*ret_info = info;
 	return 0;
 
 fail:
@@ -309,6 +311,9 @@ fail:
 	}
 
 	kfree(info->lists);
+	nova_free_snapshot_info(info);
+
+	*ret_info = NULL;
 	return -ENOMEM;
 }
 
@@ -590,8 +595,7 @@ int nova_create_snapshot(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super = nova_get_super(sb);
 	struct snapshot_table *snapshot_table;
-	struct snapshot_info_table *info_table;
-	struct snapshot_info *info;
+	struct snapshot_info *info = NULL;
 	int index;
 	u64 timestamp = 0;
 	u64 trans_id;
@@ -602,8 +606,16 @@ int nova_create_snapshot(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
+	ret = nova_initialize_snapshot_info(sb, &info);
+	if (ret) {
+		nova_dbg("%s: initialize snapshot info failed %d\n",
+				__func__, ret);
+		return ret;
+	}
+
 	mutex_lock(&sbi->s_lock);
 	trans_id = atomic64_read(&super->s_trans_id);
+	info->trans_id = trans_id;
 	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
 			(CURRENT_TIME_SEC.tv_nsec);
 	index = sbi->curr_snapshot;
@@ -616,18 +628,7 @@ int nova_create_snapshot(struct super_block *sb)
 	sbi->latest_snapshot_trans_id = trans_id;
 	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
 		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
-	mutex_unlock(&sbi->s_lock);
 
-	ret = nova_initialize_snapshot_info(sb, index, trans_id);
-	if (ret) {
-		nova_dbg("%s: initialize snapshot info failed %d\n",
-				__func__, ret);
-		return ret;
-	}
-
-	info_table = sbi->snapshot_info_table;
-	info = &info_table->infos[index];
-	mutex_lock(&sbi->s_lock);
 	ret = nova_insert_snapshot_info(sb, info);
 	mutex_unlock(&sbi->s_lock);
 
@@ -720,6 +721,8 @@ update_snapshot_table:
 	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
 	mutex_unlock(&sbi->s_lock);
+
+	nova_free_snapshot_info(info);
 
 	return 0;
 }
