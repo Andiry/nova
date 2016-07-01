@@ -98,6 +98,21 @@ static int nova_find_target_snapshot_info(struct super_block *sb,
 	return ret;
 }
 
+static struct snapshot_info *
+nova_find_next_snapshot_info(struct super_block *sb,
+	struct snapshot_info *info)
+{
+	struct snapshot_info *next = NULL;
+	struct rb_node *temp;
+
+	temp = rb_next(&info->node);
+	if (!temp)
+		return next;
+
+	next = container_of(temp, struct snapshot_info, node);
+	return next;
+}
+
 static int nova_insert_snapshot_info(struct super_block *sb,
 	struct snapshot_info *info)
 {
