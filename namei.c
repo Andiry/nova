@@ -287,7 +287,7 @@ out_fail1:
 
 static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode *pidir, u64 pi_tail,
-	u64 pidir_tail, int invalidate)
+	u64 pidir_tail, int invalidate, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_lite_journal_entry entry;
@@ -323,7 +323,8 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
 	if (invalidate) {
 		pi->valid = 0;
-		nova_flush_buffer(&pi->valid, CACHELINE_SIZE, 0);
+		pi->delete_trans_id = trans_id;
+		nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
 	}
 	PERSISTENT_BARRIER();
 
@@ -449,7 +450,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 
 	d_instantiate(dentry, inode);
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
-						pi_tail, pidir_tail, 0);
+					pi_tail, pidir_tail, 0, trans_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
 
@@ -502,7 +503,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 		goto out;
 
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
-					pi_tail, pidir_tail, invalidate);
+				pi_tail, pidir_tail, invalidate, trans_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
 	nova_invalidate_dentries(sb, create_dentry, delete_dentry);
@@ -668,7 +669,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 		goto end_rmdir;
 
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
-						pi_tail, pidir_tail, 1);
+					pi_tail, pidir_tail, 1, trans_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
 	nova_invalidate_dentries(sb, create_dentry, delete_dentry);
@@ -876,7 +877,8 @@ static int nova_rename(struct inode *old_dir,
 		nova_flush_buffer(&new_pi->log_tail, CACHELINE_SIZE, 0);
 		if (!new_inode->i_nlink) {
 			new_pi->valid = 0;
-			nova_flush_buffer(&new_pi->valid, CACHELINE_SIZE, 0);
+			new_pi->delete_trans_id = trans_id;
+			nova_flush_buffer(new_pi, sizeof(struct nova_inode), 0);
 		}
 	}
 
