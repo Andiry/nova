@@ -1064,7 +1064,8 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	u64 *new_block);
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap);
+	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
+	bool delete_dead);
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size,
 	int *extended);
