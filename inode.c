@@ -279,7 +279,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	unsigned long pgoff, unsigned int num_free,
-	bool delete_dead)
+	bool delete_dead, u64 trans_id)
 {
 	unsigned long old_nvmm;
 
@@ -292,6 +292,9 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 		nova_dbgv("%s: pgoff %lu, free %u blocks\n",
 				__func__, pgoff, num_free);
 		nova_free_data_blocks(sb, pi, old_nvmm, num_free);
+	} else {
+		nova_append_snapshot_file_write_entry(sb, entry, old_nvmm,
+				num_free, trans_id);
 	}
 	pi->i_blocks -= num_free;
 
@@ -336,7 +339,8 @@ int nova_delete_file_tree(struct super_block *sb,
 				if (old_entry && delete_nvmm) {
 					nova_free_old_entry(sb, pi, sih,
 							old_entry, old_pgoff,
-							num_free, delete_dead);
+							num_free, delete_dead,
+							trans_id);
 					freed += num_free;
 				}
 				old_entry = entry;
@@ -359,8 +363,8 @@ int nova_delete_file_tree(struct super_block *sb,
 	}
 
 	if (old_entry && delete_nvmm) {
-		nova_free_old_entry(sb, pi, sih, old_entry,
-					old_pgoff, num_free, delete_dead);
+		nova_free_old_entry(sb, pi, sih, old_entry, old_pgoff,
+					num_free, delete_dead, trans_id);
 		freed += num_free;
 	}
 
@@ -515,7 +519,8 @@ int nova_assign_write_entry(struct super_block *sb,
 					nova_free_old_entry(sb, pi, sih,
 							start_old_entry,
 							start_old_pgoff,
-							num_free, false);
+							num_free, false,
+							entry->trans_id);
 				start_old_entry = old_entry;
 				start_old_pgoff = curr_pgoff;
 				num_free = 1;
@@ -535,7 +540,8 @@ int nova_assign_write_entry(struct super_block *sb,
 
 	if (start_old_entry && free)
 		nova_free_old_entry(sb, pi, sih, start_old_entry,
-					start_old_pgoff, num_free, false);
+					start_old_pgoff, num_free, false,
+					entry->trans_id);
 
 out:
 	NOVA_END_TIMING(assign_t, assign_time);
