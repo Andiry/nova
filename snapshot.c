@@ -418,6 +418,11 @@ int nova_append_snapshot_file_write_entry(struct super_block *sb,
 		return -EINVAL;
 	}
 
+	nova_dbgv("Append file write entry: block %llu, %llu pages, "
+			"delete trans ID %llu\n", nvmm, num_pages,
+			delete_trans_id);
+	nova_dbgv("Snapshot %d, trans ID %llu\n", info->index, info->trans_id);
+
 	memset(&ss_entry, 0, sizeof(struct snapshot_file_write_entry));
 	ss_entry.type = SS_FILE_WRITE;
 	ss_entry.nvmm = nvmm;
@@ -442,6 +447,10 @@ int nova_append_snapshot_inode_entry(struct super_block *sb,
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		return -EINVAL;
 	}
+
+	nova_dbgv("Append inode entry: inode %llu, delete trans ID %llu\n",
+			pi->nova_ino, pi->delete_trans_id);
+	nova_dbgv("Snapshot %d, trans ID %llu\n", info->index, info->trans_id);
 
 	memset(&entry, 0, sizeof(struct snapshot_inode_entry));
 	entry.type = SS_INODE;
