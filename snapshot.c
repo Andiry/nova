@@ -586,6 +586,7 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index)
 		goto fail;
 	}
 
+	info->index = index;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	nvmm_info = &nvmm_info_table->infos[index];
 	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
@@ -703,6 +704,7 @@ int nova_create_snapshot(struct super_block *sb)
 	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
 		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
 
+	info->index = index;
 	ret = nova_insert_snapshot_info(sb, info);
 	mutex_unlock(&sbi->s_lock);
 
