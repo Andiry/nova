@@ -301,7 +301,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
-	bool delete_dead)
+	bool delete_dead, u64 trans_id)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry *old_entry = NULL;
@@ -380,7 +380,7 @@ static int nova_free_dram_resource(struct super_block *sb,
 	if (S_ISREG(sih->i_mode)) {
 		last_blocknr = nova_get_last_blocknr(sb, sih);
 		freed = nova_delete_file_tree(sb, sih, 0,
-					last_blocknr, false, true, false);
+					last_blocknr, false, true, false, 0);
 	} else {
 		nova_delete_dir_tree(sb, sih);
 		freed = 1;
@@ -418,7 +418,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 		return;
 
 	freed = nova_delete_file_tree(sb, sih, first_blocknr,
-					last_blocknr, true, false, false);
+				last_blocknr, true, false, false, trans_id);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -889,7 +889,7 @@ static int nova_free_inode_resource(struct super_block *sb,
 		last_blocknr = nova_get_last_blocknr(sb, sih);
 		nova_dbgv("%s: file ino %lu\n", __func__, sih->ino);
 		freed = nova_delete_file_tree(sb, sih, 0,
-					last_blocknr, true, true, true);
+					last_blocknr, true, true, true, 0);
 		break;
 	case S_IFDIR:
 		nova_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
@@ -900,7 +900,7 @@ static int nova_free_inode_resource(struct super_block *sb,
 		nova_dbgv("%s: symlink ino %lu\n",
 				__func__, sih->ino);
 		freed = nova_delete_file_tree(sb, sih, 0, 0,
-						true, true, true);
+						true, true, true, 0);
 		break;
 	default:
 		nova_dbgv("%s: special ino %lu\n",
@@ -1353,7 +1353,7 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 			goto out;
 
 		freed = nova_delete_file_tree(sb, sih, first_blocknr,
-					last_blocknr, false, false, false);
+					last_blocknr, false, false, false, 0);
 	}
 out:
 	pi->i_size	= entry->size;
