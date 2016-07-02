@@ -950,8 +950,18 @@ void nova_evict_inode(struct inode *inode)
 	}
 
 	/* This inode exists in at least one snapshot. Don't delete it yet. */
-	if (pi->create_trans_id <= sbi->latest_snapshot_trans_id)
+	if (pi->create_trans_id <= sbi->latest_snapshot_trans_id) {
+		if (pi->create_trans_id >= pi->delete_trans_id) {
+			nova_dbg("%s: pi %llu trans ID error: create %llu, "
+					"delete %llu\n",
+					__func__, pi->nova_ino,
+					pi->create_trans_id,
+					pi->delete_trans_id);
+			goto out;
+		}
+		nova_append_snapshot_inode_entry(sb, pi);
 		goto out;
+	}
 
 	NOVA_START_TIMING(evict_inode_t, evict_time);
 	nova_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
