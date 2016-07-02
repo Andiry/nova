@@ -1106,6 +1106,7 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 /* snapshot.c */
 int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	u8 type);
+int nova_save_snapshots(struct super_block *sb);
 int nova_restore_snapshot_table(struct super_block *sb);
 int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
