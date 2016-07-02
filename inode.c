@@ -278,7 +278,8 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
-	unsigned long pgoff, unsigned int num_free)
+	unsigned long pgoff, unsigned int num_free,
+	bool delete_dead)
 {
 	unsigned long old_nvmm;
 
@@ -286,7 +287,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 		return 0;
 
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
-	if (old_entry_freeable(sb, entry->trans_id)) {
+	if (delete_dead || old_entry_freeable(sb, entry->trans_id)) {
 		entry->invalid_pages += num_free;
 		nova_dbgv("%s: pgoff %lu, free %u blocks\n",
 				__func__, pgoff, num_free);
@@ -299,7 +300,8 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap)
+	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
+	bool delete_dead)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry *old_entry = NULL;
@@ -334,7 +336,7 @@ int nova_delete_file_tree(struct super_block *sb,
 				if (old_entry && delete_nvmm) {
 					nova_free_old_entry(sb, pi, sih,
 							old_entry, old_pgoff,
-							num_free);
+							num_free, delete_dead);
 					freed += num_free;
 				}
 				old_entry = entry;
@@ -358,7 +360,7 @@ int nova_delete_file_tree(struct super_block *sb,
 
 	if (old_entry && delete_nvmm) {
 		nova_free_old_entry(sb, pi, sih, old_entry,
-					old_pgoff, num_free);
+					old_pgoff, num_free, delete_dead);
 		freed += num_free;
 	}
 
@@ -382,7 +384,7 @@ static int nova_free_dram_resource(struct super_block *sb,
 	if (S_ISREG(sih->i_mode)) {
 		last_blocknr = nova_get_last_blocknr(sb, sih);
 		freed = nova_delete_file_tree(sb, sih, 0,
-						last_blocknr, false, true);
+					last_blocknr, false, true, false);
 	} else {
 		nova_delete_dir_tree(sb, sih);
 		freed = 1;
@@ -420,7 +422,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 		return;
 
 	freed = nova_delete_file_tree(sb, sih, first_blocknr,
-						last_blocknr, true, false);
+					last_blocknr, true, false, false);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -513,7 +515,7 @@ int nova_assign_write_entry(struct super_block *sb,
 					nova_free_old_entry(sb, pi, sih,
 							start_old_entry,
 							start_old_pgoff,
-							num_free);
+							num_free, false);
 				start_old_entry = old_entry;
 				start_old_pgoff = curr_pgoff;
 				num_free = 1;
@@ -533,7 +535,7 @@ int nova_assign_write_entry(struct super_block *sb,
 
 	if (start_old_entry && free)
 		nova_free_old_entry(sb, pi, sih, start_old_entry,
-					start_old_pgoff, num_free);
+					start_old_pgoff, num_free, false);
 
 out:
 	NOVA_END_TIMING(assign_t, assign_time);
@@ -880,7 +882,7 @@ static int nova_free_inode_resource(struct super_block *sb,
 		last_blocknr = nova_get_last_blocknr(sb, sih);
 		nova_dbgv("%s: file ino %lu\n", __func__, sih->ino);
 		freed = nova_delete_file_tree(sb, sih, 0,
-					last_blocknr, true, true);
+					last_blocknr, true, true, true);
 		break;
 	case S_IFDIR:
 		nova_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
@@ -891,7 +893,7 @@ static int nova_free_inode_resource(struct super_block *sb,
 		nova_dbgv("%s: symlink ino %lu\n",
 				__func__, sih->ino);
 		freed = nova_delete_file_tree(sb, sih, 0, 0,
-						true, true);
+						true, true, true);
 		break;
 	default:
 		nova_dbgv("%s: special ino %lu\n",
@@ -1326,7 +1328,7 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 			goto out;
 
 		freed = nova_delete_file_tree(sb, sih, first_blocknr,
-						last_blocknr, false, false);
+					last_blocknr, false, false, false);
 	}
 out:
 	pi->i_size	= entry->size;
