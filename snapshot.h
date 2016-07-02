@@ -37,6 +37,7 @@ struct snapshot_list {
 };
 
 struct snapshot_info {
+	int	index;
 	u64	trans_id;
 	struct rb_node node;
 
