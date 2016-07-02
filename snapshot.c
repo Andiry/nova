@@ -729,6 +729,11 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 	u64 curr_block;
 	int i;
 
+	nova_dbg("Link deleted snapshot %d to next snapshot %d, "
+			"prev trans ID %llu, next trans ID %llu\n",
+			prev_info->index, next_info->index,
+			prev_info->trans_id, next_info->trans_id);
+
 	for (i = 0; i < sbi->cpus; i++) {
 		prev_list = &prev_info->lists[i];
 		next_list = &next_info->lists[i];
@@ -775,6 +780,8 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 
 	mutex_lock(&sbi->s_lock);
 	trans_id = snapshot_table->entries[index].trans_id;
+	nova_dbg("Delete snapshot %d, trans ID %llu\n", index, trans_id);
+
 	ret = nova_find_target_snapshot_info(sb, trans_id, &info);
 	if (ret != 1 || info->trans_id != trans_id) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
