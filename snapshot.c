@@ -589,6 +589,8 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 	if (!snapshot_table)
 		return -EINVAL;
 
+	nova_dbg("Restore snapshot %d, trans ID %llu\n", index, trans_id);
+
 	/* Allocate list pages on demand later */
 	ret = nova_initialize_snapshot_info(sb, &info, 0);
 	if (ret) {
