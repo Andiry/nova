@@ -1253,7 +1253,7 @@ static int failure_thread_func(void *data)
 	if (max_size) {
 		last_blocknr = (max_size - 1) >> PAGE_SHIFT;
 		nova_delete_file_tree(sb, &sih, 0, last_blocknr,
-						false, false, false);
+						false, false, false, 0);
 	}
 
 	finished[cpuid] = 1;
