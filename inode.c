@@ -1022,6 +1022,9 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino)
 	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
 	sih = &si.header;
 
+	nova_dbgv("Delete dead inode %llu, log head 0x%llx, tail 0x%llx\n",
+			pi->nova_ino, pi->log_head, pi->log_tail);
+
 	return nova_free_inode_resource(sb, pi, sih);
 }
 
