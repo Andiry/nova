@@ -690,6 +690,15 @@ int nova_create_snapshot(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
+	trans_id = atomic64_read(&super->s_trans_id);
+	index = sbi->curr_snapshot;
+	if (snapshot_table->entries[sbi->curr_snapshot].trans_id == trans_id) {
+		/* Do not create new snapshot if no new transactions */
+		return 0;
+	}
+
+	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
+			(CURRENT_TIME_SEC.tv_nsec);
 	ret = nova_initialize_snapshot_info(sb, &info, 1);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
@@ -698,11 +707,7 @@ int nova_create_snapshot(struct super_block *sb)
 	}
 
 	mutex_lock(&sbi->s_lock);
-	trans_id = atomic64_read(&super->s_trans_id);
 	info->trans_id = trans_id;
-	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
-			(CURRENT_TIME_SEC.tv_nsec);
-	index = sbi->curr_snapshot;
 	snapshot_table->entries[sbi->curr_snapshot].trans_id = trans_id;
 	snapshot_table->entries[sbi->curr_snapshot].timestamp = timestamp;
 	nova_flush_buffer(&snapshot_table->entries[sbi->curr_snapshot],
