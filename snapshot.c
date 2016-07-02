@@ -609,6 +609,12 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
 		nvmm_list = &nvmm_page->lists[i];
+		if (!list || !nvmm_list) {
+			nova_dbg("%s: list NULL? list %p, nvmm list %p\n",
+					__func__, list, nvmm_list);
+			continue;
+		}
+
 		ret = nova_allocate_snapshot_list_pages(sb, list, nvmm_list);
 		if (ret) {
 			nova_dbg("%s failure\n", __func__);
@@ -867,8 +873,8 @@ static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 	return 0;
 }
 
-int nova_save_snapshot_info(struct super_block *sb, struct snapshot_info *info,
-	struct snapshot_nvmm_info *nvmm_info)
+static int nova_save_snapshot_info(struct super_block *sb,
+	struct snapshot_info *info, struct snapshot_nvmm_info *nvmm_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode fake_pi;
