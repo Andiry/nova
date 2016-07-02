@@ -570,7 +570,8 @@ fail:
 	return -ENOMEM;
 }
 
-static int nova_restore_snapshot_info(struct super_block *sb, int index)
+static int nova_restore_snapshot_info(struct super_block *sb, int index,
+	u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
@@ -597,6 +598,7 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index)
 	}
 
 	info->index = index;
+	info->trans_id = trans_id;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	nvmm_info = &nvmm_info_table->infos[index];
 	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
@@ -666,7 +668,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		if (trans_id == 0)
 			sbi->curr_snapshot = i;
 		else
-			nova_restore_snapshot_info(sb, i);
+			nova_restore_snapshot_info(sb, i, trans_id);
 
 		if (trans_id > sbi->latest_snapshot_trans_id)
 			sbi->latest_snapshot_trans_id = trans_id;
