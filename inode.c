@@ -393,7 +393,7 @@ static int nova_free_dram_resource(struct super_block *sb,
  * Free data blocks from inode in the range start <=> end
  */
 static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
-				    loff_t end)
+				    loff_t end, u64 trans_id)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
@@ -1244,7 +1244,8 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	}
 }
 
-static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
+static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
+	u64 trans_id)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
@@ -1276,7 +1277,7 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize)
 //	dax_truncate_page(inode, newsize, nova_dax_get_block);
 
 	truncate_pagecache(inode, newsize);
-	nova_truncate_file_blocks(inode, newsize, oldsize);
+	nova_truncate_file_blocks(inode, newsize, oldsize, trans_id);
 }
 
 int nova_getattr(struct vfsmount *mnt, struct dentry *dentry,
@@ -1363,13 +1364,12 @@ out:
 /* Returns new tail after append */
 static u64 nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	u64 tail, u64 *last_setattr)
+	u64 tail, u64 *last_setattr, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_setattr_logentry *entry;
 	u64 curr_p, new_tail = 0;
-	u64 trans_id;
 	int extended = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
@@ -1382,7 +1382,6 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	if (curr_p == 0)
 		BUG();
 
-	trans_id = nova_get_trans_id(sb);
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
 	nova_update_setattr_entry(inode, entry, attr, trans_id);
@@ -1408,6 +1407,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	u64 last_setattr = 0;
 	loff_t oldsize = inode->i_size;
 	u64 new_tail;
+	u64 trans_id;
 	timing_t setattr_time;
 
 	NOVA_START_TIMING(setattr_t, setattr_time);
@@ -1432,9 +1432,10 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (ia_valid == 0)
 		return ret;
 
+	trans_id = nova_get_trans_id(sb);
 	/* We are holding i_mutex so OK to append the log */
 	new_tail = nova_append_setattr_entry(sb, pi, inode, attr, 0,
-						&last_setattr);
+						&last_setattr, trans_id);
 
 	nova_update_tail(pi, new_tail);
 
@@ -1452,7 +1453,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 //		nova_set_blocksize_hint(sb, inode, pi, attr->ia_size);
 
 		/* now we can freely truncate the inode */
-		nova_setsize(inode, oldsize, attr->ia_size);
+		nova_setsize(inode, oldsize, attr->ia_size, trans_id);
 	}
 
 	NOVA_END_TIMING(setattr_t, setattr_time);
