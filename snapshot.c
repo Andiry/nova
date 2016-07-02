@@ -430,14 +430,14 @@ int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	return ret;
 }
 
-int nova_append_snapshot_inode_entry(struct super_block *sb, u64 ino,
-	u64 trans_id, u64 delete_trans_id)
+int nova_append_snapshot_inode_entry(struct super_block *sb,
+	struct nova_inode *pi)
 {
 	struct snapshot_info *info = NULL;
 	struct snapshot_inode_entry entry;
 	int ret;
 
-	ret = nova_find_target_snapshot_info(sb, trans_id, &info);
+	ret = nova_find_target_snapshot_info(sb, pi->create_trans_id, &info);
 	if (ret < 0 || !info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		return -EINVAL;
@@ -445,8 +445,8 @@ int nova_append_snapshot_inode_entry(struct super_block *sb, u64 ino,
 
 	memset(&entry, 0, sizeof(struct snapshot_inode_entry));
 	entry.type = SS_INODE;
-	entry.nova_ino = ino;
-	entry.delete_trans_id = delete_trans_id;
+	entry.nova_ino = pi->nova_ino;
+	entry.delete_trans_id = pi->delete_trans_id;
 
 	ret = nova_append_snapshot_list_entry(sb, info, &entry,
 			sizeof(struct snapshot_inode_entry));
