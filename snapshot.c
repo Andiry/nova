@@ -680,11 +680,10 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		trans_id = snapshot_table->entries[i].trans_id;
 
-		/* FIXME */
-		if (trans_id == 0)
+		if (trans_id) {
 			sbi->curr_snapshot = i;
-		else
 			nova_restore_snapshot_info(sb, i, trans_id);
+		}
 
 		if (trans_id > sbi->latest_snapshot_trans_id)
 			sbi->latest_snapshot_trans_id = trans_id;
