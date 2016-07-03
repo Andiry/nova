@@ -693,6 +693,27 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	return 0;
 }
 
+static int get_unused_snapshot_index(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	int index;
+	int i;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	/* Take current snapshot as hint */
+	index = sbi->curr_snapshot;
+	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
+		if (snapshot_table->entries[index].trans_id == 0)
+			return index;
+
+		index = (index + 1) % SNAPSHOT_TABLE_SIZE;
+	}
+
+	return -EINVAL;
+}
+
 int nova_create_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
