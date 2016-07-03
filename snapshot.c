@@ -731,8 +731,7 @@ int nova_create_snapshot(struct super_block *sb)
 		return -EINVAL;
 
 	trans_id = atomic64_read(&super->s_trans_id);
-	index = sbi->curr_snapshot;
-	if (snapshot_table->entries[sbi->curr_snapshot].trans_id == trans_id) {
+	if (sbi->latest_snapshot_trans_id == trans_id) {
 		/* Do not create new snapshot if no new transactions */
 		return 0;
 	}
