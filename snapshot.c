@@ -933,8 +933,11 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	int i, curr, count = 0;
-	u64 trans_id, timestamp;
+	struct snapshot_info *info;
+	struct rb_root *tree;
+	struct rb_node *temp;
+	int index = 0, count = 0;
+	u64 timestamp;
 	u64 sec, nsec;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -945,25 +948,22 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 	seq_printf(seq, "========== NOVA snapshot table ==========\n");
 	seq_printf(seq, "Index\tTrans ID\tTime\n");
 
-	/*  Print in reverse order */
-	curr = sbi->curr_snapshot - 1;
-	if (curr < 0)
-		curr += SNAPSHOT_TABLE_SIZE;
+	tree = &sbi->snapshot_info_tree;
 
-	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		if (snapshot_table->entries[curr].timestamp) {
-			trans_id = snapshot_table->entries[curr].trans_id;
-			timestamp = snapshot_table->entries[curr].timestamp;
-			sec = timestamp >> 32;
-			nsec = timestamp & 0xFFFFFFFF;
-			seq_printf(seq, "%d\t%llu\t\t%llu.%llu\n", curr,
-					trans_id, sec, nsec);
-			count++;
-		}
+	/* Print in trans ID increasing order */
+	temp = rb_first(tree);
+	while (temp) {
+		info = container_of(temp, struct snapshot_info, node);
+		index = info->index;
 
-		curr--;
-		if (curr < 0)
-			curr += SNAPSHOT_TABLE_SIZE;
+		timestamp = snapshot_table->entries[index].timestamp;
+		sec = timestamp >> 32;
+		nsec = timestamp & 0xFFFFFFFF;
+		seq_printf(seq, "%d\t%llu\t\t%llu.%llu\n", index,
+					info->trans_id, sec, nsec);
+
+		temp = rb_next(temp);
+		count++;
 	}
 
 	seq_printf(seq, "=========== Total %d snapshots ===========\n", count);
