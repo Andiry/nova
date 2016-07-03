@@ -748,18 +748,31 @@ int nova_create_snapshot(struct super_block *sb)
 
 	mutex_lock(&sbi->s_lock);
 	info->trans_id = trans_id;
-	snapshot_table->entries[sbi->curr_snapshot].trans_id = trans_id;
-	snapshot_table->entries[sbi->curr_snapshot].timestamp = timestamp;
-	nova_flush_buffer(&snapshot_table->entries[sbi->curr_snapshot],
+
+	if (sbi->num_snapshots >= SNAPSHOT_TABLE_SIZE) {
+		nova_dbg("%s: Snapshot table full\n", __func__);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	index = get_unused_snapshot_index(sb);
+	if (index < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	snapshot_table->entries[index].trans_id = trans_id;
+	snapshot_table->entries[index].timestamp = timestamp;
+	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
 	sbi->num_snapshots++;
-	sbi->curr_snapshot++;
+	sbi->curr_snapshot = index;
 	sbi->latest_snapshot_trans_id = trans_id;
-	if (sbi->curr_snapshot >= SNAPSHOT_TABLE_SIZE)
-		sbi->curr_snapshot -= SNAPSHOT_TABLE_SIZE;
 
 	info->index = index;
 	ret = nova_insert_snapshot_info(sb, info);
+
+out:
 	mutex_unlock(&sbi->s_lock);
 
 	return ret;
