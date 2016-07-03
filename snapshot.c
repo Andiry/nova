@@ -278,7 +278,6 @@ static int nova_initialize_snapshot_info_pages(struct super_block *sb,
 
 	for (i = 0; i < sbi->cpus; i++) {
 		list = &info->lists[i];
-		mutex_init(&list->list_mutex);
 		new_page = (unsigned long)kmalloc(PAGE_SIZE,
 							GFP_KERNEL);
 		/* Aligned to PAGE_SIZE */
@@ -315,6 +314,11 @@ static int nova_initialize_snapshot_info(struct super_block *sb,
 	if (!info->lists) {
 		nova_free_snapshot_info(info);
 		goto fail;
+	}
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+		mutex_init(&list->list_mutex);
 	}
 
 	if (init_pages) {
