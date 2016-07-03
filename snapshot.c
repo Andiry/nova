@@ -642,7 +642,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	int i, index;
+	int i, index, count = 0;
 	u64 recover_trans_id;
 	u64 trans_id;
 
@@ -683,11 +683,17 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		if (trans_id) {
 			sbi->curr_snapshot = i;
 			nova_restore_snapshot_info(sb, i, trans_id);
+			count++;
 		}
 
 		if (trans_id > sbi->latest_snapshot_trans_id)
 			sbi->latest_snapshot_trans_id = trans_id;
 	}
+
+	nova_dbg("Recoverd %d snapshots, current snapshot index %d, "
+			"latest transaction ID %llu\n",
+			count, sbi->curr_snapshot,
+			sbi->latest_snapshot_trans_id);
 
 	return 0;
 }
