@@ -83,6 +83,9 @@ static int nova_find_target_snapshot_info(struct super_block *sb,
 		}
 	}
 
+	if (!curr)
+		return -EINVAL;
+
 	if (curr->trans_id < trans_id) {
 		temp = rb_next(&curr->node);
 		if (!temp) {
