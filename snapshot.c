@@ -980,7 +980,6 @@ int nova_save_snapshots(struct super_block *sb)
 	struct snapshot_info *info;
 	struct snapshot_nvmm_info *nvmm_info;
 	struct rb_node *temp;
-	int i = 0;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -995,11 +994,10 @@ int nova_save_snapshots(struct super_block *sb)
 	temp = rb_first(tree);
 	while (temp) {
 		info = container_of(temp, struct snapshot_info, node);
-		nvmm_info = &nvmm_info_table->infos[i];
+		nvmm_info = &nvmm_info_table->infos[info->index];
 		nova_save_snapshot_info(sb, info, nvmm_info);
 		nova_delete_snapshot_info(sb, info, 0);
 
-		i++;
 		temp = rb_next(temp);
 		rb_erase(&info->node, tree);
 		nova_free_snapshot_info(info);
