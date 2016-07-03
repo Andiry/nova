@@ -626,7 +626,8 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 		nova_copy_snapshot_list_to_dram(sb, list, nvmm_list);
 	}
 
-	return 0;
+	ret = nova_insert_snapshot_info(sb, info);
+	return ret;
 
 fail:
 	nova_delete_snapshot_info(sb, info, 0);
