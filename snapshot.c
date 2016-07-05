@@ -741,8 +741,8 @@ int nova_create_snapshot(struct super_block *sb)
 		return 0;
 	}
 
-	timestamp = (CURRENT_TIME_SEC.tv_sec << 32) |
-			(CURRENT_TIME_SEC.tv_nsec);
+	timestamp = CURRENT_TIME_SEC.tv_sec;
+
 	ret = nova_initialize_snapshot_info(sb, &info, 1);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
@@ -974,9 +974,10 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 	struct snapshot_info *info;
 	struct rb_root *tree;
 	struct rb_node *temp;
+	struct tm tm;
 	int index = 0, count = 0;
 	u64 timestamp;
-	u64 sec, nsec;
+	unsigned long sec;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -984,7 +985,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 		return -EINVAL;
 
 	seq_printf(seq, "========== NOVA snapshot table ==========\n");
-	seq_printf(seq, "Index\tTrans ID\tTime\n");
+	seq_printf(seq, "Index\tTrans ID\t      Date\t    Time\n");
 
 	tree = &sbi->snapshot_info_tree;
 
@@ -995,10 +996,13 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 		index = info->index;
 
 		timestamp = snapshot_table->entries[index].timestamp;
-		sec = timestamp >> 32;
-		nsec = timestamp & 0xFFFFFFFF;
-		seq_printf(seq, "%d\t%llu\t\t%llu.%llu\n", index,
-					info->trans_id, sec, nsec);
+		sec = timestamp;
+		time_to_tm(sec, 0, &tm);
+		seq_printf(seq, "%5d\t%8llu\t%4lu-%02d-%02d\t%02d:%02d:%02d\n",
+					index, info->trans_id,
+					tm.tm_year + 1900, tm.tm_mon + 1,
+					tm.tm_mday,
+					tm.tm_hour, tm.tm_min, tm.tm_sec);
 
 		temp = rb_next(temp);
 		count++;
