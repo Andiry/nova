@@ -19,6 +19,8 @@
 
 #include <linux/fs.h>
 #include <linux/init.h>
+#include <linux/time.h>
+#include <linux/rtc.h>
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 #include <linux/sched.h>
