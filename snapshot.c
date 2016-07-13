@@ -833,6 +833,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	struct snapshot_info *prev = NULL, *next = NULL;
 	struct rb_root *tree;
 	u64 trans_id;
+	int delete = 0;
 	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -856,8 +857,6 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	}
 
 	next = nova_find_adjacent_snapshot_info(sb, info, 1);
-	tree = &sbi->snapshot_info_tree;
-	rb_erase(&info->node, tree);
 
 	if (next) {
 		nova_link_to_next_snapshot(sb, info, next);
@@ -869,8 +868,11 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		else
 			sbi->latest_snapshot_trans_id = 0;
 
-		nova_delete_snapshot_info(sb, info, 1);
+		delete = 1;
 	}
+
+	tree = &sbi->snapshot_info_tree;
+	rb_erase(&info->node, tree);
 
 update_snapshot_table:
 
@@ -880,6 +882,9 @@ update_snapshot_table:
 	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
 	mutex_unlock(&sbi->s_lock);
+
+	if (delete)
+		nova_delete_snapshot_info(sb, info, 1);
 
 	nova_free_snapshot_info(info);
 
