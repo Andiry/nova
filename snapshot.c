@@ -796,6 +796,11 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 			prev_info->index, next_info->index,
 			prev_info->trans_id, next_info->trans_id);
 
+	if (prev_info->trans_id >= next_info->trans_id)
+		nova_dbg("Error: prev trans ID %llu higher than "
+			"next trans ID %llu\n",
+			prev_info->trans_id, next_info->trans_id);
+
 	for (i = 0; i < sbi->cpus; i++) {
 		prev_list = &prev_info->lists[i];
 		next_list = &next_info->lists[i];
@@ -850,10 +855,10 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		goto update_snapshot_table;
 	}
 
+	next = nova_find_adjacent_snapshot_info(sb, info, 1);
 	tree = &sbi->snapshot_info_tree;
 	rb_erase(&info->node, tree);
 
-	next = nova_find_adjacent_snapshot_info(sb, info, 1);
 	if (next) {
 		nova_link_to_next_snapshot(sb, info, next);
 	} else {
