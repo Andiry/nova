@@ -808,6 +808,9 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 		mutex_lock(&prev_list->list_mutex);
 		mutex_lock(&next_list->list_mutex);
 
+		/* Set NEXT_PAGE flag for prev lists */
+		nova_set_entry_type((void *)prev_list->tail, NEXT_PAGE);
+
 		/* Link the prev lists to the head of next lists */
 		curr_block = BLOCK_OFF(prev_list->tail);
 		curr_page = (struct nova_inode_log_page *)curr_block;
