@@ -788,7 +788,7 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_list *prev_list, *next_list;
 	struct nova_inode_log_page *curr_page;
-	u64 curr_block;
+	u64 curr_block, curr_p;
 	int i;
 
 	nova_dbg("Link deleted snapshot %d to next snapshot %d, "
@@ -809,7 +809,9 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 		mutex_lock(&next_list->list_mutex);
 
 		/* Set NEXT_PAGE flag for prev lists */
-		nova_set_entry_type((void *)prev_list->tail, NEXT_PAGE);
+		curr_p = prev_list->tail;
+		if (!goto_next_list_page(sb, curr_p))
+			nova_set_entry_type((void *)curr_p, NEXT_PAGE);
 
 		/* Link the prev lists to the head of next lists */
 		curr_block = BLOCK_OFF(prev_list->tail);
