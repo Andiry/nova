@@ -9,5 +9,5 @@ echo "Unmount done."
 sleep 1
 
 echo "Mounting..."
-mount -t NOVA /dev/pmem0 /mnt/ramdisk
+mount -t NOVA /dev/pmem0m /mnt/ramdisk
 
