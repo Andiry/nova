@@ -23,7 +23,7 @@ For more details about the design and implementation of NOVA, please see this pa
 Published in FAST 2016
 
 ## Building NOVA
-NOVA works on the 4.3 version of x86-64 Linux kernel.
+NOVA works on the 4.3 and 4.4 versions of x86-64 Linux kernel.
 
 To build NOVA, simply run a
 
@@ -39,22 +39,22 @@ NOVA runs on a physically contiguous memory region that is not used by the Linux
 To run NOVA, first build up your kernel with NVDIMM support enabled (`CONFIG_BLK_DEV_PMEM`), and then you can
 reserve the memory space by booting the kernel with `memmap` command line option.
 
-For instance, adding `memmap=16G!8G` to the kernel boot parameters will reserve 16GB memory starting from 8GB address, and the kernel will create a `pmem0` block device under the `/dev` directory.
+For instance, adding `memmap=16G!8G` to the kernel boot parameters will reserve 16GB memory starting from 8GB address, and the kernel will create a `pmem0m` block device under the `/dev` directory.
 
 After the OS has booted, you can initialize a NOVA instance with the following commands:
 
 
 ~~~
 #insmod nova.ko
-#mount -t NOVA -o init /dev/pmem0 /mnt/ramdisk 
+#mount -t NOVA -o init /dev/pmem0m /mnt/ramdisk
 ~~~
 
-The above commands create a NOVA instance on pmem0 device, and mount on `/mnt/ramdisk`.
+The above commands create a NOVA instance on pmem0m device, and mount on `/mnt/ramdisk`.
 
 To recover an existing NOVA instance, mount NOVA without the init option, for example:
 
 ~~~
-#mount -t NOVA /dev/pmem0 /mnt/ramdisk 
+#mount -t NOVA /dev/pmem0m /mnt/ramdisk
 ~~~
 
 There are two scripts provided in the source code, `setup-nova.sh` and `remount-nova.sh` to help setup NOVA.
