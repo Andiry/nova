@@ -228,6 +228,87 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 	return 0;
 }
 
+static inline int nova_background_clean_inode_entry(struct super_block *sb,
+	struct snapshot_inode_entry *i_entry, u64 trans_id)
+{
+	if (i_entry->deleted == 0 && i_entry->delete_trans_id <= trans_id) {
+		nova_delete_dead_inode(sb, i_entry->nova_ino);
+		i_entry->deleted = 1;
+	}
+
+	return 0;
+}
+
+static inline int nova_background_clean_write_entry(struct super_block *sb,
+	struct snapshot_file_write_entry *w_entry,
+	struct nova_inode *fake_pi, u64 trans_id)
+{
+	if (w_entry->deleted == 0 && w_entry->delete_trans_id <= trans_id) {
+		nova_free_data_blocks(sb, fake_pi, w_entry->nvmm,
+					w_entry->num_pages);
+		w_entry->deleted = 1;
+	}
+
+	return 0;
+}
+
+static int nova_background_clean_snapshot_list(struct super_block *sb,
+	struct snapshot_list *list, u64 trans_id)
+{
+	struct nova_inode_log_page *curr_page;
+	struct nova_inode fake_pi;
+	void *addr;
+	u64 curr_p;
+	u8 type;
+
+	fake_pi.nova_ino = 0;
+	fake_pi.i_blk_type = 0;
+
+	curr_p = list->head;
+	nova_dbg_verbose("Snapshot list head 0x%llx, tail 0x%lx\n",
+				curr_p, list->tail);
+	if (curr_p == 0 && list->tail == 0)
+		return 0;
+
+	curr_page = (struct nova_inode_log_page *)curr_p;
+	while (curr_page->page_tail.trans_id < trans_id &&
+					curr_p != list->tail) {
+		if (goto_next_list_page(sb, curr_p)) {
+			curr_p = next_list_page(curr_p);
+			curr_page = (struct nova_inode_log_page *)curr_p;
+		}
+
+		if (curr_p == 0) {
+			nova_err(sb, "Snapshot list is NULL!\n");
+			BUG();
+		}
+
+		addr = (void *)curr_p;
+		type = nova_get_entry_type(addr);
+
+		switch (type) {
+			case SS_INODE:
+				nova_background_clean_inode_entry(sb, addr,
+							trans_id);
+				curr_p += sizeof(struct snapshot_inode_entry);
+				continue;
+			case SS_FILE_WRITE:
+				nova_background_clean_write_entry(sb, addr,
+							&fake_pi, trans_id);
+				curr_p += sizeof(struct snapshot_file_write_entry);
+				continue;
+			default:
+				nova_err(sb, "unknown type %d, 0x%llx\n",
+							type, curr_p);
+				NOVA_ASSERT(0);
+				curr_p += sizeof(struct snapshot_file_write_entry);
+				continue;
+		}
+	}
+
+	return 0;
+}
+
 static int nova_delete_snapshot_list_pages(struct super_block *sb,
 	struct snapshot_list *list)
 {
