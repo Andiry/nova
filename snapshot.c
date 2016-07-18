@@ -269,7 +269,7 @@ static int nova_delete_snapshot_info(struct super_block *sb,
 }
 
 static int nova_initialize_snapshot_info_pages(struct super_block *sb,
-	struct snapshot_info *info)
+	struct snapshot_info *info, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_list *list;
@@ -296,7 +296,7 @@ static int nova_initialize_snapshot_info_pages(struct super_block *sb,
 }
 
 static int nova_initialize_snapshot_info(struct super_block *sb,
-	struct snapshot_info **ret_info, int init_pages)
+	struct snapshot_info **ret_info, int init_pages, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info;
@@ -322,7 +322,7 @@ static int nova_initialize_snapshot_info(struct super_block *sb,
 	}
 
 	if (init_pages) {
-		ret = nova_initialize_snapshot_info_pages(sb, info);
+		ret = nova_initialize_snapshot_info_pages(sb, info, trans_id);
 		if (ret)
 			goto fail;
 	}
@@ -646,7 +646,7 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 	nova_dbg("Restore snapshot %d, trans ID %llu\n", index, trans_id);
 
 	/* Allocate list pages on demand later */
-	ret = nova_initialize_snapshot_info(sb, &info, 0);
+	ret = nova_initialize_snapshot_info(sb, &info, 0, trans_id);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);
@@ -790,7 +790,7 @@ int nova_create_snapshot(struct super_block *sb)
 
 	timestamp = CURRENT_TIME_SEC.tv_sec;
 
-	ret = nova_initialize_snapshot_info(sb, &info, 1);
+	ret = nova_initialize_snapshot_info(sb, &info, 1, trans_id);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);

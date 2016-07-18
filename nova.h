@@ -180,7 +180,7 @@ struct nova_file_write_entry {
 } __attribute((__packed__));
 
 struct nova_inode_page_tail {
-	__le64	padding1;
+	__le64	trans_id;	/* For snapshot list page */
 	__le64	padding2;
 	__le64	padding3;
 	__le64	next_page;
