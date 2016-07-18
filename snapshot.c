@@ -203,13 +203,15 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 		switch (type) {
 			case SS_INODE:
 				i_entry = (struct snapshot_inode_entry *)addr;
-				nova_delete_dead_inode(sb, i_entry->nova_ino);
+				if (i_entry->deleted == 0)
+					nova_delete_dead_inode(sb,
+							i_entry->nova_ino);
 				curr_p += sizeof(struct snapshot_inode_entry);
 				continue;
 			case SS_FILE_WRITE:
-				w_entry =
-					(struct snapshot_file_write_entry *)addr;
-				nova_free_data_blocks(sb, &fake_pi,
+				w_entry = (struct snapshot_file_write_entry *)addr;
+				if (w_entry->deleted == 0)
+					nova_free_data_blocks(sb, &fake_pi,
 							w_entry->nvmm,
 							w_entry->num_pages);
 				curr_p += sizeof(struct snapshot_file_write_entry);
