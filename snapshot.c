@@ -590,7 +590,8 @@ static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
 }
 
 static int nova_allocate_snapshot_list_pages(struct super_block *sb,
-	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list)
+	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list,
+	u64 trans_id)
 {
 	unsigned long prev_page = 0;
 	unsigned long new_page = 0;
@@ -669,7 +670,8 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 			continue;
 		}
 
-		ret = nova_allocate_snapshot_list_pages(sb, list, nvmm_list);
+		ret = nova_allocate_snapshot_list_pages(sb, list,
+							nvmm_list, trans_id);
 		if (ret) {
 			nova_dbg("%s failure\n", __func__);
 			goto fail;
