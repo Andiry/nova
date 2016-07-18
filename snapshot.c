@@ -279,6 +279,8 @@ static int nova_background_clean_snapshot_list(struct super_block *sb,
 					curr_p != list->tail) {
 		if (goto_next_list_page(sb, curr_p)) {
 			curr_p = next_list_page(curr_p);
+			if (curr_p == list->tail)
+				break;
 			curr_page = (struct nova_inode_log_page *)curr_p;
 			if (curr_page->page_tail.trans_id == trans_id)
 				break;
@@ -973,8 +975,8 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 		next_list->head = prev_list->head;
 		next_list->num_pages += prev_list->num_pages;
 
-//		nova_background_clean_snapshot_list(sb, next_list,
-//							next_info->trans_id);
+		nova_background_clean_snapshot_list(sb, next_list,
+							next_info->trans_id);
 
 		mutex_unlock(&next_list->list_mutex);
 		mutex_unlock(&prev_list->list_mutex);
