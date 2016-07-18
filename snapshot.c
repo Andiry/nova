@@ -156,6 +156,13 @@ static int nova_insert_snapshot_info(struct super_block *sb,
 }
 
 /* Reuse the inode log page structure */
+static inline void nova_set_link_page_trans_id(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, u64 trans_id)
+{
+	curr_page->page_tail.trans_id = trans_id;
+}
+
+/* Reuse the inode log page structure */
 static inline void nova_set_next_link_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page)
 {
@@ -287,6 +294,7 @@ static int nova_initialize_snapshot_info_pages(struct super_block *sb,
 			return -ENOMEM;
 		}
 
+		nova_set_link_page_trans_id(sb, (void *)new_page, trans_id);
 		nova_set_next_link_page_address(sb, (void *)new_page, 0);
 		list->tail = list->head = new_page;
 		list->num_pages = 1;
@@ -394,6 +402,8 @@ retry:
 						__func__);
 				return -ENOMEM;
 			}
+			nova_set_link_page_trans_id(sb, (void *)new_page,
+						info->trans_id);
 			nova_set_next_link_page_address(sb,
 						(void *)new_page, 0);
 			goto retry;
@@ -607,6 +617,7 @@ static int nova_allocate_snapshot_list_pages(struct super_block *sb,
 			goto fail;
 		}
 
+		nova_set_link_page_trans_id(sb, (void *)new_page, trans_id);
 		nova_set_next_link_page_address(sb, (void *)new_page, 0);
 
 		if (i == 0)
