@@ -52,7 +52,8 @@ enum nova_snapshot_entry_type {
 
 struct snapshot_inode_entry {
 	u8	type;
-	u8	padding[7];
+	u8	deleted;
+	u8	padding[6];
 	u64	padding64;
 	u64	nova_ino;
 	u64	delete_trans_id;
@@ -60,7 +61,8 @@ struct snapshot_inode_entry {
 
 struct snapshot_file_write_entry {
 	u8	type;
-	u8	padding[7];
+	u8	deleted;
+	u8	padding[6];
 	u64	nvmm;
 	u64	num_pages;
 	u64	delete_trans_id;
