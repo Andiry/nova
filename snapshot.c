@@ -442,6 +442,7 @@ int nova_append_snapshot_file_write_entry(struct super_block *sb,
 
 	memset(&ss_entry, 0, sizeof(struct snapshot_file_write_entry));
 	ss_entry.type = SS_FILE_WRITE;
+	ss_entry.deleted = 0;
 	ss_entry.nvmm = nvmm;
 	ss_entry.num_pages = num_pages;
 	ss_entry.delete_trans_id = delete_trans_id;
@@ -519,6 +520,7 @@ int nova_append_snapshot_inode_entry(struct super_block *sb,
 
 	memset(&entry, 0, sizeof(struct snapshot_inode_entry));
 	entry.type = SS_INODE;
+	entry.deleted = 0;
 	entry.nova_ino = pi->nova_ino;
 	entry.delete_trans_id = pi->delete_trans_id;
 
