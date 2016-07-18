@@ -447,7 +447,8 @@ int nova_append_snapshot_file_write_entry(struct super_block *sb,
  * 1) It is created after the last snapshot, or
  * 2) It is created and deleted during the same snapshot period.
  */
-int nova_evicted_inode_deleteable(struct super_block *sb, struct nova_inode *pi)
+int nova_evicted_inode_deleteable(struct super_block *sb,
+	struct nova_inode *pi, struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info = NULL;
@@ -474,19 +475,30 @@ int nova_evicted_inode_deleteable(struct super_block *sb, struct nova_inode *pi)
 	if (pi->delete_trans_id <= info->trans_id)
 		return 1;
 
+	*ret_info = info;
 	return 0;
 }
 
 int nova_append_snapshot_inode_entry(struct super_block *sb,
-	struct nova_inode *pi)
+	struct nova_inode *pi, struct snapshot_info *info)
 {
-	struct snapshot_info *info = NULL;
+	struct snapshot_table *snapshot_table;
 	struct snapshot_inode_entry entry;
+	int index;
 	int ret;
 
-	ret = nova_find_target_snapshot_info(sb, pi->create_trans_id, &info);
-	if (ret < 0 || !info) {
+	if (!info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
+		return -EINVAL;
+	}
+
+	index = info->index;
+	snapshot_table = nova_get_snapshot_table(sb);
+	if (snapshot_table->entries[index].trans_id != info->trans_id) {
+		nova_dbg("%s: Snapshot info unmatch, index %d, trans ID %llu, "
+				"snapshot table trans ID %llu\n",
+				__func__, index, info->trans_id,
+				snapshot_table->entries[index].trans_id);
 		return -EINVAL;
 	}
 

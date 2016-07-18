@@ -1106,8 +1106,6 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
 /* snapshot.c */
-int nova_evicted_inode_deleteable(struct super_block *sb,
-	struct nova_inode *pi);
 int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	u8 type);
 int nova_save_snapshots(struct super_block *sb);
@@ -1115,8 +1113,10 @@ int nova_restore_snapshot_table(struct super_block *sb);
 int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
 	u64 delete_trans_id);
+int nova_evicted_inode_deleteable(struct super_block *sb,
+	struct nova_inode *pi, struct snapshot_info **ret_info);
 int nova_append_snapshot_inode_entry(struct super_block *sb,
-	struct nova_inode *pi);
+	struct nova_inode *pi, struct snapshot_info *info);
 int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq);
 int nova_delete_dead_inode(struct super_block *sb, u64 ino);
 int nova_create_snapshot(struct super_block *sb);

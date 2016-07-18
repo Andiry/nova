@@ -956,11 +956,13 @@ void nova_evict_inode(struct inode *inode)
 
 	/* Check if this inode exists in at least one snapshot. */
 	if (pi->valid == 0) {
-		ret = nova_evicted_inode_deleteable(sb, pi);
+		struct snapshot_info *info = NULL;
+
+		ret = nova_evicted_inode_deleteable(sb, pi, &info);
 		if (ret < 0)
 			goto out;
 		if (ret == 0) {
-			nova_append_snapshot_inode_entry(sb, pi);
+			nova_append_snapshot_inode_entry(sb, pi, info);
 			goto out;
 		}
 	}
