@@ -1105,6 +1105,8 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
 /* snapshot.c */
+int nova_evicted_inode_deleteable(struct super_block *sb,
+	struct nova_inode *pi);
 int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	u8 type);
 int nova_save_snapshots(struct super_block *sb);

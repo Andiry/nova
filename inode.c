@@ -920,7 +920,6 @@ static int nova_free_inode_resource(struct super_block *sb,
 void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -948,19 +947,15 @@ void nova_evict_inode(struct inode *inode)
 		nova_print_inode_log(sb, inode);
 	}
 
-	/* This inode exists in at least one snapshot. Don't delete it yet. */
-	if (pi->create_trans_id <= sbi->latest_snapshot_trans_id &&
-			pi->valid == 0) {
-		if (pi->create_trans_id >= pi->delete_trans_id) {
-			nova_dbg("%s: pi %llu trans ID error: create %llu, "
-					"delete %llu\n",
-					__func__, pi->nova_ino,
-					pi->create_trans_id,
-					pi->delete_trans_id);
+	/* Check if this inode exists in at least one snapshot. */
+	if (pi->valid == 0) {
+		ret = nova_evicted_inode_deleteable(sb, pi);
+		if (ret < 0)
+			goto out;
+		if (ret == 0) {
+			nova_append_snapshot_inode_entry(sb, pi);
 			goto out;
 		}
-		nova_append_snapshot_inode_entry(sb, pi);
-		goto out;
 	}
 
 	NOVA_START_TIMING(evict_inode_t, evict_time);
@@ -1150,6 +1145,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->deleted = 0;
 	pi->i_create_time = CURRENT_TIME_SEC.tv_sec;
 	pi->create_trans_id = trans_id;
+	pi->delete_trans_id = 0;
 	nova_memlock_inode(sb, pi);
 
 	si = NOVA_I(inode);

@@ -442,6 +442,41 @@ int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	return ret;
 }
 
+/*
+ * An NOVA inode is deleteable if
+ * 1) It is created after the last snapshot, or
+ * 2) It is created and deleted during the same snapshot period.
+ */
+int nova_evicted_inode_deleteable(struct super_block *sb, struct nova_inode *pi)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_info *info = NULL;
+	int ret;
+
+	if (pi->create_trans_id >= pi->delete_trans_id) {
+		nova_dbg("%s: pi %llu trans ID error: create %llu, "
+				"delete %llu\n",
+				__func__, pi->nova_ino,
+				pi->create_trans_id,
+				pi->delete_trans_id);
+		return -EINVAL;
+	}
+
+	if (pi->create_trans_id > sbi->latest_snapshot_trans_id)
+		return 1;
+
+	ret = nova_find_target_snapshot_info(sb, pi->create_trans_id, &info);
+	if (ret < 0 || !info) {
+		nova_dbg("%s: Snapshot info not found\n", __func__);
+		return -EINVAL;
+	}
+
+	if (pi->delete_trans_id <= info->trans_id)
+		return 1;
+
+	return 0;
+}
+
 int nova_append_snapshot_inode_entry(struct super_block *sb,
 	struct nova_inode *pi)
 {
@@ -829,7 +864,6 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 	return 0;
 }
 
-/* FIXME: 1) Snapshot hole 2) latest snapshot trans ID update */
 int nova_delete_snapshot(struct super_block *sb, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
