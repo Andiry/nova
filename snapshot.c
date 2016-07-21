@@ -1219,3 +1219,11 @@ int nova_save_snapshots(struct super_block *sb)
 	return 0;
 }
 
+int nova_snapshot_init(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	sbi->snapshot_info_tree = RB_ROOT;
+
+	return 0;
+}

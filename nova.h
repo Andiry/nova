@@ -1121,6 +1121,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq);
 int nova_delete_dead_inode(struct super_block *sb, u64 ino);
 int nova_create_snapshot(struct super_block *sb);
 int nova_delete_snapshot(struct super_block *sb, int index);
+int nova_snapshot_init(struct super_block *sb);
 
 /* super.c */
 extern struct super_block *nova_read_super(struct super_block *sb, void *data,
