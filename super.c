@@ -545,7 +545,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	sbi->snapshot_info_tree = RB_ROOT;
+	nova_snapshot_init(sb);
 
 	if (nova_parse_options(data, sbi, 0))
 		goto out;
