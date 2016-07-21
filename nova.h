@@ -449,6 +449,10 @@ struct nova_sb_info {
 	int recover_snapshot_index;
 	u64 recover_snapshot_trans_id;
 
+	struct task_struct *snapshot_cleaner_thread;
+	wait_queue_head_t snapshot_cleaner_wait;
+	void *curr_clean_snapshot_info;
+
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
