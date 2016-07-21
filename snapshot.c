@@ -936,6 +936,15 @@ out:
 	return ret;
 }
 
+static void wakeup_snapshot_cleaner(struct nova_sb_info *sbi)
+{
+	if (!waitqueue_active(&sbi->snapshot_cleaner_wait))
+		return;
+
+	nova_dbg("Wakeup snapshot cleaner thread\n");
+	wake_up_interruptible(&sbi->snapshot_cleaner_wait);
+}
+
 static int nova_link_to_next_snapshot(struct super_block *sb,
 	struct snapshot_info *prev_info, struct snapshot_info *next_info)
 {
@@ -975,14 +984,13 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 		next_list->head = prev_list->head;
 		next_list->num_pages += prev_list->num_pages;
 
-		nova_background_clean_snapshot_list(sb, next_list,
-							next_info->trans_id);
-
 		mutex_unlock(&next_list->list_mutex);
 		mutex_unlock(&prev_list->list_mutex);
 	}
 
-	/* FIXME: Start a background thread to free freeable items */
+	sbi->curr_clean_snapshot_info = next_info;
+	wakeup_snapshot_cleaner(sbi);
+
 	return 0;
 }
 
@@ -1199,6 +1207,9 @@ int nova_save_snapshots(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
+	if (sbi->snapshot_cleaner_thread)
+		kthread_stop(sbi->snapshot_cleaner_thread);
+
 	tree = &sbi->snapshot_info_tree;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	memset(nvmm_info_table, '0', PAGE_SIZE);
@@ -1219,11 +1230,82 @@ int nova_save_snapshots(struct super_block *sb)
 	return 0;
 }
 
+static void snapshot_cleaner_try_sleeping(struct nova_sb_info *sbi)
+{
+	DEFINE_WAIT(wait);
+	prepare_to_wait(&sbi->snapshot_cleaner_wait, &wait, TASK_INTERRUPTIBLE);
+	schedule();
+	finish_wait(&sbi->snapshot_cleaner_wait, &wait);
+}
+
+static int nova_clean_snapshot(struct nova_sb_info *sbi)
+{
+	struct super_block *sb = sbi->sb;
+	struct snapshot_info *info;
+	struct snapshot_list *list;
+	int i;
+
+	if (!sbi->curr_clean_snapshot_info)
+		return 0;
+
+	info = sbi->curr_clean_snapshot_info;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+
+		mutex_lock(&list->list_mutex);
+		nova_background_clean_snapshot_list(sb, list,
+							info->trans_id);
+		mutex_unlock(&list->list_mutex);
+	}
+
+	sbi->curr_clean_snapshot_info = NULL;
+	return 0;
+}
+
+static int nova_snapshot_cleaner(void *arg)
+{
+	struct nova_sb_info *sbi = arg;
+
+	nova_dbg("Running snapshot cleaner thread\n");
+	for (;;) {
+		snapshot_cleaner_try_sleeping(sbi);
+
+		if (kthread_should_stop())
+			break;
+
+		nova_clean_snapshot(sbi);
+	}
+
+	if (sbi->curr_clean_snapshot_info)
+		nova_clean_snapshot(sbi);
+
+	return 0;
+}
+
+static int nova_snapshot_cleaner_init(struct nova_sb_info *sbi)
+{
+	int ret = 0;
+
+	init_waitqueue_head(&sbi->snapshot_cleaner_wait);
+
+	sbi->snapshot_cleaner_thread = kthread_run(nova_snapshot_cleaner,
+		sbi, "nova_snapshot_cleaner");
+	if (IS_ERR(sbi->snapshot_cleaner_thread)) {
+		nova_info("Failed to start NOVA snapshot cleaner thread\n");
+		ret = -1;
+	}
+	nova_info("Start NOVA snapshot cleaner thread.\n");
+	return ret;
+}
+
 int nova_snapshot_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int ret;
 
 	sbi->snapshot_info_tree = RB_ROOT;
+	ret = nova_snapshot_cleaner_init(sbi);
 
-	return 0;
+	return ret;
 }
