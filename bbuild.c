@@ -772,7 +772,7 @@ struct task_ring {
 	u64 addr[512];
 	int num;
 	int inodes_used_count;
-	u64 *array;
+	u64 *nvmm_array;
 };
 
 static struct task_ring *task_rings;
@@ -889,7 +889,7 @@ static int nova_set_ring_array(struct super_block *sb,
 		end = base + MAX_PGOFF;
 
 	for (pgoff = start; pgoff < end; pgoff++)
-		ring->array[pgoff - base] = (u64)(entry->block >> PAGE_SHIFT)
+		ring->nvmm_array[pgoff - base] = (u64)(entry->block >> PAGE_SHIFT)
 						+ pgoff - entry->pgoff;
 
 	return 0;
@@ -907,10 +907,10 @@ static int nova_set_file_bm(struct super_block *sb,
 		last_blocknr -= base;
 
 	for (pgoff = 0; pgoff <= last_blocknr; pgoff++) {
-		nvmm = ring->array[pgoff];
+		nvmm = ring->nvmm_array[pgoff];
 		if (nvmm) {
 			set_bm(nvmm, bm, BM_4K);
-			ring->array[pgoff] = 0;
+			ring->nvmm_array[pgoff] = 0;
 		}
 	}
 
@@ -947,7 +947,7 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 			last_blocknr = base + MAX_PGOFF - 1;
 
 		for (pgoff = first_blocknr; pgoff <= last_blocknr; pgoff++)
-			ring->array[pgoff - base] = 0;
+			ring->nvmm_array[pgoff - base] = 0;
 	}
 out:
 	sih->i_size = entry->size;
@@ -1110,8 +1110,8 @@ static void free_resources(struct super_block *sb)
 	if (task_rings) {
 		for (i = 0; i < sbi->cpus; i++) {
 			ring = &task_rings[i];
-			vfree(ring->array);
-			ring->array = NULL;
+			vfree(ring->nvmm_array);
+			ring->nvmm_array = NULL;
 		}
 	}
 
@@ -1133,8 +1133,8 @@ static int allocate_resources(struct super_block *sb, int cpus)
 
 	for (i = 0; i < cpus; i++) {
 		ring = &task_rings[i];
-		ring->array = vzalloc(sizeof(u64) * MAX_PGOFF);
-		if (!ring->array)
+		ring->nvmm_array = vzalloc(sizeof(u64) * MAX_PGOFF);
+		if (!ring->nvmm_array)
 			goto fail;
 	}
 
