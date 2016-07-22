@@ -800,6 +800,11 @@ int nova_mount_snapshot(struct super_block *sb)
 	int index;
 
 	snapshot_table = nova_get_snapshot_table(sb);
+	if (!snapshot_table) {
+		sbi->mount_snapshot = 0;
+		return -EINVAL;
+	}
+
 	index = sbi->mount_snapshot_index;
 	if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
 		nova_dbg("%s: Mount invalid snapshot %d\n",
