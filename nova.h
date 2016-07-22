@@ -445,9 +445,9 @@ struct nova_sb_info {
 	int curr_snapshot;
 	u64 latest_snapshot_trans_id;
 
-	int recover_snapshot;
-	int recover_snapshot_index;
-	u64 recover_snapshot_trans_id;
+	int mount_snapshot;
+	int mount_snapshot_index;
+	u64 mount_snapshot_trans_id;
 
 	struct task_struct *snapshot_cleaner_thread;
 	wait_queue_head_t snapshot_cleaner_wait;
@@ -616,11 +616,11 @@ static inline int old_entry_freeable(struct super_block *sb, u64 trans_id)
 	return 0;
 }
 
-static inline int pass_recover_snapshot(struct super_block *sb, u64 trans_id)
+static inline int pass_mount_snapshot(struct super_block *sb, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (trans_id > sbi->recover_snapshot_trans_id)
+	if (trans_id > sbi->mount_snapshot_trans_id)
 		return 1;
 
 	return 0;
@@ -1109,7 +1109,7 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
 /* snapshot.c */
-int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
+int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 	u8 type);
 int nova_save_snapshots(struct super_block *sb);
 int nova_restore_snapshot_table(struct super_block *sb);
