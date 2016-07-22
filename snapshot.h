@@ -73,7 +73,7 @@ struct snapshot_nvmm_list {
 	__le64 num_pages;
 	__le64 head;
 	__le64 tail;
-};
+} __attribute((__packed__));
 
 /* Support up to 128 CPUs */
 struct snapshot_nvmm_page {
@@ -83,7 +83,7 @@ struct snapshot_nvmm_page {
 struct snapshot_nvmm_info {
 	__le64	trans_id;
 	__le64 	nvmm_page_addr;
-};
+} __attribute((__packed__));
 
 struct snapshot_nvmm_info_table {
 	struct snapshot_nvmm_info infos[SNAPSHOT_TABLE_SIZE];
