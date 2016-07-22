@@ -838,10 +838,6 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
-	/* No need to rebuild the snapshots if we are mounting a snapshot */
-	if (sbi->mount_snapshot)
-		return nova_mount_snapshot(sb);
-
 	sbi->curr_snapshot = 0;
 	sbi->latest_snapshot_trans_id = 0;
 
