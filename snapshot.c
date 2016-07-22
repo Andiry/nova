@@ -769,7 +769,7 @@ static int nova_restore_snapshot_info_lists(struct super_block *sb,
 }
 
 static int nova_restore_snapshot_info(struct super_block *sb, int index,
-	u64 trans_id)
+	u64 trans_id, int just_init)
 {
 	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info = NULL;
@@ -783,7 +783,7 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 	nova_dbg("Restore snapshot %d, trans ID %llu\n", index, trans_id);
 
 	/* Allocate list pages on demand later */
-	ret = nova_initialize_snapshot_info(sb, &info, 0, trans_id);
+	ret = nova_initialize_snapshot_info(sb, &info, just_init, trans_id);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);
@@ -793,9 +793,11 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 	info->index = index;
 	info->trans_id = trans_id;
 
-	ret = nova_restore_snapshot_info_lists(sb, info, index);
-	if (ret)
-		goto fail;
+	if (just_init == 0) {
+		ret = nova_restore_snapshot_info_lists(sb, info, index);
+		if (ret)
+			goto fail;
+	}
 
 	ret = nova_insert_snapshot_info(sb, info);
 	return ret;
@@ -839,7 +841,8 @@ int nova_mount_snapshot(struct super_block *sb)
 	return 0;
 }
 
-int nova_restore_snapshot_table(struct super_block *sb)
+/* For power failure recovery, just initialize the infos */
+int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
@@ -860,7 +863,8 @@ int nova_restore_snapshot_table(struct super_block *sb)
 
 		if (trans_id) {
 			sbi->curr_snapshot = i;
-			ret = nova_restore_snapshot_info(sb, i, trans_id);
+			ret = nova_restore_snapshot_info(sb, i, trans_id,
+							just_init);
 			if (ret) {
 				nova_dbg("%s: Restore snapshot %d, "
 						" trans ID %llu failed\n",
