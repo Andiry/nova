@@ -612,15 +612,6 @@ setup_sb:
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
-	if ((sbi->s_mount_opt & NOVA_MOUNT_FORMAT) == 0 &&
-			sbi->mount_snapshot == 0) {
-		retval = nova_restore_snapshot_table(sb);
-		if (retval) {
-			printk(KERN_ERR "Restore snapshot table failed\n");
-			goto out;
-		}
-	}
-
 	/* If the FS was not formatted on this mount, scan the meta-data after
 	 * truncate list has been processed */
 	if ((sbi->s_mount_opt & NOVA_MOUNT_FORMAT) == 0)
