@@ -332,6 +332,7 @@ out:
 
 static bool nova_can_skip_full_scan(struct super_block *sb)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi =  nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	int ret;
 
@@ -351,6 +352,15 @@ static bool nova_can_skip_full_scan(struct super_block *sb)
 				"fall back to failure recovery\n");
 		nova_destroy_blocknode_trees(sb);
 		return false;
+	}
+
+	if (sbi->mount_snapshot == 0) {
+		ret = nova_restore_snapshot_table(sb);
+		if (ret) {
+			nova_err(sb, "Restore snapshot table failed, "
+					"fall back to failure recovery\n");
+			return false;
+		}
 	}
 
 	return true;
@@ -1377,6 +1387,12 @@ int nova_failure_recovery(struct super_block *sb)
 
 /*********************** Recovery entrance *************************/
 
+/*
+ * Recovery routine has three tasks:
+ * 1. Restore snapshot table;
+ * 2. Restore inuse inode list;
+ * 3. Restore the NVMM allocator.
+ */
 int nova_recovery(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
