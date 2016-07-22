@@ -359,6 +359,7 @@ static bool nova_can_skip_full_scan(struct super_block *sb)
 		if (ret) {
 			nova_err(sb, "Restore snapshot table failed, "
 					"fall back to failure recovery\n");
+			nova_destroy_snapshot_infos(sb);
 			return false;
 		}
 	}
