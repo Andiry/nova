@@ -772,6 +772,7 @@ struct task_ring {
 	u64 addr[512];
 	int num;
 	int inodes_used_count;
+	u64 *entry_array;
 	u64 *nvmm_array;
 };
 
@@ -1110,7 +1111,9 @@ static void free_resources(struct super_block *sb)
 	if (task_rings) {
 		for (i = 0; i < sbi->cpus; i++) {
 			ring = &task_rings[i];
+			vfree(ring->entry_array);
 			vfree(ring->nvmm_array);
+			ring->entry_array = NULL;
 			ring->nvmm_array = NULL;
 		}
 	}
@@ -1133,8 +1136,13 @@ static int allocate_resources(struct super_block *sb, int cpus)
 
 	for (i = 0; i < cpus; i++) {
 		ring = &task_rings[i];
+
 		ring->nvmm_array = vzalloc(sizeof(u64) * MAX_PGOFF);
 		if (!ring->nvmm_array)
+			goto fail;
+
+		ring->entry_array = vmalloc(sizeof(u64) * MAX_PGOFF);
+		if (!ring->entry_array)
 			goto fail;
 	}
 
