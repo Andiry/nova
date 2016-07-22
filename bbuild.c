@@ -330,44 +330,6 @@ out:
 	return ret;
 }
 
-/* Return TRUE if we can do a normal unmount recovery */
-static bool nova_try_normal_recovery(struct super_block *sb)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode *pi =  nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
-	int ret;
-
-	if (pi->log_head == 0 || pi->log_tail == 0)
-		return false;
-
-	ret = nova_init_blockmap_from_inode(sb);
-	if (ret) {
-		nova_err(sb, "init blockmap failed, "
-				"fall back to failure recovery\n");
-		return false;
-	}
-
-	ret = nova_init_inode_list_from_inode(sb);
-	if (ret) {
-		nova_err(sb, "init inode list failed, "
-				"fall back to failure recovery\n");
-		nova_destroy_blocknode_trees(sb);
-		return false;
-	}
-
-	if (sbi->mount_snapshot == 0) {
-		ret = nova_restore_snapshot_table(sb, 0);
-		if (ret) {
-			nova_err(sb, "Restore snapshot table failed, "
-					"fall back to failure recovery\n");
-			nova_destroy_snapshot_infos(sb);
-			return false;
-		}
-	}
-
-	return true;
-}
-
 static u64 nova_append_range_node_entry(struct super_block *sb,
 	struct nova_range_node *curr, u64 tail, unsigned long cpuid)
 {
@@ -1388,6 +1350,44 @@ int nova_failure_recovery(struct super_block *sb)
 }
 
 /*********************** Recovery entrance *************************/
+
+/* Return TRUE if we can do a normal unmount recovery */
+static bool nova_try_normal_recovery(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode *pi =  nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	int ret;
+
+	if (pi->log_head == 0 || pi->log_tail == 0)
+		return false;
+
+	ret = nova_init_blockmap_from_inode(sb);
+	if (ret) {
+		nova_err(sb, "init blockmap failed, "
+				"fall back to failure recovery\n");
+		return false;
+	}
+
+	ret = nova_init_inode_list_from_inode(sb);
+	if (ret) {
+		nova_err(sb, "init inode list failed, "
+				"fall back to failure recovery\n");
+		nova_destroy_blocknode_trees(sb);
+		return false;
+	}
+
+	if (sbi->mount_snapshot == 0) {
+		ret = nova_restore_snapshot_table(sb, 0);
+		if (ret) {
+			nova_err(sb, "Restore snapshot table failed, "
+					"fall back to failure recovery\n");
+			nova_destroy_snapshot_infos(sb);
+			return false;
+		}
+	}
+
+	return true;
+}
 
 /*
  * Recovery routine has three tasks:
