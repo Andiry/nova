@@ -215,8 +215,8 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 		case Opt_snapshot:
 			if (match_int(&args[0], &option))
 				goto bad_val;
-			sbi->recover_snapshot = 1;
-			sbi->recover_snapshot_index = option;
+			sbi->mount_snapshot = 1;
+			sbi->mount_snapshot_index = option;
 			break;
 		case Opt_err_panic:
 			clear_opt(sbi->s_mount_opt, ERRORS_CONT);

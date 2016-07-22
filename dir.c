@@ -437,8 +437,8 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		addr = (void *)nova_get_block(sb, curr_p);
 		type = nova_get_entry_type(addr);
 
-		if (sbi->recover_snapshot) {
-			if (nova_encounter_recover_snapshot(sb, addr, type))
+		if (sbi->mount_snapshot) {
+			if (nova_encounter_mount_snapshot(sb, addr, type))
 				break;
 		}
 

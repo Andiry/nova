@@ -622,7 +622,7 @@ int nova_append_snapshot_inode_entry(struct super_block *sb,
 	return ret;
 }
 
-int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
+int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 	u8 type)
 {
 	struct nova_dentry *dentry;
@@ -634,22 +634,22 @@ int nova_encounter_recover_snapshot(struct super_block *sb, void *addr,
 	switch (type) {
 		case SET_ATTR:
 			attr_entry = (struct nova_setattr_logentry *)addr;
-			if (pass_recover_snapshot(sb, attr_entry->trans_id))
+			if (pass_mount_snapshot(sb, attr_entry->trans_id))
 				ret = 1;
 			break;
 		case LINK_CHANGE:
 			linkc_entry = (struct nova_link_change_entry *)addr;
-			if (pass_recover_snapshot(sb, linkc_entry->trans_id))
+			if (pass_mount_snapshot(sb, linkc_entry->trans_id))
 				ret = 1;
 			break;
 		case DIR_LOG:
 			dentry = (struct nova_dentry *)addr;
-			if (pass_recover_snapshot(sb, dentry->trans_id))
+			if (pass_mount_snapshot(sb, dentry->trans_id))
 				ret = 1;
 			break;
 		case FILE_WRITE:
 			fw_entry = (struct nova_file_write_entry *)addr;
-			if (pass_recover_snapshot(sb, fw_entry->trans_id))
+			if (pass_mount_snapshot(sb, fw_entry->trans_id))
 				ret = 1;
 			break;
 		default:
@@ -797,7 +797,7 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, index, count = 0;
-	u64 recover_trans_id;
+	u64 mount_trans_id;
 	u64 trans_id;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -805,26 +805,26 @@ int nova_restore_snapshot_table(struct super_block *sb)
 	if (!snapshot_table)
 		return -EINVAL;
 
-	/* No need to rebuild the snapshots if we are recovering a snapshot */
-	if (sbi->recover_snapshot) {
-		index = sbi->recover_snapshot_index;
+	/* No need to rebuild the snapshots if we are mounting a snapshot */
+	if (sbi->mount_snapshot) {
+		index = sbi->mount_snapshot_index;
 		if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
-			nova_dbg("%s: recover invalid snapshot %d\n",
+			nova_dbg("%s: Mount invalid snapshot %d\n",
 					__func__, index);
-			sbi->recover_snapshot = 0;
+			sbi->mount_snapshot = 0;
 			return -EINVAL;
 		}
 
-		recover_trans_id = snapshot_table->entries[index].trans_id;
-		if (recover_trans_id == 0) {
-			nova_dbg("%s: recover invalid snapshot %d\n",
+		mount_trans_id = snapshot_table->entries[index].trans_id;
+		if (mount_trans_id == 0) {
+			nova_dbg("%s: Mount invalid snapshot %d\n",
 					__func__, index);
-			sbi->recover_snapshot = 0;
+			sbi->mount_snapshot = 0;
 			return -EINVAL;
 		}
 
-		sbi->recover_snapshot_trans_id = recover_trans_id;
-		nova_dbg("recover snapshot %d\n", index);
+		sbi->mount_snapshot_trans_id = mount_trans_id;
+		nova_dbg("Mount snapshot %d\n", index);
 		return 0;
 	}
 
