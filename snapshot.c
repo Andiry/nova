@@ -730,18 +730,49 @@ fail:
 	return -ENOMEM;
 }
 
-static int nova_restore_snapshot_info(struct super_block *sb, int index,
-	u64 trans_id)
+static int nova_restore_snapshot_info_lists(struct super_block *sb,
+	struct snapshot_info *info, int index)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_table *snapshot_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
-	struct snapshot_info *info = NULL;
 	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_info *nvmm_info;
 	struct snapshot_list *list;
 	struct snapshot_nvmm_list *nvmm_list;
 	int i;
+	int ret;
+
+	nvmm_info_table = nova_get_nvmm_info_table(sb);
+	nvmm_info = &nvmm_info_table->infos[index];
+	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
+						nvmm_info->nvmm_page_addr);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		list = &info->lists[i];
+		nvmm_list = &nvmm_page->lists[i];
+		if (!list || !nvmm_list) {
+			nova_dbg("%s: list NULL? list %p, nvmm list %p\n",
+					__func__, list, nvmm_list);
+			continue;
+		}
+
+		ret = nova_allocate_snapshot_list_pages(sb, list,
+						nvmm_list, info->trans_id);
+		if (ret) {
+			nova_dbg("%s failure\n", __func__);
+			return ret;
+		}
+		nova_copy_snapshot_list_to_dram(sb, list, nvmm_list);
+	}
+
+	return 0;
+}
+
+static int nova_restore_snapshot_info(struct super_block *sb, int index,
+	u64 trans_id)
+{
+	struct snapshot_table *snapshot_table;
+	struct snapshot_info *info = NULL;
 	int ret = 0;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -761,28 +792,10 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 
 	info->index = index;
 	info->trans_id = trans_id;
-	nvmm_info_table = nova_get_nvmm_info_table(sb);
-	nvmm_info = &nvmm_info_table->infos[index];
-	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
-						nvmm_info->nvmm_page_addr);
 
-	for (i = 0; i < sbi->cpus; i++) {
-		list = &info->lists[i];
-		nvmm_list = &nvmm_page->lists[i];
-		if (!list || !nvmm_list) {
-			nova_dbg("%s: list NULL? list %p, nvmm list %p\n",
-					__func__, list, nvmm_list);
-			continue;
-		}
-
-		ret = nova_allocate_snapshot_list_pages(sb, list,
-							nvmm_list, trans_id);
-		if (ret) {
-			nova_dbg("%s failure\n", __func__);
-			goto fail;
-		}
-		nova_copy_snapshot_list_to_dram(sb, list, nvmm_list);
-	}
+	ret = nova_restore_snapshot_info_lists(sb, info, index);
+	if (ret)
+		goto fail;
 
 	ret = nova_insert_snapshot_info(sb, info);
 	return ret;
