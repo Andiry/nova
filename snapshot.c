@@ -179,7 +179,7 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 	u64 curr_p;
 	u8 type;
 
-	fake_pi.nova_ino = 0;
+	fake_pi.nova_ino = NOVA_SNAPSHOT_INO;
 	fake_pi.i_blk_type = 0;
 
 	curr_p = list->head;
@@ -265,7 +265,7 @@ static int nova_background_clean_snapshot_list(struct super_block *sb,
 	u64 curr_p;
 	u8 type;
 
-	fake_pi.nova_ino = 0;
+	fake_pi.nova_ino = NOVA_SNAPSHOT_INO;
 	fake_pi.i_blk_type = 0;
 
 	curr_p = list->head;
@@ -1146,7 +1146,7 @@ static int nova_save_snapshot_info(struct super_block *sb,
 	u64 new_block;
 	int allocated;
 
-	fake_pi.nova_ino = 0;
+	fake_pi.nova_ino = NOVA_SNAPSHOT_INO;
 	fake_pi.i_blk_type = 0;
 
 	/* Support up to 128 CPUs */
