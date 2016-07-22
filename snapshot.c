@@ -928,8 +928,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 			sbi->latest_snapshot_trans_id);
 
 out:
-	if (just_init == 0)
-		nova_clear_nvmm_info_table(sb);
+	nova_clear_nvmm_info_table(sb);
 
 	return ret;
 }
