@@ -1113,6 +1113,7 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 	u8 type);
 int nova_save_snapshots(struct super_block *sb);
+int nova_destroy_snapshot_infos(struct super_block *sb);
 int nova_mount_snapshot(struct super_block *sb);
 int nova_restore_snapshot_table(struct super_block *sb);
 int nova_append_snapshot_file_write_entry(struct super_block *sb,

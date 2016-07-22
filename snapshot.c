@@ -1240,6 +1240,35 @@ int nova_save_snapshots(struct super_block *sb)
 	return 0;
 }
 
+int nova_destroy_snapshot_infos(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	struct rb_root *tree;
+	struct snapshot_info *info;
+	struct rb_node *temp;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+
+	if (!snapshot_table)
+		return -EINVAL;
+
+	tree = &sbi->snapshot_info_tree;
+
+	/* Save in increasing order */
+	temp = rb_first(tree);
+	while (temp) {
+		info = container_of(temp, struct snapshot_info, node);
+		nova_delete_snapshot_info(sb, info, 0);
+
+		temp = rb_next(temp);
+		rb_erase(&info->node, tree);
+		nova_free_snapshot_info(info);
+	}
+
+	return 0;
+}
+
 static void snapshot_cleaner_try_sleeping(struct nova_sb_info *sbi)
 {
 	DEFINE_WAIT(wait);
