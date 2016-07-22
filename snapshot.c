@@ -841,6 +841,60 @@ int nova_mount_snapshot(struct super_block *sb)
 	return 0;
 }
 
+static int nova_delete_nvmm_info(struct super_block *sb,
+	struct snapshot_nvmm_info *nvmm_info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_nvmm_page *nvmm_page;
+	struct snapshot_nvmm_list *nvmm_list;
+	struct nova_inode fake_pi;
+	int i;
+
+	if (nvmm_info->trans_id == 0 || nvmm_info->nvmm_page_addr == 0)
+		return 0;
+
+	fake_pi.nova_ino = NOVA_SNAPSHOT_INO;
+	fake_pi.i_blk_type = 0;
+
+	nvmm_page = (struct snapshot_nvmm_page *)nova_get_block(sb,
+						nvmm_info->nvmm_page_addr);
+
+	for (i = 0; i < sbi->cpus; i++) {
+		nvmm_list = &nvmm_page->lists[i];
+		fake_pi.log_head = nvmm_list->head;
+		fake_pi.log_tail = nvmm_list->tail;
+		nova_free_inode_log(sb, &fake_pi);
+	}
+
+	nova_free_log_blocks(sb, &fake_pi, nvmm_info->nvmm_page_addr, 1);
+	return 0;
+}
+
+static int nova_clear_nvmm_info_table(struct super_block *sb)
+{
+	struct snapshot_table *snapshot_table;
+	struct snapshot_nvmm_info_table *nvmm_info_table;
+	struct snapshot_nvmm_info *nvmm_info;
+	u64 trans_id;
+	int i;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+	nvmm_info_table = nova_get_nvmm_info_table(sb);
+
+	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
+		trans_id = snapshot_table->entries[i].trans_id;
+
+		if (trans_id) {
+			nvmm_info = &nvmm_info_table->infos[i];
+			nova_delete_nvmm_info(sb, nvmm_info);
+		}
+	}
+
+	memset(nvmm_info_table, '0', PAGE_SIZE);
+	nova_flush_buffer(nvmm_info_table, PAGE_SIZE, 1);
+	return 0;
+}
+
 /* For power failure recovery, just initialize the infos */
 int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 {
@@ -869,7 +923,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 				nova_dbg("%s: Restore snapshot %d, "
 						" trans ID %llu failed\n",
 						__func__, i, trans_id);
-				return ret;
+				goto out;
 			}
 			count++;
 		}
@@ -883,7 +937,11 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 			count, sbi->curr_snapshot,
 			sbi->latest_snapshot_trans_id);
 
-	return 0;
+out:
+	if (just_init == 0)
+		nova_clear_nvmm_info_table(sb);
+
+	return ret;
 }
 
 static int get_unused_snapshot_index(struct super_block *sb)
