@@ -792,12 +792,40 @@ fail:
 	return ret;
 }
 
+int nova_mount_snapshot(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_table *snapshot_table;
+	u64 mount_trans_id;
+	int index;
+
+	snapshot_table = nova_get_snapshot_table(sb);
+	index = sbi->mount_snapshot_index;
+	if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
+		nova_dbg("%s: Mount invalid snapshot %d\n",
+				__func__, index);
+		sbi->mount_snapshot = 0;
+		return -EINVAL;
+	}
+
+	mount_trans_id = snapshot_table->entries[index].trans_id;
+	if (mount_trans_id == 0) {
+		nova_dbg("%s: Mount invalid snapshot %d\n",
+				__func__, index);
+		sbi->mount_snapshot = 0;
+		return -EINVAL;
+	}
+
+	sbi->mount_snapshot_trans_id = mount_trans_id;
+	nova_dbg("Mount snapshot %d\n", index);
+	return 0;
+}
+
 int nova_restore_snapshot_table(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	int i, index, count = 0;
-	u64 mount_trans_id;
+	int i, count = 0;
 	u64 trans_id;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -806,27 +834,8 @@ int nova_restore_snapshot_table(struct super_block *sb)
 		return -EINVAL;
 
 	/* No need to rebuild the snapshots if we are mounting a snapshot */
-	if (sbi->mount_snapshot) {
-		index = sbi->mount_snapshot_index;
-		if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
-			nova_dbg("%s: Mount invalid snapshot %d\n",
-					__func__, index);
-			sbi->mount_snapshot = 0;
-			return -EINVAL;
-		}
-
-		mount_trans_id = snapshot_table->entries[index].trans_id;
-		if (mount_trans_id == 0) {
-			nova_dbg("%s: Mount invalid snapshot %d\n",
-					__func__, index);
-			sbi->mount_snapshot = 0;
-			return -EINVAL;
-		}
-
-		sbi->mount_snapshot_trans_id = mount_trans_id;
-		nova_dbg("Mount snapshot %d\n", index);
-		return 0;
-	}
+	if (sbi->mount_snapshot)
+		return nova_mount_snapshot(sb);
 
 	sbi->curr_snapshot = 0;
 	sbi->latest_snapshot_trans_id = 0;
