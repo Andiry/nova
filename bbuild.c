@@ -356,7 +356,7 @@ static bool nova_try_normal_recovery(struct super_block *sb)
 	}
 
 	if (sbi->mount_snapshot == 0) {
-		ret = nova_restore_snapshot_table(sb);
+		ret = nova_restore_snapshot_table(sb, 0);
 		if (ret) {
 			nova_err(sb, "Restore snapshot table failed, "
 					"fall back to failure recovery\n");

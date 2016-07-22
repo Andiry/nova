@@ -1115,7 +1115,7 @@ int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 int nova_save_snapshots(struct super_block *sb);
 int nova_destroy_snapshot_infos(struct super_block *sb);
 int nova_mount_snapshot(struct super_block *sb);
-int nova_restore_snapshot_table(struct super_block *sb);
+int nova_restore_snapshot_table(struct super_block *sb, int just_init);
 int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
 	u64 delete_trans_id);
