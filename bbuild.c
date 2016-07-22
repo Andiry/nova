@@ -1425,6 +1425,16 @@ int nova_recovery(struct super_block *sb)
 		if (ret)
 			goto out;
 
+		if (sbi->mount_snapshot == 0) {
+			/* Initialize the snapshot infos */
+			ret = nova_restore_snapshot_table(sb, 1);
+			if (ret) {
+				nova_dbg("Initialize snapshot infos failed\n");
+				nova_destroy_snapshot_infos(sb);
+				goto out;
+			}
+		}
+
 		sbi->s_inodes_used_count = 0;
 		ret = nova_failure_recovery(sb);
 		if (ret)
