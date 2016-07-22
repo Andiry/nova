@@ -777,9 +777,6 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	if (!snapshot_table)
-		return -EINVAL;
-
 	nova_dbg("Restore snapshot %d, trans ID %llu\n", index, trans_id);
 
 	/* Allocate list pages on demand later */
@@ -815,10 +812,6 @@ int nova_mount_snapshot(struct super_block *sb)
 	int index;
 
 	snapshot_table = nova_get_snapshot_table(sb);
-	if (!snapshot_table) {
-		sbi->mount_snapshot = 0;
-		return -EINVAL;
-	}
 
 	index = sbi->mount_snapshot_index;
 	if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
@@ -906,9 +899,6 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	if (!snapshot_table)
-		return -EINVAL;
-
 	sbi->curr_snapshot = 0;
 	sbi->latest_snapshot_trans_id = 0;
 
@@ -977,9 +967,6 @@ int nova_create_snapshot(struct super_block *sb)
 	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
-
-	if (!snapshot_table)
-		return -EINVAL;
 
 	trans_id = atomic64_read(&super->s_trans_id);
 	if (sbi->latest_snapshot_trans_id == trans_id) {
@@ -1098,9 +1085,6 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
-
-	if (!snapshot_table)
-		return -EINVAL;
 
 	if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
 		nova_dbg("%s: Invalid snapshot number %d\n", __func__, index);
@@ -1252,9 +1236,6 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	if (!snapshot_table)
-		return -EINVAL;
-
 	seq_printf(seq, "========== NOVA snapshot table ==========\n");
 	seq_printf(seq, "Index\tTrans ID\t      Date\t    Time\n");
 
@@ -1296,9 +1277,6 @@ int nova_save_snapshots(struct super_block *sb)
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	if (!snapshot_table)
-		return -EINVAL;
-
 	if (sbi->snapshot_cleaner_thread)
 		kthread_stop(sbi->snapshot_cleaner_thread);
 
@@ -1331,9 +1309,6 @@ int nova_destroy_snapshot_infos(struct super_block *sb)
 	struct rb_node *temp;
 
 	snapshot_table = nova_get_snapshot_table(sb);
-
-	if (!snapshot_table)
-		return -EINVAL;
 
 	tree = &sbi->snapshot_info_tree;
 
