@@ -287,15 +287,19 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 		return 0;
 
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
-	if (delete_dead || old_entry_freeable(sb, entry->trans_id)) {
-		entry->invalid_pages += num_free;
-		nova_dbgv("%s: pgoff %lu, free %u blocks\n",
-				__func__, pgoff, num_free);
-		nova_free_data_blocks(sb, pi, old_nvmm, num_free);
-	} else {
+
+	if (!delete_dead && !old_entry_freeable(sb, entry->trans_id)) {
 		nova_append_data_to_snapshot(sb, entry, old_nvmm,
 				num_free, trans_id);
+		goto out;
 	}
+
+	entry->invalid_pages += num_free;
+	nova_dbgv("%s: pgoff %lu, free %u blocks\n",
+				__func__, pgoff, num_free);
+	nova_free_data_blocks(sb, pi, old_nvmm, num_free);
+
+out:
 	pi->i_blocks -= num_free;
 
 	return num_free;
