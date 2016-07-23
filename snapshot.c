@@ -903,7 +903,8 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 	return 0;
 }
 
-static int nova_clear_nvmm_info_table(struct super_block *sb)
+static int nova_clear_nvmm_info_table(struct super_block *sb,
+	int just_init)
 {
 	struct snapshot_table *snapshot_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
@@ -914,6 +915,10 @@ static int nova_clear_nvmm_info_table(struct super_block *sb)
 	snapshot_table = nova_get_snapshot_table(sb);
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 
+	if (just_init)
+		/* No need to free because we do not set the bitmap. */
+		goto out;
+
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		trans_id = snapshot_table->entries[i].trans_id;
 
@@ -923,6 +928,7 @@ static int nova_clear_nvmm_info_table(struct super_block *sb)
 		}
 	}
 
+out:
 	memset(nvmm_info_table, '0', PAGE_SIZE);
 	nova_flush_buffer(nvmm_info_table, PAGE_SIZE, 1);
 	return 0;
@@ -968,7 +974,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 			sbi->latest_snapshot_trans_id);
 
 out:
-	nova_clear_nvmm_info_table(sb);
+	nova_clear_nvmm_info_table(sb, just_init);
 
 	return ret;
 }
