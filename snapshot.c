@@ -513,38 +513,6 @@ retry:
 	return 0;
 }
 
-int nova_append_data_to_snapshot(struct super_block *sb,
-	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
-	u64 delete_trans_id)
-{
-	struct snapshot_info *info = NULL;
-	struct snapshot_file_write_entry ss_entry;
-	int ret;
-
-	ret = nova_find_target_snapshot_info(sb, entry->trans_id, &info);
-	if (ret < 0 || !info) {
-		nova_dbg("%s: Snapshot info not found\n", __func__);
-		return -EINVAL;
-	}
-
-	nova_dbgv("Append file write entry: block %llu, %llu pages, "
-			"delete trans ID %llu to Snapshot %d, trans ID %llu\n",
-			nvmm, num_pages, delete_trans_id,
-			info->index, info->trans_id);
-
-	memset(&ss_entry, 0, sizeof(struct snapshot_file_write_entry));
-	ss_entry.type = SS_FILE_WRITE;
-	ss_entry.deleted = 0;
-	ss_entry.nvmm = nvmm;
-	ss_entry.num_pages = num_pages;
-	ss_entry.delete_trans_id = delete_trans_id;
-
-	ret = nova_append_snapshot_list_entry(sb, info, &ss_entry,
-			sizeof(struct snapshot_file_write_entry));
-
-	return ret;
-}
-
 /*
  * An entry is deleteable if
  * 1) It is created after the last snapshot, or
@@ -580,6 +548,64 @@ static int nova_old_entry_deleteable(struct super_block *sb,
 
 	*ret_info = info;
 	return 0;
+}
+
+static int nova_append_snapshot_file_write_entry(struct super_block *sb,
+	struct snapshot_info *info, u64 nvmm, u64 num_pages,
+	u64 delete_trans_id)
+{
+	struct snapshot_table *snapshot_table;
+	struct snapshot_file_write_entry entry;
+	int index;
+	int ret;
+
+	if (!info) {
+		nova_dbg("%s: Snapshot info not found\n", __func__);
+		return -EINVAL;
+	}
+
+	index = info->index;
+	snapshot_table = nova_get_snapshot_table(sb);
+	if (snapshot_table->entries[index].trans_id != info->trans_id) {
+		nova_dbg("%s: Snapshot info unmatch, index %d, trans ID %llu, "
+				"snapshot table trans ID %llu\n",
+				__func__, index, info->trans_id,
+				snapshot_table->entries[index].trans_id);
+		return -EINVAL;
+	}
+
+	nova_dbgv("Append file write entry: block %llu, %llu pages, "
+			"delete trans ID %llu to Snapshot %d, trans ID %llu\n",
+			nvmm, num_pages, delete_trans_id,
+			info->index, info->trans_id);
+
+	memset(&entry, 0, sizeof(struct snapshot_file_write_entry));
+	entry.type = SS_FILE_WRITE;
+	entry.deleted = 0;
+	entry.nvmm = nvmm;
+	entry.num_pages = num_pages;
+	entry.delete_trans_id = delete_trans_id;
+
+	ret = nova_append_snapshot_list_entry(sb, info, &entry,
+			sizeof(struct snapshot_file_write_entry));
+
+	return ret;
+}
+
+int nova_append_data_to_snapshot(struct super_block *sb,
+	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
+	u64 delete_trans_id)
+{
+	struct snapshot_info *info = NULL;
+	int ret;
+
+	ret = nova_old_entry_deleteable(sb, entry->trans_id,
+					delete_trans_id, &info);
+	if (ret == 0)
+		nova_append_snapshot_file_write_entry(sb, info, nvmm,
+					num_pages, delete_trans_id);
+
+	return ret;
 }
 
 static int nova_append_snapshot_inode_entry(struct super_block *sb,
