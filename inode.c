@@ -293,7 +293,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 				__func__, pgoff, num_free);
 		nova_free_data_blocks(sb, pi, old_nvmm, num_free);
 	} else {
-		nova_append_snapshot_file_write_entry(sb, entry, old_nvmm,
+		nova_append_data_to_snapshot(sb, entry, old_nvmm,
 				num_free, trans_id);
 	}
 	pi->i_blocks -= num_free;

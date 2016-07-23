@@ -513,7 +513,7 @@ retry:
 	return 0;
 }
 
-int nova_append_snapshot_file_write_entry(struct super_block *sb,
+int nova_append_data_to_snapshot(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
 	u64 delete_trans_id)
 {
