@@ -905,7 +905,7 @@ static int nova_set_ring_array(struct super_block *sb,
 
 	for (pgoff = start; pgoff < end; pgoff++) {
 		index = pgoff - base;
-		if (ring->entry_array[index]) {
+		if (ring->nvmm_array[index]) {
 			if (ring->entry_array[index] != old_entry) {
 				if (old_entry)
 					nova_check_old_entry(sb, sih, old_entry,
@@ -993,7 +993,7 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 
 	for (pgoff = first_blocknr; pgoff <= last_blocknr; pgoff++) {
 		index = pgoff - base;
-		if (ring->entry_array[index]) {
+		if (ring->nvmm_array[index]) {
 			if (ring->entry_array[index] != old_entry) {
 				if (old_entry)
 					nova_check_old_entry(sb, sih, old_entry,
