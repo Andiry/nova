@@ -920,15 +920,18 @@ static int nova_set_ring_array(struct super_block *sb,
 				num_free++;
 			}
 		}
-
-		ring->entry_array[index] = (u64)entry;
-		ring->nvmm_array[index] = (u64)(entry->block >> PAGE_SHIFT)
-						+ pgoff - entry->pgoff;
 	}
 
 	if (old_entry)
 		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
 					num_free, trans_id, ring, base, bm);
+
+	for (pgoff = start; pgoff < end; pgoff++) {
+		index = pgoff - base;
+		ring->entry_array[index] = (u64)entry;
+		ring->nvmm_array[index] = (u64)(entry->block >> PAGE_SHIFT)
+						+ pgoff - entry->pgoff;
+	}
 
 	return 0;
 }
@@ -1008,14 +1011,17 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 				num_free++;
 			}
 		}
-
-		ring->nvmm_array[index] = 0;
-		ring->entry_array[index] = 0;
 	}
 
 	if (old_entry)
 		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
 					num_free, trans_id, ring, base, bm);
+
+	for (pgoff = first_blocknr; pgoff <= last_blocknr; pgoff++) {
+		index = pgoff - base;
+		ring->nvmm_array[index] = 0;
+		ring->entry_array[index] = 0;
+	}
 
 out:
 	sih->i_size = entry->size;
