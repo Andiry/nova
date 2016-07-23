@@ -282,16 +282,18 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 	bool delete_dead, u64 trans_id)
 {
 	unsigned long old_nvmm;
+	int ret;
 
 	if (!entry)
 		return 0;
 
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
 
-	if (!delete_dead && !old_entry_freeable(sb, entry->trans_id)) {
-		nova_append_data_to_snapshot(sb, entry, old_nvmm,
+	if (!delete_dead) {
+		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
 				num_free, trans_id);
-		goto out;
+		if (ret == 0)
+			goto out;
 	}
 
 	entry->invalid_pages += num_free;
@@ -954,7 +956,7 @@ void nova_evict_inode(struct inode *inode)
 	/* Check if this inode exists in at least one snapshot. */
 	if (pi->valid == 0) {
 		ret = nova_append_inode_to_snapshot(sb, pi);
-		if (ret <= 0)
+		if (ret == 0)
 			goto out;
 	}
 
