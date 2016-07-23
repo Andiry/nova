@@ -550,7 +550,7 @@ int nova_append_snapshot_file_write_entry(struct super_block *sb,
  * 1) It is created after the last snapshot, or
  * 2) It is created and deleted during the same snapshot period.
  */
-int nova_evicted_inode_deleteable(struct super_block *sb,
+static int nova_evicted_inode_deleteable(struct super_block *sb,
 	struct nova_inode *pi, struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -582,7 +582,7 @@ int nova_evicted_inode_deleteable(struct super_block *sb,
 	return 0;
 }
 
-int nova_append_snapshot_inode_entry(struct super_block *sb,
+static int nova_append_snapshot_inode_entry(struct super_block *sb,
 	struct nova_inode *pi, struct snapshot_info *info)
 {
 	struct snapshot_table *snapshot_table;
@@ -618,6 +618,19 @@ int nova_append_snapshot_inode_entry(struct super_block *sb,
 
 	ret = nova_append_snapshot_list_entry(sb, info, &entry,
 			sizeof(struct snapshot_inode_entry));
+
+	return ret;
+}
+
+int nova_append_inode_to_snapshot(struct super_block *sb,
+	struct nova_inode *pi)
+{
+	struct snapshot_info *info = NULL;
+	int ret;
+
+	ret = nova_evicted_inode_deleteable(sb, pi, &info);
+	if (ret == 0)
+		nova_append_snapshot_inode_entry(sb, pi, info);
 
 	return ret;
 }
