@@ -947,37 +947,60 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 	unsigned long base, unsigned int data_bits)
 {
 	unsigned long first_blocknr, last_blocknr;
-	unsigned long pgoff;
+	unsigned long pgoff, old_pgoff = 0;
 	unsigned long index;
+	unsigned int num_free = 0;
+	u64 old_entry = 0;
 	loff_t start, end;
+	u64 trans_id = entry->trans_id;
 
-	if (sih->i_size > entry->size) {
-		start = entry->size;
-		end = sih->i_size;
+	if (sih->i_size <= entry->size)
+		goto out;
 
-		first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
+	start = entry->size;
+	end = sih->i_size;
 
-		if (end > 0)
-			last_blocknr = (end - 1) >> data_bits;
-		else
-			last_blocknr = 0;
+	first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
 
-		if (first_blocknr > last_blocknr)
-			goto out;
+	if (end > 0)
+		last_blocknr = (end - 1) >> data_bits;
+	else
+		last_blocknr = 0;
 
-		if (first_blocknr < base)
-			first_blocknr = base;
+	if (first_blocknr > last_blocknr)
+		goto out;
 
-		if (last_blocknr > base + MAX_PGOFF - 1)
-			last_blocknr = base + MAX_PGOFF - 1;
+	if (first_blocknr < base)
+		first_blocknr = base;
 
-		for (pgoff = first_blocknr; pgoff <= last_blocknr; pgoff++) {
-			index = pgoff - base;
+	if (last_blocknr > base + MAX_PGOFF - 1)
+		last_blocknr = base + MAX_PGOFF - 1;
 
-			ring->nvmm_array[index] = 0;
-			ring->entry_array[index] = 0;
+	for (pgoff = first_blocknr; pgoff <= last_blocknr; pgoff++) {
+		index = pgoff - base;
+		if (ring->entry_array[index]) {
+			if (ring->entry_array[index] != old_entry) {
+				if (old_entry)
+					nova_check_old_entry(sb, sih, old_entry,
+							old_pgoff, num_free,
+							trans_id);
+
+				old_entry = ring->entry_array[index];
+				old_pgoff = pgoff;
+				num_free = 1;
+			} else {
+				num_free++;
+			}
 		}
+
+		ring->nvmm_array[index] = 0;
+		ring->entry_array[index] = 0;
 	}
+
+	if (old_entry)
+		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
+					num_free, trans_id);
+
 out:
 	sih->i_size = entry->size;
 }
