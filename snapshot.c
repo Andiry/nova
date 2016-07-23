@@ -546,36 +546,36 @@ int nova_append_data_to_snapshot(struct super_block *sb,
 }
 
 /*
- * An NOVA inode is deleteable if
+ * An entry is deleteable if
  * 1) It is created after the last snapshot, or
  * 2) It is created and deleted during the same snapshot period.
  */
-static int nova_evicted_inode_deleteable(struct super_block *sb,
-	struct nova_inode *pi, struct snapshot_info **ret_info)
+static int nova_old_entry_deleteable(struct super_block *sb,
+	u64 create_trans_id, u64 delete_trans_id,
+	struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info = NULL;
 	int ret;
 
-	if (pi->create_trans_id >= pi->delete_trans_id) {
-		nova_dbg("%s: pi %llu trans ID error: create %llu, "
-				"delete %llu\n",
-				__func__, pi->nova_ino,
-				pi->create_trans_id,
-				pi->delete_trans_id);
+	if (create_trans_id >= delete_trans_id) {
+		nova_dbg("%s: trans ID error: create %llu, "
+				"delete %llu\n", __func__,
+				create_trans_id,
+				delete_trans_id);
 		return -EINVAL;
 	}
 
-	if (pi->create_trans_id > sbi->latest_snapshot_trans_id)
+	if (create_trans_id > sbi->latest_snapshot_trans_id)
 		return 1;
 
-	ret = nova_find_target_snapshot_info(sb, pi->create_trans_id, &info);
+	ret = nova_find_target_snapshot_info(sb, create_trans_id, &info);
 	if (ret < 0 || !info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		return -EINVAL;
 	}
 
-	if (pi->delete_trans_id <= info->trans_id)
+	if (delete_trans_id <= info->trans_id)
 		return 1;
 
 	*ret_info = info;
@@ -628,7 +628,8 @@ int nova_append_inode_to_snapshot(struct super_block *sb,
 	struct snapshot_info *info = NULL;
 	int ret;
 
-	ret = nova_evicted_inode_deleteable(sb, pi, &info);
+	ret = nova_old_entry_deleteable(sb, pi->create_trans_id,
+					pi->delete_trans_id, &info);
 	if (ret == 0)
 		nova_append_snapshot_inode_entry(sb, pi, info);
 
