@@ -1223,6 +1223,16 @@ static int failure_thread_func(void *data)
 			pi_addr = curr + i * NOVA_INODE_SIZE;
 			pi = nova_get_block(sb, pi_addr);
 			if (pi->i_mode && pi->deleted == 0) {
+				if (pi->valid == 0) {
+					ret = nova_append_inode_to_snapshot(sb,
+									pi);
+					if (ret != 0) {
+						/* Deleteable */
+						pi->deleted = 1;
+						continue;
+					}
+				}
+
 				nova_recover_inode_pages(sb, &sih, ring,
 						pi_addr, global_bm[cpuid]);
 				nova_failure_update_inodetree(sb, pi,
