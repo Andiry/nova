@@ -851,10 +851,13 @@ static int nova_traverse_dir_inode_log(struct super_block *sb,
 static unsigned int nova_check_old_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 entry_addr,
 	unsigned long pgoff, unsigned int num_free,
-	u64 trans_id)
+	u64 trans_id, struct task_ring *ring, unsigned long base,
+	struct scan_bitmap *bm)
 {
 	struct nova_file_write_entry *entry;
-	unsigned long old_nvmm;
+	unsigned long old_nvmm, nvmm;
+	unsigned long index;
+	int i;
 	int ret;
 
 	entry = (struct nova_file_write_entry *)entry_addr;
@@ -867,12 +870,23 @@ static unsigned int nova_check_old_entry(struct super_block *sb,
 	ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
 				num_free, trans_id);
 
+	if (ret != 0)
+		return ret;
+
+	index = pgoff - base;
+	for (i = 0; i < num_free; i++) {
+		nvmm = ring->nvmm_array[index];
+		if (nvmm)
+			set_bm(nvmm, bm, BM_4K);
+		index++;
+	}
+
 	return ret;
 }
 
 static int nova_set_ring_array(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	struct task_ring *ring, unsigned long base)
+	struct task_ring *ring, unsigned long base, struct scan_bitmap *bm)
 {
 	unsigned long start, end;
 	unsigned long pgoff, old_pgoff = 0;
@@ -896,7 +910,8 @@ static int nova_set_ring_array(struct super_block *sb,
 				if (old_entry)
 					nova_check_old_entry(sb, sih, old_entry,
 							old_pgoff, num_free,
-							trans_id);
+							trans_id, ring, base,
+							bm);
 
 				old_entry = ring->entry_array[index];
 				old_pgoff = pgoff;
@@ -913,7 +928,7 @@ static int nova_set_ring_array(struct super_block *sb,
 
 	if (old_entry)
 		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
-					num_free, trans_id);
+					num_free, trans_id, ring, base, bm);
 
 	return 0;
 }
@@ -944,7 +959,7 @@ static int nova_set_file_bm(struct super_block *sb,
 static void nova_ring_setattr_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry, struct task_ring *ring,
-	unsigned long base, unsigned int data_bits)
+	unsigned long base, unsigned int data_bits, struct scan_bitmap *bm)
 {
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long pgoff, old_pgoff = 0;
@@ -983,7 +998,8 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 				if (old_entry)
 					nova_check_old_entry(sb, sih, old_entry,
 							old_pgoff, num_free,
-							trans_id);
+							trans_id, ring, base,
+							bm);
 
 				old_entry = ring->entry_array[index];
 				old_pgoff = pgoff;
@@ -999,7 +1015,7 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 
 	if (old_entry)
 		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
-					num_free, trans_id);
+					num_free, trans_id, ring, base, bm);
 
 out:
 	sih->i_size = entry->size;
@@ -1059,7 +1075,8 @@ again:
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
 				nova_ring_setattr_entry(sb, sih, attr_entry,
-							ring, base, data_bits);
+							ring, base, data_bits,
+							bm);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
@@ -1079,7 +1096,8 @@ again:
 		if (entry->num_pages != entry->invalid_pages) {
 			if (entry->pgoff < base + MAX_PGOFF &&
 					entry->pgoff + entry->num_pages > base)
-				nova_set_ring_array(sb, sih, entry, ring, base);
+				nova_set_ring_array(sb, sih, entry,
+							ring, base, bm);
 		}
 
 		curr_p += sizeof(struct nova_file_write_entry);
