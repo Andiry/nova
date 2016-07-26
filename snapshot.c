@@ -1277,7 +1277,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 	struct tm tm;
 	int index = 0, count = 0;
 	u64 timestamp;
-	unsigned long sec;
+	unsigned long local_time;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -1293,8 +1293,8 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 		index = info->index;
 
 		timestamp = snapshot_table->entries[index].timestamp;
-		sec = timestamp;
-		time_to_tm(sec, 0, &tm);
+		local_time = timestamp - sys_tz.tz_minuteswest * 60;
+		time_to_tm(local_time, 0, &tm);
 		seq_printf(seq, "%5d\t%8llu\t%4lu-%02d-%02d\t%02d:%02d:%02d\n",
 					index, info->trans_id,
 					tm.tm_year + 1900, tm.tm_mon + 1,
