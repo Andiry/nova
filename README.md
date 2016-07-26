@@ -59,11 +59,41 @@ To recover an existing NOVA instance, mount NOVA without the init option, for ex
 
 There are two scripts provided in the source code, `setup-nova.sh` and `remount-nova.sh` to help setup NOVA.
 
+## Snapshot support
+NOVA is a snapshot (checkpointing) file system. It provides a consistent view of the entire file system at a particular time, so that users can restore files that are mistakenly overwritten or deleted.
+
+To create a snapshot:
+
+~~~
+#echo 1 > /proc/fs/NOVA/<device>/create_snapshot
+~~~
+
+To list the current snapshots:
+
+~~~
+#cat /proc/fs/NOVA/<device>/snapshots
+~~~
+
+To delete a snapshot, specify the snapshot index which is given by the previous command:
+
+~~~
+#echo <index> > /proc/fs/NOVA/<device>/delete_snapshot
+~~~
+
+To mount a snapshot, mount NOVA and specifying the snapshot index, for example:
+
+~~~
+#mount -t NOVA -o snapshot=<index> /dev/pmem0m /mnt/ramdisk
+~~~
+
+Users should not write to the file system after mounting a snapshot.
+
 ## Current limitations
 
 * NOVA only works on x86-64 kernels.
 * NOVA does not currently support extended attributes or ACL.
 * NOVA requires the underlying block device to support DAX (Direct Access) feature.
+* NOVA currently supports up to 256 snapshots.
 
 [NVSL]: http://nvsl.ucsd.edu/ "http://nvsl.ucsd.edu"
 [POSIXtest]: http://www.tuxera.com/community/posix-test-suite/ 
