@@ -279,7 +279,7 @@ int nova_reassign_file_tree(struct super_block *sb,
 }
 
 ssize_t nova_cow_file_write(struct file *filp,
-	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
+	const char __user *buf,	size_t len, loff_t *ppos, bool need_lock)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -312,7 +312,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	NOVA_START_TIMING(cow_write_t, cow_write_time);
 
 	sb_start_write(inode->i_sb);
-	if (need_mutex)
+	if (need_lock)
 		mutex_lock(&inode->i_mutex);
 
 	if (!access_ok(VERIFY_READ, buf, len)) {
@@ -453,7 +453,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	}
 
 out:
-	if (need_mutex)
+	if (need_lock)
 		mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
 	NOVA_END_TIMING(cow_write_t, cow_write_time);

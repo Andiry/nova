@@ -1003,7 +1003,7 @@ int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 begin_tail);
 ssize_t nova_cow_file_write(struct file *filp, const char __user *buf,
-          size_t len, loff_t *ppos, bool need_mutex);
+          size_t len, loff_t *ppos, bool need_lock);
 ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t pos, size_t count, u64 *begin,
 	u64 *end);
