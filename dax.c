@@ -789,12 +789,8 @@ static int __nova_dax_file_fault(struct vm_area_struct *vma,
 	if (dax_pfn == 0)
 		goto out;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address,
 		__pfn_to_pfn_t(dax_pfn, PFN_DEV));
-#else
-	err = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address, dax_pfn);
-#endif
 
 	if (err == -ENOMEM)
 		goto out;
