@@ -1478,11 +1478,11 @@ void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	inode->i_flags |= S_DAX;
 }
 
-static ssize_t nova_direct_IO(struct kiocb *iocb,
-	struct iov_iter *iter, loff_t offset)
+static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct file *filp = iocb->ki_filp;
-	loff_t end = offset;
+	loff_t offset = iocb->ki_pos;
+	loff_t end;
 	size_t count = iov_iter_count(iter);
 	ssize_t ret = -EINVAL;
 	ssize_t written = 0;
