@@ -57,13 +57,13 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			goto flags_out;
 		}
 
-		mutex_lock(&inode->i_mutex);
+		inode_lock(inode);
 		oldflags = le32_to_cpu(pi->i_flags);
 
 		if ((flags ^ oldflags) &
 		    (FS_APPEND_FL | FS_IMMUTABLE_FL)) {
 			if (!capable(CAP_LINUX_IMMUTABLE)) {
-				mutex_unlock(&inode->i_mutex);
+				inode_unlock(inode);
 				ret = -EPERM;
 				goto flags_out;
 			}
@@ -86,7 +86,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
 		nova_memlock_inode(sb, pi);
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 flags_out:
 		mnt_drop_write_file(filp);
 		return ret;
@@ -109,7 +109,7 @@ flags_out:
 		}
 
 		trans_id = nova_get_trans_id(sb);
-		mutex_lock(&inode->i_mutex);
+		inode_lock(inode);
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inode->i_generation = generation;
 
@@ -121,7 +121,7 @@ flags_out:
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
 		nova_memlock_inode(sb, pi);
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 setversion_out:
 		mnt_drop_write_file(filp);
 		return ret;

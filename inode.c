@@ -1429,7 +1429,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		return ret;
 
 	trans_id = nova_get_trans_id(sb);
-	/* We are holding i_mutex so OK to append the log */
+	/* We are holding inode lock so OK to append the log */
 	new_tail = nova_append_setattr_entry(sb, pi, inode, attr, 0,
 						&last_setattr, trans_id);
 
