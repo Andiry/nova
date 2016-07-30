@@ -288,6 +288,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 		return 0;
 
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
+	entry->reassigned = 1;
 
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,

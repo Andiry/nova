@@ -170,7 +170,8 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 
 struct nova_file_write_entry {
 	u8	entry_type;
-	u8	padding[3];
+	u8	reassigned;
+	u8	padding[2];
 	__le32	num_pages;
 	__le64	block;
 	__le64	pgoff;
