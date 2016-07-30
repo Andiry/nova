@@ -1481,14 +1481,15 @@ void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct file *filp = iocb->ki_filp;
-	loff_t offset = iocb->ki_pos;
-	loff_t end;
 	size_t count = iov_iter_count(iter);
 	ssize_t ret = -EINVAL;
 	ssize_t written = 0;
 	unsigned long seg;
 	unsigned long nr_segs = iter->nr_segs;
 	const struct iovec *iv = iter->iov;
+	int rw = iov_iter_rw(iter);
+	loff_t offset = iocb->ki_pos;
+	loff_t end;
 	timing_t dio_time;
 
 	NOVA_START_TIMING(direct_IO_t, dio_time);
@@ -1497,10 +1498,10 @@ static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	nova_dbgv("%s: %lu segs\n", __func__, nr_segs);
 	iv = iter->iov;
 	for (seg = 0; seg < nr_segs; seg++) {
-		if (iov_iter_rw(iter) == READ) {
+		if (rw == READ) {
 			ret = nova_dax_file_read(filp, iv->iov_base,
 					iv->iov_len, &offset);
-		} else if (iov_iter_rw(iter) == WRITE) {
+		} else if (rw == WRITE) {
 			ret = nova_cow_file_write(filp, iv->iov_base,
 					iv->iov_len, &offset, false);
 		}
