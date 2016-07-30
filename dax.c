@@ -90,7 +90,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 				entry->num_pages, entry->block >> PAGE_SHIFT);
 			return -EINVAL;
 		}
-		if (entry->invalid_pages == 0) {
+		if (entry->reassigned == 0) {
 			nr = (entry->num_pages - (index - entry->pgoff))
 				* PAGE_SIZE;
 		} else {
@@ -382,6 +382,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		entry_data.entry_type = FILE_WRITE;
+		entry_data.reassigned = 0;
 		entry_data.trans_id = trans_id;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
@@ -586,6 +587,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		NOVA_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		entry_data.entry_type = FILE_WRITE;
+		entry_data.reassigned = 0;
 		entry_data.trans_id = trans_id;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
