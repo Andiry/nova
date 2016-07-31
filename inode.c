@@ -1478,6 +1478,7 @@ void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	inode->i_flags |= S_DAX;
 }
 
+#if 0
 static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct file *filp = iocb->ki_filp;
@@ -1524,6 +1525,16 @@ static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 err:
 	NOVA_END_TIMING(direct_IO_t, dio_time);
 	return ret;
+}
+#endif
+
+static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
+{
+	struct file *filp = iocb->ki_filp;
+	struct address_space *mapping = filp->f_mapping;
+	struct inode *inode = mapping->host;
+
+	return dax_do_io(iocb, inode, iter, nova_dax_get_block, NULL, 0);
 }
 
 static int nova_coalesce_log_pages(struct super_block *sb,
