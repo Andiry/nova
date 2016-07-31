@@ -1534,7 +1534,8 @@ static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
 
-	return dax_do_io(iocb, inode, iter, nova_dax_get_block, NULL, 0);
+	return dax_do_io(iocb, inode, iter, nova_dax_get_block,
+				NULL, DIO_LOCKING);
 }
 
 static int nova_coalesce_log_pages(struct super_block *sb,

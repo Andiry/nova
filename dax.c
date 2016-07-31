@@ -608,13 +608,11 @@ int nova_dax_get_block(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
 	int ret;
 
-	inode_lock(inode);
 	ret = nova_dax_get_blocks(inode, iblock, max_blocks, bh, create);
 	if (ret > 0) {
 		bh->b_size = ret << inode->i_blkbits;
 		ret = 0;
 	}
-	inode_unlock(inode);
 	return ret;
 }
 
