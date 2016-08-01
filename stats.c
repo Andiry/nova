@@ -252,9 +252,9 @@ void nova_clear_stats(void)
 static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {
-	nova_dbg("file write entry @ 0x%llx: paoff %llu, pages %u, "
+	nova_dbg("file write entry @ 0x%llx: trans %llu, paoff %llu, pages %u, "
 			"blocknr %llu, invalid count %u, size %llu\n",
-			curr, entry->pgoff, entry->num_pages,
+			curr, entry->trans_id, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,
 			entry->invalid_pages, entry->size);
 }
@@ -262,23 +262,23 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 static inline void nova_print_set_attr_entry(struct super_block *sb,
 	u64 curr, struct nova_setattr_logentry *entry)
 {
-	nova_dbg("set attr entry @ 0x%llx: mode %u, size %llu\n",
-			curr, entry->mode, entry->size);
+	nova_dbg("set attr entry @ 0x%llx: trans %llu, mode %u, size %llu\n",
+			curr, entry->trans_id, entry->mode, entry->size);
 }
 
 static inline void nova_print_link_change_entry(struct super_block *sb,
 	u64 curr, struct nova_link_change_entry *entry)
 {
-	nova_dbg("link change entry @ 0x%llx: links %u, flags %u\n",
-			curr, entry->links, entry->flags);
+	nova_dbg("link change entry @ 0x%llx: trans %llu, links %u, flags %u\n",
+			curr, entry->trans_id, entry->links, entry->flags);
 }
 
 static inline size_t nova_print_dentry(struct super_block *sb,
 	u64 curr, struct nova_dentry *entry)
 {
-	nova_dbg("dir logentry @ 0x%llx: inode %llu, "
+	nova_dbg("dir logentry @ 0x%llx: trans %llu, inode %llu, "
 			"namelen %u, rec len %u\n", curr,
-			le64_to_cpu(entry->ino),
+			entry->trans_id, le64_to_cpu(entry->ino),
 			entry->name_len, le16_to_cpu(entry->de_len));
 
 	return le16_to_cpu(entry->de_len);
