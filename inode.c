@@ -1452,7 +1452,9 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (last_setattr) {
 		addr = (void *)nova_get_block(sb, last_setattr);
 		old_entry = (struct nova_setattr_logentry *)addr;
-		if (old_entry_freeable(sb, old_entry->trans_id))
+		/* Do not invalidate setsize entries */
+		if (old_entry_freeable(sb, old_entry->trans_id) &&
+				(old_entry->attr & ATTR_SIZE) == 0)
 			old_entry->invalid = 1;
 	}
 
@@ -1666,10 +1668,6 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 		case SET_ATTR:
 			setattr_entry = (struct nova_setattr_logentry *)addr;
 			if (setattr_entry->invalid == 0)
-				ret = false;
-			/* Do not invalidate setsize entries */
-			setattr_entry = (struct nova_setattr_logentry *)addr;
-			if (setattr_entry->attr & ATTR_SIZE)
 				ret = false;
 			*length = sizeof(struct nova_setattr_logentry);
 			break;
