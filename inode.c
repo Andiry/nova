@@ -1305,6 +1305,7 @@ static void nova_update_setattr_entry(struct inode *inode,
 	entry->ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
 	entry->trans_id = trans_id;
+	entry->invalid 	= 0;
 
 	if (ia_valid & ATTR_SIZE)
 		entry->size = cpu_to_le64(attr->ia_size);
