@@ -481,7 +481,6 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	u64 temp_tail;
 	u64 curr_entry;
 	u32 time;
-	loff_t new_size;
 	unsigned int data_bits;
 	unsigned long nvmm = 0;
 	unsigned long next_pgoff;
@@ -540,9 +539,9 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 			num_blocks = max_blocks;
 	}
 
-	/* don't zero-out the allocated blocks */
+	/* Return initialized blocks to the user */
 	allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
-						iblock, 0, 1);
+						iblock, 1, 1);
 	if (allocated <= 0) {
 		nova_err(sb, "%s alloc blocks failed!, %d\n", __func__,
 							allocated);
@@ -561,11 +560,8 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 							pi->i_blk_type));
 	entry_data.mtime = cpu_to_le32(time);
 
-	new_size = (iblock + num_blocks) * PAGE_SIZE;
-	if (new_size > inode->i_size)
-		entry_data.size = cpu_to_le64(new_size);
-	else
-		entry_data.size = cpu_to_le64(inode->i_size);
+	/* Do not extend file size */
+	entry_data.size = cpu_to_le64(inode->i_size);
 
 	curr_entry = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, pi->log_tail);
@@ -588,12 +584,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 		goto out;
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	if (new_size > inode->i_size) {
-		i_size_write(inode, new_size);
-		sih->i_size = new_size;
-	}
-
-	set_buffer_new(bh);
+//	set_buffer_new(bh);
 
 out:
 	if (ret < 0)
