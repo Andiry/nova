@@ -370,12 +370,14 @@ int nova_append_link_change_entry(struct super_block *sb,
 		return -ENOMEM;
 
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
-	entry->entry_type = LINK_CHANGE;
-	entry->trans_id = trans_id;
-	entry->links = cpu_to_le16(inode->i_nlink);
-	entry->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	entry->flags = cpu_to_le32(inode->i_flags);
-	entry->generation = cpu_to_le32(inode->i_generation);
+	entry->entry_type	= LINK_CHANGE;
+	entry->trans_id		= trans_id;
+	entry->invalid		= 0;
+	entry->links		= cpu_to_le16(inode->i_nlink);
+	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->flags		= cpu_to_le32(inode->i_flags);
+	entry->generation	= cpu_to_le32(inode->i_generation);
+
 	nova_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
 	*old_linkc = sih->last_link_change;
