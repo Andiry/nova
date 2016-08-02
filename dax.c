@@ -481,8 +481,6 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_file_write_entry entry_data;
-	struct nova_file_write_entry *entries[1];
-	int nr_entries;
 	u64 trans_id;
 	u64 temp_tail;
 	u64 curr_entry;
@@ -529,10 +527,8 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	trans_id = nova_get_trans_id(sb);
 
 	/* Fill the hole */
-	nr_entries = radix_tree_gang_lookup(&sih->tree,
-					(void **)entries, iblock, 1);
-	if (nr_entries == 1) {
-		entry = entries[0];
+	entry = nova_find_next_entry(sb, sih, iblock);
+	if (entry) {
 		next_pgoff = entry->pgoff;
 		if (next_pgoff <= iblock) {
 			BUG();

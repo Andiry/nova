@@ -315,14 +315,12 @@ int nova_delete_file_tree(struct super_block *sb,
 {
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry *old_entry = NULL;
-	struct nova_file_write_entry *entries[1];
 	struct nova_inode *pi;
 	unsigned long pgoff = start_blocknr;
 	unsigned long old_pgoff = 0;
 	timing_t delete_time;
 	unsigned int num_free = 0;
 	int freed = 0;
-	int nr_entries;
 	void *ret;
 
 	pi = (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
@@ -359,11 +357,9 @@ int nova_delete_file_tree(struct super_block *sb,
 			pgoff++;
 		} else {
 			/* We are finding a hole. Jump to the next entry. */
-			nr_entries = radix_tree_gang_lookup(&sih->tree,
-						(void **)entries, pgoff, 1);
-			if (nr_entries != 1)
+			entry = nova_find_next_entry(sb, sih, pgoff);
+			if (!entry)
 				break;
-			entry = entries[0];
 			pgoff++;
 			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
 		}
@@ -475,10 +471,8 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 	int *data_found, int *hole_found, int hole)
 {
 	struct nova_file_write_entry *entry;
-	struct nova_file_write_entry *entries[1];
 	unsigned long blocks = 0;
 	unsigned long pgoff, old_pgoff;
-	int nr_entries;
 
 	pgoff = first_blocknr;
 	while (pgoff <= last_blocknr) {
@@ -491,11 +485,9 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 			pgoff++;
 		} else {
 			*hole_found = 1;
-			nr_entries = radix_tree_gang_lookup(&sih->tree,
-						(void **)entries, pgoff, 1);
+			entry = nova_find_next_entry(sb, sih, pgoff);
 			pgoff++;
-			if (nr_entries == 1) {
-				entry = entries[0];
+			if (entry) {
 				pgoff = pgoff > entry->pgoff ?
 					pgoff : entry->pgoff;
 				if (pgoff > last_blocknr)
