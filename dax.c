@@ -461,6 +461,12 @@ out:
 	return ret;
 }
 
+ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
+	size_t len, loff_t *ppos)
+{
+	return nova_cow_file_write(filp, buf, len, ppos, true);
+}
+
 /*
  * return > 0, # of blocks mapped or allocated.
  * return = 0, if plain lookup failed.
@@ -611,6 +617,7 @@ int nova_dax_get_block(struct inode *inode, sector_t iblock,
 	return ret;
 }
 
+#if 0
 static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi, loff_t pos,
 	size_t count, void *kmem)
@@ -799,12 +806,6 @@ out:
 	return ret;
 }
 
-ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
-	size_t len, loff_t *ppos)
-{
-	return nova_cow_file_write(filp, buf, len, ppos, true);
-}
-
 static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info *si, u64 nvmm, pgoff_t pgoff,
 	vm_flags_t vm_flags, void **kmem, unsigned long *pfn)
@@ -968,6 +969,7 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
 }
+#endif
 
 static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
