@@ -2465,21 +2465,20 @@ u32 nova_calc_entry_csum(void *entry)
 	u32 checksum;
 	unsigned int entry_len;
 	struct nova_dentry dentry;
+	struct nova_link_change_entry lc_entry;
 	u8 *entry_to_check;
 
+	/* Entry is checksummed on its copy with csum set to 0,
+	 * unless csum is the last field. */
 	type = nova_get_entry_type(entry);
 	switch (type) {
-		/* nova_dentry has variable length due to dir names. */
-		/* Thus dentry is checksummed on its copy with csum set to 0. */
+		/* nova_dentry has variable length due to its name. */
 		case DIR_LOG:
 			dentry = *((struct nova_dentry *) entry);
 			dentry.csum = 0;
 			entry_len = dentry.de_len;
 			entry_to_check = (u8 *) &dentry;
 			break;
-		/* Other log entries have fixed length and so the checksum is
-		 * calculated in-place. The csum field which is supposed to be
-		 * the last 4 bytes is excluded from checksumming. */
 		case FILE_WRITE:
 			entry_len = sizeof(struct nova_file_write_entry) -
 					NOVA_ENTRY_CSUM_LEN;
@@ -2491,9 +2490,10 @@ u32 nova_calc_entry_csum(void *entry)
 			entry_to_check = (u8 *) entry;
 			break;
 		case LINK_CHANGE:
-			entry_len = sizeof(struct nova_link_change_entry) -
-					NOVA_ENTRY_CSUM_LEN;
-			entry_to_check = (u8 *) entry;
+			lc_entry = *((struct nova_link_change_entry *) entry);
+			lc_entry.csum = 0;
+			entry_len = sizeof(struct nova_link_change_entry);
+			entry_to_check = (u8 *) &lc_entry;
 			break;
 		default:
 			entry_len = 0;

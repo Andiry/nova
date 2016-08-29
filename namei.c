@@ -337,6 +337,7 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 void nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
+	struct nova_link_change_entry lc_entry;
 	struct nova_link_change_entry *old_entry;
 	void *addr;
 
@@ -344,8 +345,10 @@ void nova_invalidate_link_change_entry(struct super_block *sb,
 		addr = (void *)nova_get_block(sb, old_link_change);
 		old_entry = (struct nova_link_change_entry *)addr;
 		if (old_entry_freeable(sb, old_entry->trans_id))
-			old_entry->invalid = 1;
-			nova_update_entry_csum(old_entry);
+			lc_entry = *old_entry;
+			lc_entry.invalid = 1;
+			nova_update_entry_csum(&lc_entry);
+			nova_memcpy_atomic(old_entry, &lc_entry, 8);
 	}
 }
 

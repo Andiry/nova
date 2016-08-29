@@ -206,6 +206,10 @@ struct	nova_inode_log_page {
 /*
  * Structure of a directory log entry in NOVA.
  * Update DIR_LOG_REC_LEN if modify this struct!
+ *
+ * The 'invalid' and 'csum' fields must be in the same 64-bit word for atomic
+ * in-place invalidation. If their locations change the invalidation function
+ * has to be revised accordingly.
  */
 struct nova_dentry {
 	u8	entry_type;
@@ -244,17 +248,22 @@ struct nova_setattr_logentry {
 	__le32	csum;		/* entry checksum, should be the last 4 bytes */
 } __attribute((__packed__));
 
-/* Do we need this to be 32 bytes? */
+/* Do we need this to be 32 bytes?
+ *
+ * The 'invalid' and 'csum' fields must be in the same 64-bit word for atomic
+ * in-place invalidation. If their locations change the invalidation function
+ * has to be revised accordingly.
+ */
 struct nova_link_change_entry {
 	u8	entry_type;
 	u8	invalid;
 	__le16	links;
+	__le32	csum;
 	__le32	ctime;
 	__le32	flags;
 	__le32	generation;
-	__le64	trans_id;
 	__le32	padding;
-	__le32	csum;		/* entry checksum, should be the last 4 bytes */
+	__le64	trans_id;
 } __attribute((__packed__));
 
 enum alloc_type {
