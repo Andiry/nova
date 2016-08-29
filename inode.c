@@ -1419,6 +1419,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_setattr_logentry sa_entry;
 	struct nova_setattr_logentry *old_entry;
 	void *addr;
 	int ret;
@@ -1465,8 +1466,11 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		/* Do not invalidate setsize entries */
 		if (old_entry_freeable(sb, old_entry->trans_id) &&
 				(old_entry->attr & ATTR_SIZE) == 0) {
-			old_entry->invalid = 1;
-			nova_update_entry_csum(old_entry);
+			sa_entry = *old_entry;
+			sa_entry.invalid = 1;
+			nova_update_entry_csum(&sa_entry);
+			nova_memcpy_atomic(&old_entry->invalid,
+						&sa_entry.invalid, 8);
 		}
 	}
 
