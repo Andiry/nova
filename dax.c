@@ -542,6 +542,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long nvmm = 0;
 	unsigned long next_pgoff;
 	unsigned long blocknr = 0;
+	u64 trans_id;
 	int num_blocks = 0;
 	int allocated = 0;
 	int ret = 0;
@@ -576,6 +577,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	num_blocks = max_blocks;
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
+	trans_id = nova_get_trans_id(sb);
 
 	/* Fill the hole */
 	entry = nova_find_next_entry(sb, sih, iblock);
@@ -603,13 +605,14 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	}
 
 	num_blocks = allocated;
+	entry_data.entry_type = FILE_WRITE;
+	entry_data.reassigned = 0;
+	entry_data.trans_id = trans_id;
 	entry_data.pgoff = cpu_to_le64(iblock);
 	entry_data.num_pages = cpu_to_le32(num_blocks);
 	entry_data.invalid_pages = 0;
 	entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,
 							pi->i_blk_type));
-	/* Set entry type after set block */
-	nova_set_entry_type((void *)&entry_data, FILE_WRITE);
 	entry_data.mtime = cpu_to_le32(time);
 
 	/* Do not extend file size */
