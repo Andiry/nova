@@ -337,18 +337,24 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 void nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
-	struct nova_link_change_entry lc_entry;
 	struct nova_link_change_entry *old_entry;
+	struct nova_link_change_entry shdw_entry;
 	void *addr;
 
 	if (old_link_change) {
 		addr = (void *)nova_get_block(sb, old_link_change);
 		old_entry = (struct nova_link_change_entry *)addr;
 		if (old_entry_freeable(sb, old_entry->trans_id))
-			lc_entry = *old_entry;
-			lc_entry.invalid = 1;
-			nova_update_entry_csum(&lc_entry);
-			nova_memcpy_atomic(old_entry, &lc_entry, 8);
+			shdw_entry = *old_entry;
+			shdw_entry.invalid = 1;
+			nova_update_entry_csum(&shdw_entry);
+			nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
+					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
+			nova_dbg_verbose("invalidate link_change entry @ "
+					"0x%llx: links %u csum 0x%x",
+					old_link_change, old_entry->links,
+					old_entry->csum);
 	}
 }
 
@@ -366,12 +372,13 @@ int nova_append_link_change_entry(struct super_block *sb,
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
-	nova_dbg_verbose("%s: inode %lu attr change\n",
-				__func__, inode->i_ino);
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
 		return -ENOMEM;
+
+	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
+				__func__, inode->i_ino, curr_p);
 
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
 	entry->entry_type	= LINK_CHANGE;

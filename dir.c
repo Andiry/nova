@@ -357,18 +357,20 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 void nova_invalidate_dentries(struct super_block *sb,
 	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry)
 {
-	struct nova_dentry dentry;
+	struct nova_dentry shdw_dentry;
 
 	if (create_dentry && old_entry_freeable(sb, create_dentry->trans_id)) {
-		dentry = *create_dentry;
-		dentry.invalid = 1;
-		nova_update_entry_csum(&dentry);
-		nova_memcpy_atomic(create_dentry, &dentry, 8);
+		shdw_dentry = *create_dentry;
+		shdw_dentry.invalid = 1;
+		nova_update_entry_csum(&shdw_dentry);
+		nova_memcpy_atomic(ADDR_ALIGN(&create_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
 
-		dentry = *delete_dentry;
-		dentry.invalid = 1;
-		nova_update_entry_csum(&dentry);
-		nova_memcpy_atomic(delete_dentry, &dentry, 8);
+		shdw_dentry = *delete_dentry;
+		shdw_dentry.invalid = 1;
+		nova_update_entry_csum(&shdw_dentry);
+		nova_memcpy_atomic(ADDR_ALIGN(&delete_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
 	}
 }
 

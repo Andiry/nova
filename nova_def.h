@@ -241,9 +241,10 @@ static inline void nova_flush_buffer(void *buf, uint32_t len, bool fence)
 		PERSISTENT_BARRIER();
 }
 
-/* ======================= Checksum ========================= */
-/* The csum field is supposed to be the last 4 bytes of log entries except for
- * nova_dentry that has variable length. */
-#define NOVA_ENTRY_CSUM_LEN (4)
+/* ==================== Metadata and Data Checksums ====================== */
+#define	NOVA_META_CSUM_LEN	(2)
+#define	NOVA_DATA_CSUM_LEN	(4)
+
+#define	ADDR_ALIGN(p, bytes)	((void *) (((unsigned long) p) & ~(bytes - 1)))
 
 #endif /* _LINUX_NOVA_DEF_H */
