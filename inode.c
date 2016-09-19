@@ -162,6 +162,8 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 		curr = *(u64 *)(curr_addr);
 
 		if (curr == 0) {
+			u64 alternate_pi_addr = 0;
+
 			if (extendable == 0)
 				return -EINVAL;
 
@@ -176,6 +178,9 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 			*(u64 *)(curr_addr) = curr;
 			nova_flush_buffer((void *)curr_addr,
 						NOVA_INODE_SIZE, 1);
+			/* Extend alternate inode table */
+			nova_get_inode_address(sb, ino, version + 1,
+						&alternate_pi_addr, extendable);
 		}
 	}
 
