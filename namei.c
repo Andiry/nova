@@ -345,6 +345,7 @@ void nova_invalidate_link_change_entry(struct super_block *sb,
 		old_entry = (struct nova_link_change_entry *)addr;
 		if (old_entry_freeable(sb, old_entry->trans_id))
 			old_entry->invalid = 1;
+			nova_update_entry_csum(old_entry);
 	}
 }
 
@@ -378,6 +379,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	entry->flags		= cpu_to_le32(inode->i_flags);
 	entry->generation	= cpu_to_le32(inode->i_generation);
 
+	nova_update_entry_csum(entry);
 	nova_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
 	*old_linkc = sih->last_link_change;
@@ -393,10 +395,15 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 	if (entry->entry_type != LINK_CHANGE)
 		BUG();
 
-	pi->i_links_count	= entry->links;
-	pi->i_ctime		= entry->ctime;
-	pi->i_flags		= entry->flags;
-	pi->i_generation	= entry->generation;
+	if (!nova_verify_entry_csum(entry)) {
+		printk("nova error: %s: nova_link_change_entry checksum"
+			" mismatch @ 0x%llx\n", __func__, (u64) entry);
+	} else {
+		pi->i_links_count	= entry->links;
+		pi->i_ctime		= entry->ctime;
+		pi->i_flags		= entry->flags;
+		pi->i_generation	= entry->generation;
+	}
 
 	/* Do not flush now */
 }

@@ -57,6 +57,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	time = CURRENT_TIME_SEC.tv_sec;
 	entry->mtime = cpu_to_le32(time);
 	entry->size = cpu_to_le64(len + 1);
+	nova_update_entry_csum(entry);
 	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
 
 	sih->log_pages = 1;

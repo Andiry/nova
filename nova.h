@@ -39,6 +39,7 @@
 #include <linux/kthread.h>
 #include <linux/buffer_head.h>
 #include <linux/uio.h>
+#include <linux/crc32c.h>
 #include <asm/tlbflush.h>
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
@@ -180,6 +181,8 @@ struct nova_file_write_entry {
 	__le32	mtime;
 	__le64	size;
 	__le64	trans_id;
+	__le32	csumpadding;	/* for 8-byte alignment */
+	__le32	csum;		/* entry checksum, should be the last 4 bytes */
 } __attribute((__packed__));
 
 struct nova_inode_page_tail {
@@ -209,10 +212,10 @@ struct nova_dentry {
 	u8	name_len;               /* length of the dentry name */
 	u8	file_type;              /* file type */
 	u8	invalid;		/* Invalid now? */
+	__le32  csum;			/* entry checksum */
 	__le16	de_len;                 /* length of this dentry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */
-	__le32	padding;
 	__le64	ino;                    /* inode no pointed to by this entry */
 	__le64	size;
 	__le64	trans_id;
@@ -235,9 +238,10 @@ struct nova_setattr_logentry {
 	__le32	mtime;
 	__le32	ctime;
 	__le64	size;
-	u8	invalid;
-	u8	paddings[7];
 	__le64	trans_id;
+	u8	invalid;
+	u8	paddings[3];
+	__le32	csum;		/* entry checksum, should be the last 4 bytes */
 } __attribute((__packed__));
 
 /* Do we need this to be 32 bytes? */
@@ -249,7 +253,8 @@ struct nova_link_change_entry {
 	__le32	flags;
 	__le32	generation;
 	__le64	trans_id;
-	__le64	padding;
+	__le32	padding;
+	__le32	csum;		/* entry checksum, should be the last 4 bytes */
 } __attribute((__packed__));
 
 enum alloc_type {
@@ -1090,6 +1095,9 @@ int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	bool free);
+u32 nova_calc_entry_csum(void *entry);
+void nova_update_entry_csum(void *entry);
+bool nova_verify_entry_csum(void *entry);
 
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);

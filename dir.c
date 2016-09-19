@@ -190,10 +190,14 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 
 	/* Update actual de_len */
 	entry->de_len = cpu_to_le16(de_len);
+
+	/* Update checksum */
+	nova_update_entry_csum(entry);
+
 	nova_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
-			"name len %u, file type %u\n",
+			"name len %u, file type %u, csum 0x%x\n",
 			curr_p, entry->ino, entry->de_len,
-			entry->name_len, entry->file_type);
+			entry->name_len, entry->file_type, entry->csum);
 
 	nova_flush_buffer(entry, de_len, 0);
 
@@ -238,6 +242,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
 	strncpy(de_entry->name, ".\0", 2);
+	nova_update_entry_csum(de_entry);
 	nova_flush_buffer(de_entry, NOVA_DIR_LOG_REC_LEN(1), 0);
 
 	curr_p = new_block + NOVA_DIR_LOG_REC_LEN(1);
@@ -253,6 +258,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
 	strncpy(de_entry->name, "..\0", 3);
+	nova_update_entry_csum(de_entry);
 	nova_flush_buffer(de_entry, NOVA_DIR_LOG_REC_LEN(2), 0);
 
 	curr_p += NOVA_DIR_LOG_REC_LEN(2);
@@ -354,6 +360,8 @@ void nova_invalidate_dentries(struct super_block *sb,
 	if (create_dentry && old_entry_freeable(sb, create_dentry->trans_id)) {
 		create_dentry->invalid = 1;
 		delete_dentry->invalid = 1;
+		nova_update_entry_csum(create_dentry);
+		nova_update_entry_csum(delete_dentry);
 	}
 }
 
@@ -469,11 +477,16 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 		entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 		nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
-			"name %s, namelen %u, rec len %u\n", curr_p,
+			"name %s, namelen %u, csum 0x%x, rec len %u\n", curr_p,
 			entry->entry_type, le64_to_cpu(entry->ino),
-			entry->name, entry->name_len,
+			entry->name, entry->name_len, entry->csum,
 			le16_to_cpu(entry->de_len));
 
+		if (!nova_verify_entry_csum(entry)) {
+			nova_err(sb, "%s: nova_dentry checksum mismatch"
+				" @ 0x%llx\n", __func__, (u64) entry);
+			break;
+		}
 		if (entry->invalid == 0) {
 			if (entry->ino > 0)
 				ret = nova_replay_add_dentry(sb, sih, entry);
@@ -569,9 +582,9 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 
 			child_pi = nova_get_block(sb, pi_addr);
 			nova_dbgv("ctx: ino %llu, name %s, "
-				"name_len %u, de_len %u\n",
+				"name_len %u, de_len %u, csum 0x%x\n",
 				(u64)ino, entry->name, entry->name_len,
-				entry->de_len);
+				entry->de_len, entry->csum);
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 				ino, IF2DT(le16_to_cpu(child_pi->i_mode)))) {
 				nova_dbgv("Here: pos %llu\n", ctx->pos);
