@@ -85,7 +85,7 @@ int nova_init_inode_table(struct super_block *sb)
 	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_table = nova_get_inode_table(sb, i);
+		inode_table = nova_get_inode_table(sb, 0, i);
 		if (!inode_table)
 			return -EINVAL;
 
@@ -129,7 +129,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	cpuid = ino % sbi->cpus;
 	internal_ino = ino / sbi->cpus;
 
-	inode_table = nova_get_inode_table(sb, cpuid);
+	inode_table = nova_get_inode_table(sb, 0, cpuid);
 	superpage_count = internal_ino >> num_inodes_bits;
 	index = internal_ino & ((1 << num_inodes_bits) - 1);
 

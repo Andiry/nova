@@ -403,16 +403,17 @@ struct free_list {
 /*
  * The first block contains super blocks and reserved inodes;
  * The second block contains pointers to journal pages.
- * The third block contains pointers to inode tables.
- * The fourth block contains snapshot timestamps.
- * The fifth block contains snapshot infos upon umount.
+ * The third/fourth block contains pointers to inode tables.
+ * The fifth block contains snapshot timestamps.
+ * The sixth block contains snapshot infos upon umount.
  */
-#define	RESERVED_BLOCKS		5
+#define	RESERVED_BLOCKS		6
 
 #define	JOURNAL_START		1
-#define	INODE_TABLE_START	2
-#define	SNAPSHOT_TABLE_START	3
-#define	SNAPSHOT_INFO_START	4
+#define	INODE_TABLE0_START	2
+#define	INODE_TABLE1_START	3
+#define	SNAPSHOT_TABLE_START	4
+#define	SNAPSHOT_INFO_START	5
 
 struct inode_map {
 	struct mutex inode_table_mutex;
@@ -607,15 +608,22 @@ struct inode_table {
 };
 
 static inline
-struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
+struct inode_table *nova_get_inode_table(struct super_block *sb,
+	int version, int cpu)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int table_start;
 
 	if (cpu >= sbi->cpus)
 		return NULL;
 
+	if (version % 2 == 0)
+		table_start = INODE_TABLE0_START;
+	else
+		table_start = INODE_TABLE1_START;
+
 	return (struct inode_table *)((char *)nova_get_block(sb,
-		NOVA_DEF_BLOCK_SIZE_4K * INODE_TABLE_START) +
+		NOVA_DEF_BLOCK_SIZE_4K * table_start) +
 		cpu * CACHELINE_SIZE);
 }
 

@@ -1370,7 +1370,7 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 
 	ring_id = 0;
 	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
-		inode_table = nova_get_inode_table(sb, cpuid);
+		inode_table = nova_get_inode_table(sb, 0, cpuid);
 		if (!inode_table)
 			return -EINVAL;
 
