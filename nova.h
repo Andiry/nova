@@ -1098,7 +1098,7 @@ extern int nova_init_inode_table(struct super_block *sb);
 unsigned long nova_get_last_blocknr(struct super_block *sb,
 	struct nova_inode_info_header *sih);
 int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
-	u64 *pi_addr, int extendable);
+	u64 *pi_addr, int extendable, int extend_alternate);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
