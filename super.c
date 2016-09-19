@@ -545,6 +545,18 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	/* Now a NULL block_csum_base disables data checksum.
+	 * To test data checksum, reserve an adequate region of physical memory
+	 * and use ioremap properly to enable it. */
+	sbi->block_csum_base = NULL; /*
+	sbi->block_csum_base = ioremap_nocache(0x280000000, 0x40000000);
+	if (!sbi->block_csum_base) {
+		nova_dbg("ioremap_nocache failed\n");
+		retval = -ENOMEM;
+		goto out;
+	}
+	// */
+
 	nova_snapshot_init(sb);
 
 	if (nova_parse_options(data, sbi, 0))

@@ -241,9 +241,11 @@ static inline void nova_flush_buffer(void *buf, uint32_t len, bool fence)
 		PERSISTENT_BARRIER();
 }
 
-/* ==================== Metadata and Data Checksums ====================== */
+/* ==================== Metadata and Data Checksum ====================== */
 #define	NOVA_META_CSUM_LEN	(2)
 #define	NOVA_DATA_CSUM_LEN	(4)
+
+#define	NOVA_INIT_CSUM		(15)
 
 #define	ADDR_ALIGN(p, bytes)	((void *) (((unsigned long) p) & ~(bytes - 1)))
 

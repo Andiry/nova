@@ -60,6 +60,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	do {
 		unsigned long nr, left;
 		unsigned long nvmm;
+		unsigned long csum_blks;
 		void *dax_mem = NULL;
 		int zero = 0;
 
@@ -105,6 +106,21 @@ memcpy:
 		if (nr > len - copied)
 			nr = len - copied;
 
+		if ( (!zero) && (NOVA_SB(sb)->block_csum_base) ) {
+			/* only whole blocks can be verified */
+			csum_blks = ((offset + nr - 1) >> PAGE_SHIFT) + 1;
+			if (!nova_verify_data_csum(inode, entry,
+						index, csum_blks)) {
+				nova_err(sb, "%s: nova data checksum fail! "
+					"inode %lu entry pgoff %lu "
+					"index %lu blocks %lu\n", __func__,
+					inode->i_ino, entry->pgoff,
+					index, csum_blks);
+				error = -EIO;
+				goto out;
+			}
+		}
+
 		NOVA_START_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
 		if (!zero)
@@ -114,14 +130,6 @@ memcpy:
 			left = __clear_user(buf + copied, nr);
 
 		NOVA_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
-
-		if (!nova_verify_data_csum(buf + copied, nr, entry)) {
-			nova_err(sb, "%s: nova file data checksum fail"
-				" inode %llu offset %llu size %llu\n",
-				__func__, inode->i_ino, offset, nr);
-			error = -EIO;
-			goto out;
-		}
 
 		if (left) {
 			nova_dbg("%s ERROR!: bytes %lu, left %lu\n",
@@ -341,7 +349,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	struct nova_file_write_entry entry_data;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, ret;
+	size_t count, offset, copied, csummed, ret;
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
@@ -455,15 +463,24 @@ ssize_t nova_cow_file_write(struct file *filp,
 		else
 			entry_data.size = cpu_to_le64(inode->i_size);
 
-		entry_data.csumdata = cpu_to_le32(
-				nova_calc_data_csum(buf, copied));
-
 		curr_entry = nova_append_file_write_entry(sb, pi, inode,
 							&entry_data, temp_tail);
 		if (curr_entry == 0) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
 			goto out;
+		}
+
+
+		if ( (copied > 0) && (NOVA_SB(sb)->block_csum_base) ) {
+			csummed = copied - nova_update_cow_csum(inode, blocknr,
+						(void *) buf, offset, copied);
+			if (unlikely(csummed != copied)) {
+				nova_dbg("%s: not all data bytes are "
+					"checksummed! copied %zu, "
+					"csummed %zu\n", __func__,
+					copied, csummed);
+			}
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
@@ -689,7 +706,7 @@ int nova_dax_get_block(struct inode *inode, sector_t iblock,
 #if 0
 static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi, loff_t pos,
-	size_t count, void *kmem)
+	size_t count, void *kmem, unsigned long blocknr)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -698,7 +715,7 @@ static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 	u64 nvmm_block;
 	void *nvmm_addr;
 	loff_t offset;
-	size_t bytes, copied;
+	size_t bytes, copied, csummed;
 	ssize_t written = 0;
 	int status = 0;
 	ssize_t ret;
@@ -724,11 +741,23 @@ static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
 
+		if ( (copied > 0) && (NOVA_SB(sb)->block_csum_base) ) {
+			csummed = copied - nova_update_cow_csum(inode,
+				blocknr, nvmm_addr + offset, offset, copied);
+			if (unlikely(csummed != copied)) {
+				nova_dbg("%s: not all data bytes are "
+					"checksummed! copied %zu, "
+					"csummed %zu\n", __func__,
+					copied, csummed);
+			}
+		}
+
 		if (copied > 0) {
 			status = copied;
 			written += copied;
 			pos += copied;
 			count -= copied;
+			blocknr += (offset + copied) >> sb->s_blocksize_bits;
 			kmem += offset + copied;
 		}
 		if (unlikely(copied != bytes)) {
@@ -809,7 +838,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 		NOVA_START_TIMING(memcpy_w_wb_t, memcpy_time);
 		copied = nova_flush_mmap_to_nvmm(sb, inode, pi, pos, bytes,
-							kmem);
+							kmem, blocknr);
 		NOVA_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
 		entry_data.entry_type = FILE_WRITE;
@@ -824,9 +853,6 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		entry_data.mtime = cpu_to_le32(time);
 
 		entry_data.size = cpu_to_le64(inode->i_size);
-
-		entry_data.csumdata = cpu_to_le32(
-				nova_calc_data_csum(kmem + offset, copied));
 
 		curr_entry = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail);
@@ -1129,27 +1155,161 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 }
 
 /* Calculate the data checksum. */
-u32 nova_calc_data_csum(const char __user *buf, unsigned long size)
+u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
 {
-	u32 checksum;
+	u32 csum;
 
-	checksum = crc32c(~1, (void *) buf, size);
+	/* TODO: Check if the function uses accelerated instructions for CRC. */
+	csum = crc32c(init, buf, size);
 
-	return checksum;
+	return csum;
 }
 
-/* Verify the data checksum. */
-bool nova_verify_data_csum(const char __user *buf, unsigned long size,
-			struct nova_file_write_entry *entry)
+/* Update copy-on-write data checksums.
+ *
+ * This function works on a sequence of contiguous data blocks that are just
+ * created and the write buffer 'wrbuf' that causes this write transaction. The
+ * data of 'wrbuf', and possible partial head and tail blocks are already copied
+ * to NVMM data blocks.
+ *
+ * Logically the write buffer is in DRAM and it's checksummed before written to
+ * NVMM, but if necessary 'wrbuf' can point to NVMM as well. Partial head and
+ * and tail blocks are read from NVMM.
+ *
+ * Checksum is calculated over a whole block.
+ *
+ * blocknr: the physical block# of the first data block
+ * wrbuf:   write buffer used to create the data blocks
+ * offset:  byte offset of 'wrbuf' relative to the start the first block
+ * bytes:   #bytes of 'wrbuf' written to the data blocks
+ *
+ * return: #bytes NOT checksummed (0 means a good exit)
+ *
+ * */
+size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
+		void *wrbuf, size_t offset, size_t bytes)
 {
-	u32 checksum;
-	u32 csumdata;
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode  *pi = nova_get_inode(sb, inode);
+
+	void *blockptr, *bufptr, *csum_addr;
+	size_t blocksize = nova_inode_blk_size(pi);
+	u32 csum;
+	size_t csummed = 0;
+
+	bufptr   = wrbuf;
+	blockptr = nova_get_block(sb,
+			nova_get_block_off(sb, blocknr,	pi->i_blk_type));
+
+	/* in case file write entry is given instead of blocknr:
+	 * blocknr  = get_nvmm(sb, sih, entry, entry->pgoff);
+	 * blockptr = nova_get_block(sb, entry->block);
+	 */
+
+	if (offset) { // partial head block
+		csum = nova_calc_data_csum(NOVA_INIT_CSUM, blockptr, offset);
+		csummed = (blocksize - offset) < bytes ?
+				blocksize - offset : bytes;
+		csum = nova_calc_data_csum(csum, bufptr, csummed);
+
+		if (offset + csummed < blocksize)
+			csum = nova_calc_data_csum(csum,
+						blockptr + offset + csummed,
+						blocksize - offset - csummed);
+
+		csum      = cpu_to_le32(csum);
+		csum_addr = nova_get_block_csum_addr(sb, blocknr);
+		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
+
+		blocknr  += 1;
+		bufptr   += csummed;
+		blockptr += blocksize;
+	}
+
+	if (csummed < bytes) {
+		while (csummed + blocksize < bytes) {
+			csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
+						bufptr, blocksize));
+			csum_addr = nova_get_block_csum_addr(sb, blocknr);
+			memcpy_to_pmem_nocache(csum_addr, &csum,
+						NOVA_DATA_CSUM_LEN);
+
+			blocknr  += 1;
+			bufptr   += blocksize;
+			blockptr += blocksize;
+			csummed  += blocksize;
+		}
+
+		if (csummed < bytes) { // partial tail block
+			csum = nova_calc_data_csum(NOVA_INIT_CSUM, bufptr,
+							bytes - csummed);
+			csum = nova_calc_data_csum(csum,
+						blockptr + bytes - csummed,
+						blocksize - (bytes - csummed));
+
+			csum      = cpu_to_le32(csum);
+			csum_addr = nova_get_block_csum_addr(sb, blocknr);
+			memcpy_to_pmem_nocache(csum_addr, &csum,
+						NOVA_DATA_CSUM_LEN);
+
+			csummed = bytes;
+		}
+	}
+
+	return (bytes - csummed);
+}
+
+/* Verify checksums of requested data blocks of a file write entry.
+ *
+ * This function works on an existing file write 'entry' with its data in NVMM.
+ *
+ * Only a whole block can be checksum verified.
+ *
+ * index:  start block index of the file where data will be verified
+ * blocks: #blocks to be verified starting from index
+ *
+ * return: true or false
+ *
+ * */
+bool nova_verify_data_csum(struct inode *inode,
+		struct nova_file_write_entry *entry, pgoff_t index,
+		unsigned long blocks)
+{
+	struct super_block            *sb  = inode->i_sb;
+	struct nova_inode             *pi  = nova_get_inode(sb, inode);
+	struct nova_inode_info        *si  = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+
+	void *blockptr;
+	size_t blocksize = nova_inode_blk_size(pi);
+	unsigned long block, blocknr;
+	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
 
-	checksum = nova_calc_data_csum(buf, size);
-	csumdata = le32_to_cpu(entry->csumdata);
+	blocknr  = get_nvmm(sb, sih, entry, index);
+	blockptr = nova_get_block(sb,
+			nova_get_block_off(sb, blocknr,	pi->i_blk_type));
 
-	match = checksum == csumdata;
+	match = true;
+	for (block = 0; block < blocks; block++) {
+		csum_calc = nova_calc_data_csum(NOVA_INIT_CSUM,
+						blockptr, blocksize);
+		csum_addr = nova_get_block_csum_addr(sb, blocknr);
+		csum_nvmm = le32_to_cpu(*csum_addr);
+		match     = (csum_calc == csum_nvmm);
+
+		if (!match) {
+			nova_dbg("%s: nova data block checksum fail! "
+				"inode %lu block index %lu "
+				"csum calc 0x%08x csum nvmm 0x%08x\n",
+				__func__, inode->i_ino, index + block,
+				csum_calc, csum_nvmm);
+			break;
+		}
+
+		blocknr  += 1;
+		blockptr += blocksize;
+	}
 
 	return match;
 }

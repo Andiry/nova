@@ -174,10 +174,6 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
  * The 'reassigned', 'invalid_pages', and 'csum' fields must be in the same
  * 64-bit word for atomic in-place updates. If their locations change the
  * nova_free_old_entry() function has to be revised accordingly.
- *
- * Data checksum 'csumdata' is for data blocks associated with this entry. It's
- * excluded from the entry 'csum' calculation and so in-place updating
- * 'csumdata' is fine.
  */
 struct nova_file_write_entry {
 	u8	entry_type;
@@ -191,8 +187,6 @@ struct nova_file_write_entry {
 	__le64	pgoff;
 	__le64	size;
 	__le64	trans_id;
-	__le32	padding;
-	__le32	csumdata;	/* data checksum, should be the last 4 bytes */
 } __attribute((__packed__));
 
 struct nova_inode_page_tail {
@@ -503,6 +497,9 @@ struct nova_sb_info {
 	/* Shared free block list */
 	unsigned long per_list_blocks;
 	struct free_list shared_free_list;
+
+	/* Storage for block checksums */
+	void *block_csum_base;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)
@@ -975,6 +972,18 @@ static inline int is_dir_init_entry(struct super_block *sb,
 	return 0;
 }
 
+/* Checksum methods */
+static inline void *nova_get_block_csum_addr(struct super_block *sb, u64 block)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	void *block_csum_addr = sbi->block_csum_base;
+
+	if (block_csum_addr)
+		block_csum_addr += NOVA_DATA_CSUM_LEN * block;
+
+	return block_csum_addr;
+}
+
 #include "wprotect.h"
 
 /* Function Prototypes */
@@ -1040,9 +1049,12 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 int nova_dax_get_block(struct inode *inode, sector_t iblock,
 	struct buffer_head *bh, int create);
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
-u32 nova_calc_data_csum(const char __user *buf, unsigned long size);
-bool nova_verify_data_csum(const char __user *buf, unsigned long size,
-			struct nova_file_write_entry *entry);
+u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);
+size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
+		void *wrbuf, size_t offset, size_t bytes);
+bool nova_verify_data_csum(struct inode *inode,
+		struct nova_file_write_entry *entry, pgoff_t index,
+		unsigned long blocks);
 
 /* dir.c */
 extern const struct file_operations nova_dir_operations;

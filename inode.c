@@ -2503,8 +2503,7 @@ u16 nova_calc_entry_csum(void *entry)
 		case FILE_WRITE:
 			fw_entry = *((struct nova_file_write_entry*) entry);
 			fw_entry.csum = 0;
-			entry_len = sizeof(struct nova_file_write_entry) -
-					NOVA_DATA_CSUM_LEN; // excl. csumdata
+			entry_len = sizeof(struct nova_file_write_entry);
 			entry_to_check = (u8 *) &fw_entry;
 			break;
 		case SET_ATTR:
@@ -2526,8 +2525,7 @@ u16 nova_calc_entry_csum(void *entry)
 			break;
 	}
 
-	/* TODO: Check the initial value (1st arg), and if the function uses
-	 * accelerated instructions for CRC. */
+	/* TODO: Check if the function uses accelerated instructions for CRC. */
 	checksum = crc16(~1, entry_to_check, entry_len);
 
 	return checksum;
@@ -2565,7 +2563,7 @@ void nova_update_entry_csum(void *entry)
 				" 0x%04x\n", __func__, checksum);
 			break;
 		default:
-			nova_dbgv("%s: unknown or unsupported entry type (%d)"
+			nova_dbg("%s: unknown or unsupported entry type (%d)"
 				" for checksum, 0x%llx\n", __func__, type,
 				(u64) entry);
 			break;
@@ -2602,7 +2600,7 @@ bool nova_verify_entry_csum(void *entry)
 			break;
 		default:
 			entry_csum = 0;
-			nova_dbgv("%s: unknown or unsupported entry type (%d)"
+			nova_dbg("%s: unknown or unsupported entry type (%d)"
 				" for checksum, 0x%llx\n", __func__, type,
 				(u64) entry);
 			break;
