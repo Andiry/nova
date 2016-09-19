@@ -582,7 +582,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 			if (ino == 0)
 				continue;
 
-			ret = nova_get_inode_address(sb, ino, &pi_addr, 0);
+			ret = nova_get_inode_address(sb, ino, 0, &pi_addr, 0);
 			if (ret) {
 				nova_dbg("%s: get child inode %lu address "
 					"failed %d\n", __func__, ino, ret);
@@ -716,7 +716,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 			ino = __le64_to_cpu(entry->ino);
 			pos = BKDRHash(entry->name, entry->name_len);
 
-			ret = nova_get_inode_address(sb, ino, &pi_addr, 0);
+			ret = nova_get_inode_address(sb, ino, 0, &pi_addr, 0);
 			if (ret) {
 				nova_dbg("%s: get child inode %lu address "
 					"failed %d\n", __func__, ino, ret);

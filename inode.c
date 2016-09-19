@@ -119,7 +119,7 @@ int nova_init_inode_table(struct super_block *sb)
 	return ret;
 }
 
-int nova_get_inode_address(struct super_block *sb, u64 ino,
+int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	u64 *pi_addr, int extendable)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -144,7 +144,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	cpuid = ino % sbi->cpus;
 	internal_ino = ino / sbi->cpus;
 
-	inode_table = nova_get_inode_table(sb, 0, cpuid);
+	inode_table = nova_get_inode_table(sb, version, cpuid);
 	superpage_count = internal_ino >> num_inodes_bits;
 	index = internal_ino & ((1 << num_inodes_bits) - 1);
 
@@ -866,7 +866,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 	if (ino == NOVA_ROOT_INO) {
 		pi_addr = NOVA_ROOT_INO_START;
 	} else {
-		err = nova_get_inode_address(sb, ino, &pi_addr, 0);
+		err = nova_get_inode_address(sb, ino, 0, &pi_addr, 0);
 		if (err) {
 			nova_dbg("%s: get inode %lu address failed %d\n",
 					__func__, ino, err);
@@ -1036,7 +1036,7 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino)
 		return -EINVAL;
 	}
 
-	err = nova_get_inode_address(sb, ino, &pi_addr, 0);
+	err = nova_get_inode_address(sb, ino, 0, &pi_addr, 0);
 	if (err) {
 		nova_dbg("%s: get inode %llu address failed %d\n",
 					__func__, ino, err);
@@ -1085,7 +1085,7 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 		return 0;
 	}
 
-	ret = nova_get_inode_address(sb, free_ino, pi_addr, 1);
+	ret = nova_get_inode_address(sb, free_ino, 0, pi_addr, 1);
 	if (ret) {
 		nova_dbg("%s: get inode address failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);
