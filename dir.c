@@ -483,8 +483,9 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			le16_to_cpu(entry->de_len));
 
 		if (!nova_verify_entry_csum(entry)) {
-			nova_err(sb, "%s: nova_dentry checksum mismatch"
-				" @ 0x%llx\n", __func__, (u64) entry);
+			nova_err(sb, "%s: nova_dentry checksum fail"
+				" inode %llu entry addr 0x%llx\n",
+				__func__, ino, (u64) entry);
 			break;
 		}
 		if (entry->invalid == 0) {

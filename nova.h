@@ -181,7 +181,7 @@ struct nova_file_write_entry {
 	__le32	mtime;
 	__le64	size;
 	__le64	trans_id;
-	__le32	csumpadding;	/* for 8-byte alignment */
+	__le32	csumdata;	/* data blocks checksum */
 	__le32	csum;		/* entry checksum, should be the last 4 bytes */
 } __attribute((__packed__));
 
@@ -1016,6 +1016,9 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 int nova_dax_get_block(struct inode *inode, sector_t iblock,
 	struct buffer_head *bh, int create);
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
+u32 nova_calc_data_csum(const char __user *buf, unsigned long size);
+bool nova_verify_data_csum(const char __user *buf, unsigned long size,
+			struct nova_file_write_entry *entry);
 
 /* dir.c */
 extern const struct file_operations nova_dir_operations;

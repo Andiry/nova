@@ -1344,8 +1344,9 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 		BUG();
 
 	if (!nova_verify_entry_csum(entry)) {
-		nova_err(sb, "%s: nova_setattr_logentry checksum mismatch"
-			" @ 0x%llx\n", __func__, (u64) entry);
+		nova_err(sb, "%s: nova_setattr_logentry checksum fail"
+			" inode %llu entry addr 0x%llx\n",
+			__func__, pi->nova_ino, (u64) entry);
 		goto out;
 	}
 
@@ -2349,9 +2350,9 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 		entry = (struct nova_file_write_entry *)addr;
 		if (!nova_verify_entry_csum(entry)) {
-			nova_err(sb, "%s: nova_file_write_entry checksum"
-					" mismatch @ 0x%llx\n", __func__,
-					(u64) entry);
+			nova_err(sb, "%s: nova_file_write_entry checksum fail"
+					" inode %llu entry addr 0x%llx\n",
+					__func__, ino, (u64) entry);
 			break;
 		}
 		if (entry->num_pages != entry->invalid_pages) {

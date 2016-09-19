@@ -396,8 +396,9 @@ void nova_apply_link_change_entry(struct nova_inode *pi,
 		BUG();
 
 	if (!nova_verify_entry_csum(entry)) {
-		printk("nova error: %s: nova_link_change_entry checksum"
-			" mismatch @ 0x%llx\n", __func__, (u64) entry);
+		printk("nova error: %s: nova_link_change_entry checksum fail"
+			" inode %llu entry addr 0x%llx\n",
+			__func__, pi->nova_ino, (u64) entry);
 	} else {
 		pi->i_links_count	= entry->links;
 		pi->i_ctime		= entry->ctime;

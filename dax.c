@@ -115,6 +115,14 @@ memcpy:
 
 		NOVA_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
+		if (!nova_verify_data_csum(buf + copied, nr, entry)) {
+			nova_err(sb, "%s: nova file data checksum fail"
+				" inode %llu offset %llu size %llu\n",
+				__func__, inode->i_ino, offset, nr);
+			error = -EIO;
+			goto out;
+		}
+
 		if (left) {
 			nova_dbg("%s ERROR!: bytes %lu, left %lu\n",
 				__func__, nr, left);
@@ -381,6 +389,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
+
 	/* offset in the actual block size block */
 
 	ret = file_remove_privs(filp);
@@ -445,6 +454,9 @@ ssize_t nova_cow_file_write(struct file *filp,
 			entry_data.size = cpu_to_le64(pos + copied);
 		else
 			entry_data.size = cpu_to_le64(inode->i_size);
+
+		entry_data.csumdata = cpu_to_le32(
+				nova_calc_data_csum(buf, copied));
 
 		curr_entry = nova_append_file_write_entry(sb, pi, inode,
 							&entry_data, temp_tail);
@@ -813,6 +825,9 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 		entry_data.size = cpu_to_le64(inode->i_size);
 
+		entry_data.csumdata = cpu_to_le32(
+				nova_calc_data_csum(kmem + offset, copied));
+
 		curr_entry = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail);
 		if (curr_entry == 0) {
@@ -1111,4 +1126,30 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
 
 	return 0;
+}
+
+/* Calculate the data checksum. */
+u32 nova_calc_data_csum(const char __user *buf, unsigned long size)
+{
+	u32 checksum;
+
+	checksum = crc32c(~1, (void *) buf, size);
+
+	return checksum;
+}
+
+/* Verify the data checksum. */
+bool nova_verify_data_csum(const char __user *buf, unsigned long size,
+			struct nova_file_write_entry *entry)
+{
+	u32 checksum;
+	u32 csumdata;
+	bool match;
+
+	checksum = nova_calc_data_csum(buf, size);
+	csumdata = le32_to_cpu(entry->csumdata);
+
+	match = checksum == csumdata;
+
+	return match;
 }
