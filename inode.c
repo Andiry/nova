@@ -65,27 +65,18 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 	return 0;
 }
 
-int nova_init_inode_table(struct super_block *sb)
+static int nova_alloc_inode_table(struct super_block *sb, struct nova_inode *pi,
+	int version)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct inode_table *inode_table;
-	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	unsigned long blocknr;
 	u64 block;
 	int allocated;
 	int i;
 
-	pi->i_mode = 0;
-	pi->i_uid = 0;
-	pi->i_gid = 0;
-	pi->i_links_count = cpu_to_le16(1);
-	pi->i_flags = 0;
-	pi->nova_ino = NOVA_INODETABLE_INO;
-
-	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
-
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_table = nova_get_inode_table(sb, 0, i);
+		inode_table = nova_get_inode_table(sb, version, i);
 		if (!inode_table)
 			return -EINVAL;
 
@@ -100,8 +91,32 @@ int nova_init_inode_table(struct super_block *sb)
 		nova_flush_buffer(inode_table, CACHELINE_SIZE, 0);
 	}
 
-	PERSISTENT_BARRIER();
 	return 0;
+}
+
+int nova_init_inode_table(struct super_block *sb)
+{
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	int ret;
+	int i;
+
+	pi->i_mode = 0;
+	pi->i_uid = 0;
+	pi->i_gid = 0;
+	pi->i_links_count = cpu_to_le16(1);
+	pi->i_flags = 0;
+	pi->nova_ino = NOVA_INODETABLE_INO;
+
+	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
+
+	for (i = 0; i < 2; i++) {
+		ret = nova_alloc_inode_table(sb, pi, i);
+		if (ret)
+			return ret;
+	}
+
+	PERSISTENT_BARRIER();
+	return ret;
 }
 
 int nova_get_inode_address(struct super_block *sb, u64 ino,
