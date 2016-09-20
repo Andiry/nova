@@ -1119,7 +1119,9 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih = NULL;
 	struct nova_inode *pi;
+	struct nova_inode *alter_pi;
 	int errval;
+	u64 alter_pi_addr = 0;
 	timing_t new_inode_time;
 
 	NOVA_START_TIMING(new_vfs_inode_t, new_inode_time);
@@ -1143,6 +1145,11 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		errval = -EACCES;
 		goto fail1;
 	}
+
+	/* Get alternate inode address */
+	errval = nova_get_inode_address(sb, ino, 1, &alter_pi_addr, 0, 0);
+	if (errval)
+		goto fail1;
 
 	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
 	nova_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
@@ -1192,10 +1199,14 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->delete_trans_id = 0;
 	nova_memlock_inode(sb, pi);
 
+	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
+	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+
 	si = NOVA_I(inode);
 	sih = &si->header;
 	nova_init_header(sb, sih, inode->i_mode);
 	sih->pi_addr = pi_addr;
+	sih->alter_pi_addr = alter_pi_addr;
 	sih->ino = ino;
 
 	nova_update_inode(inode, pi);

@@ -348,6 +348,7 @@ struct nova_inode_info_header {
 	unsigned long i_size;
 	unsigned long ino;
 	unsigned long pi_addr;
+	unsigned long alter_pi_addr;
 	unsigned long mmap_pages;	/* Num of mmap pages */
 	unsigned long low_dirty;	/* Mmap dirty low range */
 	unsigned long high_dirty;	/* Mmap dirty high range */
