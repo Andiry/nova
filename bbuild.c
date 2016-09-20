@@ -764,6 +764,7 @@ void nova_init_header(struct super_block *sb,
 	sih->high_dirty = 0;
 	sih->i_size = 0;
 	sih->pi_addr = 0;
+	sih->alter_pi_addr = 0;
 	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
 	INIT_RADIX_TREE(&sih->cache_tree, GFP_ATOMIC);
 	sih->i_mode = i_mode;
@@ -778,6 +779,8 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
 	unsigned long nova_ino;
+	u64 alter_pi_addr = 0;
+	int ret;
 
 	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
 	if (!pi)
@@ -788,6 +791,11 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 
 	nova_ino = pi->nova_ino;
 
+	/* Get alternate inode address */
+	ret = nova_get_inode_address(sb, nova_ino, 1, &alter_pi_addr, 0, 0);
+	if (ret)
+		return ret;
+
 	nova_dbgv("%s: inode %lu, addr 0x%llx, valid %d, "
 			"head 0x%llx, tail 0x%llx\n",
 			__func__, nova_ino, pi_addr, pi->valid,
@@ -795,6 +803,7 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 
 	nova_init_header(sb, sih, __le16_to_cpu(pi->i_mode));
 	sih->ino = nova_ino;
+	sih->alter_pi_addr = alter_pi_addr;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFLNK:

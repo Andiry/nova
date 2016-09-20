@@ -846,6 +846,7 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 	sih->log_pages = 0;
 	sih->i_mode = 0;
 	sih->pi_addr = 0;
+	sih->alter_pi_addr = 0;
 	sih->i_size = 0;
 
 	err = nova_free_inuse_inode(sb, pi->nova_ino);
