@@ -1504,6 +1504,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 						&last_setattr, trans_id);
 
 	nova_update_tail(pi, new_tail);
+	nova_update_alter_inode(sb, inode, pi);
 
 	/* Invalidate old setattr entry */
 	if (last_setattr) {

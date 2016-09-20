@@ -63,6 +63,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	sih->log_pages = 1;
 	pi->log_head = block;
 	nova_update_tail(pi, block + sizeof(struct nova_file_write_entry));
+	nova_update_alter_inode(sb, inode, pi);
 
 	return 0;
 }

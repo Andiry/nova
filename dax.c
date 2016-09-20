@@ -530,6 +530,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 		i_size_write(inode, pos);
 		sih->i_size = pos;
 	}
+	nova_update_alter_inode(sb, inode, pi);
 
 out:
 	if (ret < 0)
@@ -670,6 +671,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 
 //	set_buffer_new(bh);
+	nova_update_alter_inode(sb, inode, pi);
 
 out:
 	if (ret < 0) {

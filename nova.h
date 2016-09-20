@@ -875,6 +875,28 @@ static inline struct nova_inode *nova_get_inode(struct super_block *sb,
 	return (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
 }
 
+static inline struct nova_inode *nova_get_alter_inode(struct super_block *sb,
+	struct inode *inode)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+
+	return (struct nova_inode *)nova_get_block(sb, sih->alter_pi_addr);
+}
+
+static inline int nova_update_alter_inode(struct super_block *sb,
+	struct inode *inode, struct nova_inode *pi)
+{
+	struct nova_inode *alter_pi;
+
+	alter_pi = nova_get_alter_inode(sb, inode);
+	if (!alter_pi)
+		return -EINVAL;
+
+	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	return 0;
+}
+
 static inline unsigned long
 nova_get_numblocks(unsigned short btype)
 {
