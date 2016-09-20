@@ -212,7 +212,10 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id)
 {
+	struct nova_inode *alter_pi;
+	u64 alter_pi_addr = 0;
 	int allocated;
+	int ret;
 	u64 new_block;
 	u64 curr_p;
 	struct nova_dentry *de_entry;
@@ -263,6 +266,17 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	curr_p += NOVA_DIR_LOG_REC_LEN(2);
 	nova_update_tail(pi, curr_p);
+
+	/* Get alternate inode address */
+	ret = nova_get_alter_inode_address(sb, self_ino, &alter_pi_addr);
+	if (ret)
+		return ret;
+
+	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
+	if (!alter_pi)
+		return -EINVAL;
+
+	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
 
 	return 0;
 }

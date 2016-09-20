@@ -1118,6 +1118,8 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 extern const struct address_space_operations nova_aops_dax;
 int nova_init_inode_inuse_list(struct super_block *sb);
 extern int nova_init_inode_table(struct super_block *sb);
+int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
+	u64 *alter_pi_addr);
 unsigned long nova_get_last_blocknr(struct super_block *sb,
 	struct nova_inode_info_header *sih);
 int nova_get_inode_address(struct super_block *sb, u64 ino, int version,

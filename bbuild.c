@@ -792,7 +792,7 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	nova_ino = pi->nova_ino;
 
 	/* Get alternate inode address */
-	ret = nova_get_inode_address(sb, nova_ino, 1, &alter_pi_addr, 0, 0);
+	ret = nova_get_alter_inode_address(sb, nova_ino, &alter_pi_addr);
 	if (ret)
 		return ret;
 

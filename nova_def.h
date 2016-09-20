@@ -170,7 +170,9 @@ struct nova_super_block {
 #define NOVA_LITEJOURNAL_INO	(5)
 #define NOVA_INODELIST1_INO	(6)
 #define NOVA_SNAPSHOT_INO	(7)	/* Fake snapshot inode */
+#define NOVA_ALTER_ROOT_INO	(8)
 
+/* We have space for 12 reserved inodes */
 #define	NOVA_ROOT_INO_START	(NOVA_SB_SIZE * 2)
 
 /* Normal inode starts at 16 */

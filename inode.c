@@ -192,6 +192,23 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	return 0;
 }
 
+int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
+	u64 *alter_pi_addr)
+{
+	int ret;
+
+	if (ino == NOVA_ROOT_INO) {
+		*alter_pi_addr = NOVA_SB_SIZE * 2 +
+			 (NOVA_ALTER_ROOT_INO - NOVA_ROOT_INO) * NOVA_INODE_SIZE;
+	} else {
+		ret = nova_get_inode_address(sb, ino, 1, alter_pi_addr, 0, 0);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 static int nova_free_contiguous_log_blocks(struct super_block *sb,
 	struct nova_inode *pi, u64 head)
 {
@@ -1148,7 +1165,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	}
 
 	/* Get alternate inode address */
-	errval = nova_get_inode_address(sb, ino, 1, &alter_pi_addr, 0, 0);
+	errval = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
 	if (errval)
 		goto fail1;
 
