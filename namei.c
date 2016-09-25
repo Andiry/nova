@@ -914,6 +914,13 @@ static int nova_rename(struct inode *old_dir,
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
 
+	nova_update_alter_inode(sb, old_inode, old_pi);
+	nova_update_alter_inode(sb, old_dir, old_pidir);
+	if (old_dir != new_dir)
+		nova_update_alter_inode(sb, new_dir, new_pidir);
+	if (new_inode)
+		nova_update_alter_inode(sb, new_inode, new_pi);
+
 	nova_invalidate_link_change_entry(sb, old_linkc1);
 	nova_invalidate_link_change_entry(sb, old_linkc2);
 	nova_invalidate_dentries(sb, create_dentry1, delete_dentry1);
