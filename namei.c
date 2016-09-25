@@ -67,7 +67,8 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 }
 
 static void nova_lite_transaction_for_new_inode(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode *pidir, u64 pidir_tail)
+	struct nova_inode *pi, struct nova_inode *pidir, struct inode *inode,
+	struct inode *dir, u64 pidir_tail)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_lite_journal_entry entry;
@@ -99,6 +100,9 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
+
+	nova_update_alter_inode(sb, inode, pi);
+	nova_update_alter_inode(sb, dir, pidir);
 	NOVA_END_TIMING(create_trans_t, trans_time);
 }
 
@@ -149,7 +153,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	unlock_new_inode(inode);
 
 	pi = nova_get_block(sb, pi_addr);
-	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, inode, dir, tail);
 	NOVA_END_TIMING(create_t, create_time);
 	return err;
 out_err:
@@ -197,7 +201,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	unlock_new_inode(inode);
 
 	pi = nova_get_block(sb, pi_addr);
-	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, inode, dir, tail);
 	NOVA_END_TIMING(mknod_t, mknod_time);
 	return err;
 out_err:
@@ -273,7 +277,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, inode, dir, tail);
 out:
 	NOVA_END_TIMING(symlink_t, symlink_time);
 	return err;
@@ -591,7 +595,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 
-	nova_lite_transaction_for_new_inode(sb, pi, pidir, tail);
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, inode, dir, tail);
 out:
 	NOVA_END_TIMING(mkdir_t, mkdir_time);
 	return err;
