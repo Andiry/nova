@@ -1271,6 +1271,7 @@ void nova_dirty_inode(struct inode *inode, int flags)
 	 * we can do in-place atomic update */
 	nova_memunlock_inode(sb, pi);
 	pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	nova_update_alter_inode(sb, inode, pi);
 	nova_memlock_inode(sb, pi);
 	/* Relax atime persistency */
 	nova_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
