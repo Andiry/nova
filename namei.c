@@ -290,8 +290,9 @@ out_fail1:
 }
 
 static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode *pidir, u64 pi_tail,
-	u64 pidir_tail, int invalidate, u64 trans_id)
+	struct nova_inode *pi, struct nova_inode *pidir, struct inode *inode,
+	struct inode *dir, u64 pi_tail, u64 pidir_tail,
+	int invalidate, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_lite_journal_entry entry;
@@ -334,6 +335,9 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	spin_unlock(&sbi->journal_locks[cpu]);
+
+	nova_update_alter_inode(sb, inode, pi);
+	nova_update_alter_inode(sb, dir, pidir);
 	NOVA_END_TIMING(link_trans_t, trans_time);
 }
 
@@ -473,7 +477,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	}
 
 	d_instantiate(dentry, inode);
-	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
+	nova_lite_transaction_for_time_and_link(sb, pi, pidir, inode, dir,
 					pi_tail, pidir_tail, 0, trans_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
@@ -526,7 +530,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	if (retval)
 		goto out;
 
-	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
+	nova_lite_transaction_for_time_and_link(sb, pi, pidir, inode, dir,
 				pi_tail, pidir_tail, invalidate, trans_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
@@ -692,7 +696,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	if (err)
 		goto end_rmdir;
 
-	nova_lite_transaction_for_time_and_link(sb, pi, pidir,
+	nova_lite_transaction_for_time_and_link(sb, pi, pidir, inode, dir,
 					pi_tail, pidir_tail, 1, trans_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
