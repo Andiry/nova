@@ -23,18 +23,24 @@
 #define __NOVA_JOURNAL_H__
 #include <linux/slab.h>
 
+#define	JOURNAL_INODE	1
+#define	JOURNAL_ENTRY	2
+
 /* Lite journal */
 struct nova_lite_journal_entry {
-	/* The highest byte of addr is type */
-	u64 addrs[4];
-	u64 values[4];
-};
+	__le64 type;
+	__le64 data1;
+	__le64 data2;
+	__le32 padding;
+	__le32 csum;
+} __attribute((__packed__));
 
+u64 nova_create_inode_transaction(struct super_block *sb,
+	struct inode *inode1, struct inode *inode2, int cpu);
+u64 nova_create_rename_transaction(struct super_block *sb,
+	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
+	struct inode *new_dir, u64 *father_ino, int cpu);
+void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
 int nova_lite_journal_soft_init(struct super_block *sb);
 int nova_lite_journal_hard_init(struct super_block *sb);
-u64 nova_create_lite_transaction(struct super_block *sb,
-	struct nova_lite_journal_entry *dram_entry1,
-	struct nova_lite_journal_entry *dram_entry2,
-	int entries, int cpu);
-void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
 #endif    /* __NOVA_JOURNAL_H__ */

@@ -71,26 +71,15 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	struct inode *dir, u64 pidir_tail)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_lite_journal_entry entry;
 	int cpu;
 	u64 journal_tail;
 	timing_t trans_time;
 
 	NOVA_START_TIMING(create_trans_t, trans_time);
 
-	/* Commit a lite transaction */
-	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
-	entry.addrs[0] = (u64)nova_get_addr_off(sbi, &pidir->log_tail);
-	entry.addrs[0] |= (u64)8 << 56;
-	entry.values[0] = pidir->log_tail;
-
-	entry.addrs[1] = (u64)nova_get_addr_off(sbi, &pi->valid);
-	entry.addrs[1] |= (u64)1 << 56;
-	entry.values[1] = pi->valid;
-
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
-	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1, cpu);
+	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
 
 	pidir->log_tail = pidir_tail;
 	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
@@ -295,32 +284,15 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	int invalidate, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_lite_journal_entry entry;
 	u64 journal_tail;
 	int cpu;
 	timing_t trans_time;
 
 	NOVA_START_TIMING(link_trans_t, trans_time);
 
-	/* Commit a lite transaction */
-	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
-	entry.addrs[0] = (u64)nova_get_addr_off(sbi, &pi->log_tail);
-	entry.addrs[0] |= (u64)8 << 56;
-	entry.values[0] = pi->log_tail;
-
-	entry.addrs[1] = (u64)nova_get_addr_off(sbi, &pidir->log_tail);
-	entry.addrs[1] |= (u64)8 << 56;
-	entry.values[1] = pidir->log_tail;
-
-	if (invalidate) {
-		entry.addrs[2] = (u64)nova_get_addr_off(sbi, &pi->valid);
-		entry.addrs[2] |= (u64)1 << 56;
-		entry.values[2] = pi->valid;
-	}
-
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
-	journal_tail = nova_create_lite_transaction(sb, &entry, NULL, 1, cpu);
+	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
 
 	pi->log_tail = pi_tail;
 	nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
@@ -721,7 +693,6 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *old_pi = NULL, *new_pi = NULL;
 	struct nova_inode *new_pidir = NULL, *old_pidir = NULL;
-	struct nova_lite_journal_entry entry, entry1;
 	struct nova_dentry *father_entry = NULL;
 	char *head_addr = NULL;
 	u64 old_tail = 0, new_tail = 0;
@@ -731,7 +702,6 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_dentry *create_dentry2 = NULL, *delete_dentry2;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
-	int entries = 0;
 	int cpu;
 	int change_parent = 0;
 	u64 journal_tail;
@@ -837,53 +807,13 @@ static int nova_rename(struct inode *old_dir,
 			goto out;
 	}
 
-	entries = 1;
-	memset(&entry, 0, sizeof(struct nova_lite_journal_entry));
-
-	entry.addrs[0] = (u64)nova_get_addr_off(sbi, &old_pi->log_tail);
-	entry.addrs[0] |= (u64)8 << 56;
-	entry.values[0] = old_pi->log_tail;
-
-	entry.addrs[1] = (u64)nova_get_addr_off(sbi, &old_pidir->log_tail);
-	entry.addrs[1] |= (u64)8 << 56;
-	entry.values[1] = old_pidir->log_tail;
-
-	if (old_dir != new_dir) {
-		entry.addrs[2] = (u64)nova_get_addr_off(sbi,
-						&new_pidir->log_tail);
-		entry.addrs[2] |= (u64)8 << 56;
-		entry.values[2] = new_pidir->log_tail;
-
-		if (change_parent && father_entry) {
-			entry.addrs[3] = (u64)nova_get_addr_off(sbi,
-						&father_entry->ino);
-			entry.addrs[3] |= (u64)8 << 56;
-			entry.values[3] = father_entry->ino;
-		}
-	}
-
-	if (new_inode) {
-		entries++;
-		memset(&entry1, 0, sizeof(struct nova_lite_journal_entry));
-
-		entry1.addrs[0] = (u64)nova_get_addr_off(sbi,
-						&new_pi->log_tail);
-		entry1.addrs[0] |= (u64)8 << 56;
-		entry1.values[0] = new_pi->log_tail;
-
-		if (!new_inode->i_nlink) {
-			entry1.addrs[1] = (u64)nova_get_addr_off(sbi,
-							&new_pi->valid);
-			entry1.addrs[1] |= (u64)1 << 56;
-			entry1.values[1] = new_pi->valid;
-		}
-
-	}
-
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
-	journal_tail = nova_create_lite_transaction(sb, &entry, &entry1,
-							entries, cpu);
+	journal_tail = nova_create_rename_transaction(sb, old_inode, old_dir,
+				new_inode,
+				old_dir != new_dir ? new_dir : NULL,
+				father_entry ? &father_entry->ino : NULL,
+				cpu);
 
 	old_pi->log_tail = old_pi_tail;
 	nova_flush_buffer(&old_pi->log_tail, CACHELINE_SIZE, 0);
@@ -913,6 +843,7 @@ static int nova_rename(struct inode *old_dir,
 	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
+	spin_unlock(&sbi->journal_locks[cpu]);
 
 	nova_update_alter_inode(sb, old_inode, old_pi);
 	nova_update_alter_inode(sb, old_dir, old_pidir);
@@ -925,8 +856,6 @@ static int nova_rename(struct inode *old_dir,
 	nova_invalidate_link_change_entry(sb, old_linkc2);
 	nova_invalidate_dentries(sb, create_dentry1, delete_dentry1);
 	nova_invalidate_dentries(sb, create_dentry2, delete_dentry2);
-
-	spin_unlock(&sbi->journal_locks[cpu]);
 
 	NOVA_END_TIMING(rename_t, rename_time);
 	return 0;
