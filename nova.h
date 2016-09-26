@@ -316,12 +316,37 @@ static inline __le32 nova_mask_flags(umode_t mode, __le32 flags)
 		return flags & cpu_to_le32(NOVA_OTHER_FLMASK);
 }
 
-static inline int nova_calc_checksum(u8 *data, int n)
+static inline int nova_calc_sb_checksum(u8 *data, int n)
 {
 	u16 crc = 0;
 
 	crc = crc16(~0, (__u8 *)data + sizeof(__le16), n - sizeof(__le16));
 	if (*((__le16 *)data) == cpu_to_le16(crc))
+		return 0;
+	else
+		return 1;
+}
+
+static inline int nova_update_inode_checksum(struct nova_inode *pi)
+{
+	u32 crc = 0;
+
+	crc = crc32c(~0, (__u8 *)pi,
+			(sizeof(struct nova_inode) - sizeof(__le32)));
+
+	pi->csum = crc;
+	nova_flush_buffer(pi, sizeof(struct nova_inode), 1);
+	return 0;
+}
+
+static inline int nova_check_inode_checksum(struct nova_inode *pi)
+{
+	u32 crc = 0;
+
+	crc = crc32c(~0, (__u8 *)pi,
+			(sizeof(struct nova_inode) - sizeof(__le32)));
+
+	if (pi->csum == cpu_to_le32(crc))
 		return 0;
 	else
 		return 1;

@@ -445,8 +445,8 @@ int nova_check_integrity(struct super_block *sb,
 	}
 
 	/* Read the superblock */
-	if (nova_calc_checksum((u8 *)super, NOVA_SB_STATIC_SIZE(super))) {
-		if (nova_calc_checksum((u8 *)super_redund,
+	if (nova_calc_sb_checksum((u8 *)super, NOVA_SB_STATIC_SIZE(super))) {
+		if (nova_calc_sb_checksum((u8 *)super_redund,
 					NOVA_SB_STATIC_SIZE(super_redund))) {
 			printk(KERN_ERR "checksum error in super block\n");
 			goto out;

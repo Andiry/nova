@@ -115,6 +115,8 @@ struct nova_inode {
 		__le32 rdev;	/* major/minor # */
 	} dev;			/* device inode */
 
+	__le32	csum;
+
 	/* Leave 8 bytes for inode table tail pointer */
 } __attribute((__packed__));
 
