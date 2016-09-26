@@ -83,6 +83,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					&new_tail, &old_linkc, trans_id);
 		if (!ret) {
 			nova_update_tail(pi, new_tail);
+			nova_update_inode_checksum(pi);
 			nova_update_alter_inode(sb, inode, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
@@ -119,6 +120,7 @@ flags_out:
 					&new_tail, &old_linkc, trans_id);
 		if (!ret) {
 			nova_update_tail(pi, new_tail);
+			nova_update_inode_checksum(pi);
 			nova_update_alter_inode(sb, inode, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}

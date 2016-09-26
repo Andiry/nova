@@ -266,6 +266,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	curr_p += NOVA_DIR_LOG_REC_LEN(2);
 	nova_update_tail(pi, curr_p);
+	nova_update_inode_checksum(pi);
 
 	/* Get alternate inode address */
 	ret = nova_get_alter_inode_address(sb, self_ino, &alter_pi_addr);
