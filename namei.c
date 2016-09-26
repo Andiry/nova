@@ -82,8 +82,11 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
 
 	pidir->log_tail = pidir_tail;
+	nova_update_inode_checksum(pidir);
 	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
+
 	pi->valid = 1;
+	nova_update_inode_checksum(pi);
 	nova_flush_buffer(&pi->valid, CACHELINE_SIZE, 0);
 	PERSISTENT_BARRIER();
 
@@ -295,14 +298,17 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
 
 	pi->log_tail = pi_tail;
-	nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
-	pidir->log_tail = pidir_tail;
-	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
 	if (invalidate) {
 		pi->valid = 0;
 		pi->delete_trans_id = trans_id;
-		nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
 	}
+	nova_update_inode_checksum(pi);
+	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
+
+	pidir->log_tail = pidir_tail;
+	nova_update_inode_checksum(pidir);
+	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
+
 	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
@@ -816,12 +822,16 @@ static int nova_rename(struct inode *old_dir,
 				cpu);
 
 	old_pi->log_tail = old_pi_tail;
+	nova_update_inode_checksum(old_pi);
 	nova_flush_buffer(&old_pi->log_tail, CACHELINE_SIZE, 0);
+
 	old_pidir->log_tail = old_tail;
+	nova_update_inode_checksum(old_pidir);
 	nova_flush_buffer(&old_pidir->log_tail, CACHELINE_SIZE, 0);
 
 	if (old_pidir != new_pidir) {
 		new_pidir->log_tail = new_tail;
+		nova_update_inode_checksum(new_pidir);
 		nova_flush_buffer(&new_pidir->log_tail, CACHELINE_SIZE, 0);
 	}
 
@@ -832,12 +842,12 @@ static int nova_rename(struct inode *old_dir,
 
 	if (new_inode) {
 		new_pi->log_tail = new_pi_tail;
-		nova_flush_buffer(&new_pi->log_tail, CACHELINE_SIZE, 0);
 		if (!new_inode->i_nlink) {
 			new_pi->valid = 0;
 			new_pi->delete_trans_id = trans_id;
-			nova_flush_buffer(new_pi, sizeof(struct nova_inode), 0);
 		}
+		nova_update_inode_checksum(new_pi);
+		nova_flush_buffer(new_pi, sizeof(struct nova_inode), 0);
 	}
 
 	PERSISTENT_BARRIER();
