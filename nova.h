@@ -1083,7 +1083,7 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 	enum bm_type type);
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
-	u64 pi_addr, int rebuild_dir);
+	u64 ino, u64 pi_addr, int rebuild_dir);
 void nova_save_blocknode_mappings_to_log(struct super_block *sb);
 void nova_save_inode_list_to_log(struct super_block *sb);
 void nova_init_header(struct super_block *sb,
@@ -1153,6 +1153,8 @@ int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, pgoff_t pgoff);
+int nova_check_inode_integrity(struct super_block *sb, u64 ino,
+	struct nova_inode *pi, u64 alter_pi_addr);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 extern void nova_evict_inode(struct inode *inode);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);

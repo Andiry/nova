@@ -774,11 +774,10 @@ void nova_init_header(struct super_block *sb,
 }
 
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
-	u64 pi_addr, int rebuild_dir)
+	u64 ino, u64 pi_addr, int rebuild_dir)
 {
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
-	unsigned long nova_ino;
 	u64 alter_pi_addr = 0;
 	int ret;
 
@@ -786,23 +785,25 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	if (!pi)
 		NOVA_ASSERT(0);
 
-	if (pi->deleted == 1)
-		return -EINVAL;
-
-	nova_ino = pi->nova_ino;
-
 	/* Get alternate inode address */
-	ret = nova_get_alter_inode_address(sb, nova_ino, &alter_pi_addr);
+	ret = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
 	if (ret)
 		return ret;
 
-	nova_dbgv("%s: inode %lu, addr 0x%llx, valid %d, "
+	ret = nova_check_inode_integrity(sb, ino, pi, alter_pi_addr);
+	if (ret)
+		return ret;
+
+	if (pi->deleted == 1)
+		return -EINVAL;
+
+	nova_dbgv("%s: inode %llu, addr 0x%llx, valid %d, "
 			"head 0x%llx, tail 0x%llx\n",
-			__func__, nova_ino, pi_addr, pi->valid,
+			__func__, ino, pi_addr, pi->valid,
 			pi->log_head, pi->log_tail);
 
 	nova_init_header(sb, sih, __le16_to_cpu(pi->i_mode));
-	sih->ino = nova_ino;
+	sih->ino = ino;
 	sih->alter_pi_addr = alter_pi_addr;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {

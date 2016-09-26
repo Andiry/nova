@@ -872,6 +872,44 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 	return err;
 }
 
+int nova_check_inode_integrity(struct super_block *sb, u64 ino,
+	struct nova_inode *pi, u64 alter_pi_addr)
+{
+	struct nova_inode *alter_pi;
+	int diff = 0;
+	int ret;
+
+	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
+	if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
+		nova_dbg("%s: inode %llu shadow mismatch\n", __func__, ino);
+		diff = 1;
+	}
+
+	ret = nova_check_inode_checksum(pi);
+	if (ret == 0) {
+		if (diff) {
+			nova_dbg("Update shadow inode with original inode\n");
+			memcpy_to_pmem_nocache(alter_pi, pi,
+						sizeof(struct nova_inode));
+		}
+		return ret;
+	}
+
+	ret = nova_check_inode_checksum(alter_pi);
+	if (ret == 0) {
+		if (diff) {
+			nova_dbg("Update original inode with shadow inode\n");
+			memcpy_to_pmem_nocache(pi, alter_pi,
+						sizeof(struct nova_inode));
+		}
+		return ret;
+	}
+
+	/* We are in big trouble */
+	nova_err(sb, "%s: inode %llu check failure\n", __func__, ino);
+	return -EIO;
+}
+
 struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 {
 	struct nova_inode_info *si;
@@ -905,7 +943,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 		goto fail;
 	}
 
-	err = nova_rebuild_inode(sb, si, pi_addr, 1);
+	err = nova_rebuild_inode(sb, si, ino, pi_addr, 1);
 	if (err)
 		goto fail;
 
@@ -1073,7 +1111,7 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino)
 		return -EACCES;
 
 	memset(&si, 0, sizeof(struct nova_inode_info));
-	err = nova_rebuild_inode(sb, &si, pi_addr, 0);
+	err = nova_rebuild_inode(sb, &si, ino, pi_addr, 0);
 	if (err)
 		return err;
 

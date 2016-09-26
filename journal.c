@@ -54,7 +54,7 @@ static inline int nova_update_entry_checksum(struct super_block *sb,
 	return 0;
 }
 
-static inline int nova_check_entry_checksum(struct super_block *sb,
+static inline int nova_check_entry_integrity(struct super_block *sb,
 	struct nova_lite_journal_entry *entry)
 {
 	u32 crc = 0;
@@ -89,7 +89,7 @@ static int nova_check_journal_entries(struct super_block *sb,
 	temp = pair->journal_head;
 	while (temp != pair->journal_tail) {
 		entry = (struct nova_lite_journal_entry *)nova_get_block(sb, temp);
-		ret = nova_check_entry_checksum(sb, entry);
+		ret = nova_check_entry_integrity(sb, entry);
 		if (ret) {
 			nova_dbg("Entry %p checksum failure\n", entry);
 			nova_print_lite_transaction(entry);
