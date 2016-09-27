@@ -61,6 +61,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
 
 	sih->log_pages = 1;
+	sih->i_blocks = 2;
 	pi->log_head = block;
 	nova_update_tail(pi, block + sizeof(struct nova_file_write_entry));
 	nova_update_inode_checksum(pi);

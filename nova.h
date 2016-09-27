@@ -371,6 +371,7 @@ struct nova_inode_info_header {
 	unsigned short i_mode;		/* Dir or file? */
 	unsigned long log_pages;	/* Num of log pages */
 	unsigned long i_size;
+	unsigned long i_blocks;
 	unsigned long ino;
 	unsigned long pi_addr;
 	unsigned long alter_pi_addr;
@@ -956,10 +957,11 @@ static inline int nova_is_mounting(struct super_block *sb)
 }
 
 static inline void check_eof_blocks(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode)
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_inode_info_header *sih)
 {
 	if ((pi->i_flags & cpu_to_le32(NOVA_EOFBLOCKS_FL)) &&
-		(inode->i_size + sb->s_blocksize) > (le64_to_cpu(pi->i_blocks)
+		(inode->i_size + sb->s_blocksize) > (sih->i_blocks
 			<< sb->s_blocksize_bits)) {
 		pi->i_flags &= cpu_to_le32(~NOVA_EOFBLOCKS_FL);
 		nova_update_inode_checksum(pi);

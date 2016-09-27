@@ -379,7 +379,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	root_i->i_links_count = cpu_to_le16(2);
 	root_i->i_blk_type = NOVA_BLOCK_TYPE_4K;
 	root_i->i_flags = 0;
-	root_i->i_blocks = cpu_to_le64(1);
 	root_i->i_size = cpu_to_le64(sb->s_blocksize);
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
@@ -1059,7 +1058,7 @@ static int __init init_nova_fs(void)
 
 	nova_proc_root = proc_mkdir(proc_dirname, NULL);
 
-	nova_dbgv("Data structure size: inode %lu, log_page %lu, "
+	nova_dbg("Data structure size: inode %lu, log_page %lu, "
 		"file_write_entry %lu, dir_entry(max) %d, "
 		"setattr_entry %lu, link_change_entry %lu\n",
 		sizeof(struct nova_inode),

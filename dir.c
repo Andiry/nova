@@ -203,7 +203,7 @@ static u64 nova_append_dir_inode_entry(struct super_block *sb,
 
 	*curr_tail = curr_p + de_len;
 
-	dir->i_blocks = pidir->i_blocks;
+	dir->i_blocks = sih->i_blocks;
 	NOVA_END_TIMING(append_dir_entry_t, append_time);
 	return curr_p;
 }
@@ -232,7 +232,6 @@ int nova_append_dir_init_entries(struct super_block *sb,
 		return - ENOMEM;
 	}
 	pi->log_tail = pi->log_head = new_block;
-	pi->i_blocks = 1;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
@@ -544,7 +543,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			nova_get_block(sb, curr_p);
 	}
 
-	pi->i_blocks = sih->log_pages;
+	sih->i_blocks = sih->log_pages;
 
 //	nova_print_dir_tree(sb, sih, ino);
 	NOVA_END_TIMING(rebuild_dir_t, rebuild_time);

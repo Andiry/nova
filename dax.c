@@ -508,8 +508,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 
 	nova_memunlock_inode(sb, pi);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
-	le64_add_cpu(&pi->i_blocks,
-			(total_blocks << (data_bits - sb->s_blocksize_bits)));
+	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
 	nova_memlock_inode(sb, pi);
 
 	nova_update_tail(pi, temp_tail);
@@ -519,11 +518,11 @@ ssize_t nova_cow_file_write(struct file *filp,
 	if (ret)
 		goto out;
 
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	inode->i_blocks = sih->i_blocks;
 
 	ret = written;
 	NOVA_STATS_ADD(write_breaks, step);
-	nova_dbgv("blocks: %lu, %llu\n", inode->i_blocks, pi->i_blocks);
+	nova_dbgv("blocks: %lu, %lu\n", inode->i_blocks, sih->i_blocks);
 
 	*ppos = pos;
 	if (pos > inode->i_size) {
@@ -659,8 +658,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 
 	nvmm = blocknr;
 	data_bits = blk_type_to_shift[pi->i_blk_type];
-	le64_add_cpu(&pi->i_blocks,
-			(num_blocks << (data_bits - sb->s_blocksize_bits)));
+	sih->i_blocks += (num_blocks << (data_bits - sb->s_blocksize_bits));
 
 	temp_tail = curr_entry + sizeof(struct nova_file_write_entry);
 	nova_update_tail(pi, temp_tail);
@@ -669,7 +667,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	if (ret)
 		goto out;
 
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	inode->i_blocks = sih->i_blocks;
 
 //	set_buffer_new(bh);
 	nova_update_inode_checksum(pi);
@@ -892,10 +890,9 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 	nova_memunlock_inode(sb, pi);
 	data_bits = blk_type_to_shift[pi->i_blk_type];
-	le64_add_cpu(&pi->i_blocks,
-			(total_blocks << (data_bits - sb->s_blocksize_bits)));
+	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
 	nova_memlock_inode(sb, pi);
-	inode->i_blocks = le64_to_cpu(pi->i_blocks);
+	inode->i_blocks = sih->i_blocks;
 
 	*begin = begin_tail;
 	*end = temp_tail;

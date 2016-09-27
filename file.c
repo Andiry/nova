@@ -258,7 +258,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		/* Free the overlap blocks after the write is committed */
 		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
 
-		inode->i_blocks = le64_to_cpu(pi->i_blocks);
+		inode->i_blocks = sih->i_blocks;
 	}
 
 	mutex_unlock(&inode->i_mutex);

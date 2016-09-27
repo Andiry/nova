@@ -262,7 +262,6 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 		goto out_fail2;
 	}
 
-	pi->i_blocks = 2;
 	nova_block_symlink(sb, pi, inode, log_block, name_blocknr,
 				symname, len, trans_id);
 
@@ -527,7 +526,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
 	struct nova_inode *pidir, *pi;
-	struct nova_inode_info *si;
+	struct nova_inode_info *si, *sidir;
 	struct nova_inode_info_header *sih = NULL;
 	u64 pi_addr = 0;
 	u64 tail = 0;
@@ -572,7 +571,9 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
 
 	pidir = nova_get_inode(sb, dir);
-	dir->i_blocks = pidir->i_blocks;
+	sidir = NOVA_I(dir);
+	sih = &si->header;
+	dir->i_blocks = sih->i_blocks;
 	inc_nlink(dir);
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
