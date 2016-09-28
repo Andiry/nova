@@ -357,11 +357,13 @@ ssize_t nova_cow_file_write(struct file *filp,
 	int allocated = 0;
 	void* kmem;
 	u64 curr_entry;
+	u64 alter_curr_entry;
 	size_t bytes;
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
 	u64 temp_tail = 0, begin_tail = 0;
+	u64 alter_temp_tail;
 	u64 trans_id;
 	u32 time;
 
@@ -412,6 +414,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 
 	trans_id = nova_get_trans_id(sb);
 	temp_tail = pi->log_tail;
+	alter_temp_tail = pi->alter_log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -464,7 +467,8 @@ ssize_t nova_cow_file_write(struct file *filp,
 			entry_data.size = cpu_to_le64(inode->i_size);
 
 		ret = nova_append_file_write_entry(sb, pi, inode,
-					&entry_data, temp_tail, &curr_entry);
+					&entry_data, temp_tail, alter_temp_tail,
+					&curr_entry, &alter_curr_entry);
 		if (ret) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
@@ -503,6 +507,8 @@ ssize_t nova_cow_file_write(struct file *filp,
 		if (begin_tail == 0)
 			begin_tail = curr_entry;
 		temp_tail = curr_entry + sizeof(struct nova_file_write_entry);
+		alter_temp_tail = alter_curr_entry +
+					sizeof(struct nova_file_write_entry);
 	}
 
 	nova_memunlock_inode(sb, pi);
@@ -511,6 +517,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	nova_memlock_inode(sb, pi);
 
 	nova_update_tail(pi, temp_tail);
+	nova_update_alter_tail(pi, alter_temp_tail);
 
 	/* Free the overlap blocks after the write is committed */
 	ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
@@ -565,7 +572,9 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_file_write_entry entry_data;
 	u64 temp_tail = 0;
+	u64 alter_temp_tail;
 	u64 curr_entry;
+	u64 alter_curr_entry;
 	u32 time;
 	unsigned int data_bits;
 	unsigned long nvmm = 0;
@@ -648,7 +657,8 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	entry_data.size = cpu_to_le64(inode->i_size);
 
 	ret = nova_append_file_write_entry(sb, pi, inode,
-				&entry_data, pi->log_tail, &curr_entry);
+				&entry_data, pi->log_tail, pi->alter_log_tail,
+				&curr_entry, &alter_curr_entry);
 	if (ret) {
 		nova_dbg("%s: append inode entry failed\n", __func__);
 		ret = -ENOSPC;
@@ -660,7 +670,10 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	sih->i_blocks += (num_blocks << (data_bits - sb->s_blocksize_bits));
 
 	temp_tail = curr_entry + sizeof(struct nova_file_write_entry);
+	alter_temp_tail = alter_curr_entry +
+				sizeof(struct nova_file_write_entry);
 	nova_update_tail(pi, temp_tail);
+	nova_update_alter_tail(pi, alter_temp_tail);
 
 	ret = nova_reassign_file_tree(sb, pi, sih, curr_entry);
 	if (ret)

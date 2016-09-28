@@ -300,6 +300,19 @@ static inline void nova_update_tail(struct nova_inode *pi, u64 new_tail)
 	NOVA_END_TIMING(update_tail_t, update_time);
 }
 
+static inline void nova_update_alter_tail(struct nova_inode *pi, u64 new_tail)
+{
+	timing_t update_time;
+
+	NOVA_START_TIMING(update_tail_t, update_time);
+
+	PERSISTENT_BARRIER();
+	pi->alter_log_tail = new_tail;
+	nova_flush_buffer(&pi->alter_log_tail, CACHELINE_SIZE, 1);
+
+	NOVA_END_TIMING(update_tail_t, update_time);
+}
+
 /* symlink.c */
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, u64 log_block,
@@ -1190,7 +1203,7 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	int *extended);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data, u64 tail,
-	u64 *curr_entry);
+	u64 alter_tail, u64 *curr_entry, u64 *alter_curr_entry);
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih);
