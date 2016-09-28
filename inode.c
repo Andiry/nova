@@ -1496,7 +1496,8 @@ static int nova_append_setattr_entry(struct super_block *sb,
 
 	NOVA_START_TIMING(append_setattr_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
+						MAIN_LOG, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 
@@ -2043,7 +2044,8 @@ static int nova_inode_log_thorough_gc(struct super_block *sb,
 		if (!ret) {
 			extended = 0;
 			new_curr = nova_get_append_head(sb, pi, NULL,
-						new_curr, length, &extended);
+						new_curr, length, MAIN_LOG,
+						&extended);
 			if (extended)
 				blocks++;
 			/* Copy entry to the new log */
@@ -2208,7 +2210,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 }
 
 static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, u64 curr_p)
+	struct nova_inode_info_header *sih, u64 curr_p, int log_id)
 {
 	u64 new_block;
 	int allocated;
@@ -2287,7 +2289,8 @@ static u64 nova_append_one_log_page(struct super_block *sb,
 }
 
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, u64 tail, size_t size, int *extended)
+	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
+	int *extended)
 {
 	u64 curr_p;
 
@@ -2302,7 +2305,8 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 			nova_set_next_page_flag(sb, curr_p);
 
 		if (sih) {
-			curr_p = nova_extend_inode_log(sb, pi, sih, curr_p);
+			curr_p = nova_extend_inode_log(sb, pi, sih, curr_p,
+								log_id);
 		} else {
 			curr_p = nova_append_one_log_page(sb, pi, curr_p);
 			/* For thorough GC */
@@ -2318,7 +2322,7 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 		curr_p = next_log_page(sb, curr_p);
 	}
 
-	return  curr_p;
+	return curr_p;
 }
 
 /*
@@ -2341,7 +2345,8 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
+						MAIN_LOG, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 

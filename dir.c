@@ -164,7 +164,8 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 
 	NOVA_START_TIMING(append_dir_entry_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pidir, sih, tail, size, &extended);
+	curr_p = nova_get_append_head(sb, pidir, sih, tail, size,
+						MAIN_LOG, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 

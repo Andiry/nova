@@ -358,7 +358,8 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
 
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
+						MAIN_LOG, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 

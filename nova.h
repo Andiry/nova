@@ -147,6 +147,9 @@ extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
 /* ======================= Log entry ========================= */
 /* Inode entry in the log */
 
+#define	MAIN_LOG	0
+#define	ALTER_LOG	1
+
 #define	INVALID_MASK	4095
 #define	BLOCK_OFF(p)	((p) & ~INVALID_MASK)
 
@@ -1183,7 +1186,7 @@ int nova_delete_file_tree(struct super_block *sb,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
 	bool delete_dead, u64 trasn_id);
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih, u64 tail, size_t size,
+	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
 	int *extended);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data, u64 tail,
