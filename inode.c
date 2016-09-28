@@ -1482,14 +1482,14 @@ out:
 }
 
 /* Returns new tail after append */
-static u64 nova_append_setattr_entry(struct super_block *sb,
+static int nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	u64 tail, u64 *last_setattr, u64 trans_id)
+	u64 tail, u64 *new_tail, u64 *last_setattr, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_setattr_logentry *entry;
-	u64 curr_p, new_tail = 0;
+	u64 curr_p;
 	int extended = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
@@ -1498,7 +1498,7 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
-		BUG();
+		return -ENOSPC;
 
 	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
 				__func__, inode->i_ino, curr_p);
@@ -1506,12 +1506,12 @@ static u64 nova_append_setattr_entry(struct super_block *sb,
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
 	nova_update_setattr_entry(inode, entry, attr, trans_id);
-	new_tail = curr_p + size;
+	*new_tail = curr_p + size;
 	*last_setattr = sih->last_setattr;
 	sih->last_setattr = curr_p;
 
 	NOVA_END_TIMING(append_setattr_t, append_time);
-	return new_tail;
+	return 0;
 }
 
 int nova_notify_change(struct dentry *dentry, struct iattr *attr)
@@ -1556,8 +1556,12 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 
 	trans_id = nova_get_trans_id(sb);
 	/* We are holding i_mutex so OK to append the log */
-	new_tail = nova_append_setattr_entry(sb, pi, inode, attr, 0,
+	ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, &new_tail,
 						&last_setattr, trans_id);
+	if (ret) {
+		nova_dbg("%s: append setattr entry failure\n", __func__);
+		return ret;
+	}
 
 	nova_update_tail(pi, new_tail);
 	nova_update_inode_checksum(pi);
@@ -2323,8 +2327,9 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
  * We cannot update pi->log_tail here because a transaction may contain
  * multiple entries.
  */
-u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, struct nova_file_write_entry *data, u64 tail)
+int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, struct nova_file_write_entry *data, u64 tail,
+	u64 *curr_entry)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -2338,7 +2343,7 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
-		return curr_p;
+		return -ENOSPC;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, curr_p);
 	nova_update_entry_csum(data);
@@ -2349,9 +2354,10 @@ u64 nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT, entry->size, entry->csum);
 	/* entry->invalid is set to 0 */
+	*curr_entry = curr_p;
 
 	NOVA_END_TIMING(append_file_entry_t, append_time);
-	return curr_p;
+	return 0;
 }
 
 void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)

@@ -463,14 +463,13 @@ ssize_t nova_cow_file_write(struct file *filp,
 		else
 			entry_data.size = cpu_to_le64(inode->i_size);
 
-		curr_entry = nova_append_file_write_entry(sb, pi, inode,
-							&entry_data, temp_tail);
-		if (curr_entry == 0) {
+		ret = nova_append_file_write_entry(sb, pi, inode,
+					&entry_data, temp_tail, &curr_entry);
+		if (ret) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
 			goto out;
 		}
-
 
 		if ( (copied > 0) && (NOVA_SB(sb)->block_csum_base) ) {
 			csummed = copied - nova_update_cow_csum(inode, blocknr,
@@ -648,9 +647,9 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	/* Do not extend file size */
 	entry_data.size = cpu_to_le64(inode->i_size);
 
-	curr_entry = nova_append_file_write_entry(sb, pi, inode,
-						&entry_data, pi->log_tail);
-	if (curr_entry == 0) {
+	ret = nova_append_file_write_entry(sb, pi, inode,
+				&entry_data, pi->log_tail, &curr_entry);
+	if (ret) {
 		nova_dbg("%s: append inode entry failed\n", __func__);
 		ret = -ENOSPC;
 		goto out;
