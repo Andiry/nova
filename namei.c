@@ -360,7 +360,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size, &extended);
 	if (curr_p == 0)
-		return -ENOMEM;
+		return -ENOSPC;
 
 	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
 				__func__, inode->i_ino, curr_p);
