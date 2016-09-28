@@ -102,6 +102,9 @@ struct nova_inode {
 	__le64	log_head;	/* Log head pointer */
 	__le64	log_tail;	/* Log tail pointer */
 
+	__le64	alter_log_head;	/* Alternate log head pointer */
+	__le64	alter_log_tail;	/* Alternate log tail pointer */
+
 	__le64	create_trans_id;	/* Transaction ID when create */
 	__le64	delete_trans_id;	/* Transaction ID when create */
 
