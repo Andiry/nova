@@ -285,6 +285,19 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, trans_id);
 
 	nova_update_tail(pi, new_block + length);
+
+	allocated = nova_allocate_inode_log_pages(sb, pi, 1, &new_block);
+	if (allocated != 1) {
+		nova_err(sb, "ERROR: no inode log page available\n");
+		return - ENOMEM;
+	}
+	pi->alter_log_tail = pi->alter_log_head = new_block;
+
+	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
+
+	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, trans_id);
+
+	nova_update_alter_tail(pi, new_block + length);
 	nova_update_inode_checksum(pi);
 	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
 
