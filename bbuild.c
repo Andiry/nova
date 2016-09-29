@@ -743,7 +743,8 @@ static int alloc_bm(struct super_block *sb, unsigned long initsize)
 #define MAX_PGOFF	262144
 
 struct task_ring {
-	u64 addr[512];
+	u64 addr0[512];
+	u64 addr1[512];		/* Second inode address */
 	int num;
 	int inodes_used_count;
 	u64 *entry_array;
@@ -1298,7 +1299,7 @@ static int failure_thread_func(void *data)
 	unsigned long ino_low, ino_high;
 	unsigned long last_blocknr;
 	unsigned int data_bits;
-	u64 curr;
+	u64 curr, curr1;
 	int cpuid = smp_processor_id();
 	unsigned long i;
 	unsigned long max_size = 0;
@@ -1314,7 +1315,8 @@ static int failure_thread_func(void *data)
 	nova_init_header(sb, &sih, 0);
 
 	for (count = 0; count < ring->num; count++) {
-		curr = ring->addr[count];
+		curr = ring->addr0[count];
+		curr1 = ring->addr1[count];
 		ino_low = ino_high = 0;
 
 		/*
@@ -1323,6 +1325,10 @@ static int failure_thread_func(void *data)
 		 */
 		for (i = 0; i < 512; i++)
 			set_bm((curr >> PAGE_SHIFT) + i, global_bm[cpuid],
+					BM_4K);
+
+		for (i = 0; i < 512; i++)
+			set_bm((curr1 >> PAGE_SHIFT) + i, global_bm[cpuid],
 					BM_4K);
 
 		for (i = 0; i < num_inodes_per_page; i++) {
@@ -1374,34 +1380,44 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 	unsigned long curr_addr;
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 curr;
+	int version;
 	int ret = 0;
+	int count;
 	int cpuid;
-	int ring_id;
 
-	ring_id = 0;
 	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
-		inode_table = nova_get_inode_table(sb, 0, cpuid);
-		if (!inode_table)
-			return -EINVAL;
-
-		curr = inode_table->log_head;
-		while (curr) {
-			ring = &task_rings[ring_id];
-			if (ring->num >= 512) {
-				nova_err(sb, "%s: ring size too small\n",
-						__func__);
+		ring = &task_rings[cpuid];
+		for (version = 0; version < 2; version++) {
+			inode_table = nova_get_inode_table(sb, version,
+								cpuid);
+			if (!inode_table)
 				return -EINVAL;
+
+			count = 0;
+			curr = inode_table->log_head;
+			while (curr) {
+				if (ring->num >= 512) {
+					nova_err(sb, "%s: ring size "
+						"too small\n", __func__);
+					return -EINVAL;
+				}
+
+				if (version == 0)
+					ring->addr0[count] = curr;
+				else
+					ring->addr1[count] = curr;
+
+				count++;
+
+				curr_addr = (unsigned long)nova_get_block(sb,
+								curr);
+				/* Next page resides at the last 8 bytes */
+				curr_addr += 2097152 - 8;
+				curr = *(u64 *)(curr_addr);
 			}
 
-			ring->addr[ring->num] = curr;
-			ring->num++;
-
-			ring_id = (ring_id + 1) % sbi->cpus;
-
-			curr_addr = (unsigned long)nova_get_block(sb, curr);
-			/* Next page resides at the last 8 bytes */
-			curr_addr += 2097152 - 8;
-			curr = *(u64 *)(curr_addr);
+			if (count > ring->num)
+				ring->num = count;
 		}
 	}
 
