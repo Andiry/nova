@@ -343,6 +343,23 @@ void nova_invalidate_link_change_entry(struct super_block *sb,
 	}
 }
 
+static void nova_update_link_change_entry(struct inode *inode,
+	struct nova_link_change_entry *entry, u64 trans_id)
+{
+	size_t size = sizeof(struct nova_link_change_entry);
+
+	entry->entry_type	= LINK_CHANGE;
+	entry->trans_id		= trans_id;
+	entry->invalid		= 0;
+	entry->links		= cpu_to_le16(inode->i_nlink);
+	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->flags		= cpu_to_le32(inode->i_flags);
+	entry->generation	= cpu_to_le32(inode->i_generation);
+
+	nova_update_entry_csum(entry);
+	nova_flush_buffer(entry, size, 0);
+}
+
 /* Returns new tail after append */
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, u64 tail, u64 *new_tail,
@@ -367,16 +384,8 @@ int nova_append_link_change_entry(struct super_block *sb,
 				__func__, inode->i_ino, curr_p);
 
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
-	entry->entry_type	= LINK_CHANGE;
-	entry->trans_id		= trans_id;
-	entry->invalid		= 0;
-	entry->links		= cpu_to_le16(inode->i_nlink);
-	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
-	entry->flags		= cpu_to_le32(inode->i_flags);
-	entry->generation	= cpu_to_le32(inode->i_generation);
+	nova_update_link_change_entry(inode, entry, trans_id);
 
-	nova_update_entry_csum(entry);
-	nova_flush_buffer(entry, size, 0);
 	*new_tail = curr_p + size;
 	*old_linkc = sih->last_link_change;
 	sih->last_link_change = curr_p;
