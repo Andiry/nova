@@ -190,7 +190,8 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 static int nova_append_dir_inode_entry(struct super_block *sb,
 	struct nova_inode *pidir, struct inode *dir,
 	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
-	u64 *curr_entry, int link_change, u64 trans_id)
+	u64 alter_tail, u64 *curr_entry, u64 *alter_entry,
+	int link_change, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(dir);
 	struct nova_inode_info_header *sih = &si->header;
@@ -212,6 +213,17 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	nova_update_dentry(dir, dentry, entry, ino, de_len,
 						link_change, trans_id);
 	*curr_entry = curr_p;
+
+	curr_p = nova_get_append_head(sb, pidir, sih, alter_tail, size,
+						ALTER_LOG, &extended);
+	if (curr_p == 0)
+		return -ENOSPC;
+
+	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
+
+	nova_update_dentry(dir, dentry, entry, ino, de_len,
+						link_change, trans_id);
+	*alter_entry = curr_p;
 
 	dir->i_blocks = sih->i_blocks;
 	NOVA_END_TIMING(append_dir_entry_t, append_time);
@@ -319,7 +331,8 @@ int nova_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	u64 tail, u64 *new_tail, u64 trans_id)
+	u64 tail, u64 alter_tail, u64 *new_tail, u64 *alter_new_tail,
+	u64 trans_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -332,6 +345,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	unsigned short loglen;
 	int ret;
 	u64 curr_entry;
+	u64 alter_entry;
 	timing_t add_dentry_time;
 
 	nova_dbg_verbose("%s: dir %lu new inode %llu\n",
@@ -352,8 +366,9 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 
 	loglen = NOVA_DIR_LOG_REC_LEN(namelen);
 	ret = nova_append_dir_inode_entry(sb, pidir, dir, ino,
-				dentry,	loglen, tail, &curr_entry,
-				inc_link, trans_id);
+				dentry,	loglen, tail, alter_tail,
+				&curr_entry, &alter_entry, inc_link,
+				trans_id);
 
 	if (ret) {
 		nova_dbg("%s: append dir entry failure\n", __func__);
@@ -363,6 +378,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	direntry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
 	ret = nova_insert_dir_radix_tree(sb, sih, name, namelen, direntry);
 	*new_tail = curr_entry + loglen;
+	*alter_new_tail = alter_entry + loglen;
 	NOVA_END_TIMING(add_dentry_t, add_dentry_time);
 	return ret;
 }
@@ -371,7 +387,8 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
  * already been logged for consistency
  */
 int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
-	u64 *new_tail, struct nova_dentry **create_dentry,
+	u64 alter_tail, u64 *new_tail, u64 *alter_new_tail,
+	struct nova_dentry **create_dentry,
 	struct nova_dentry **delete_dentry, u64 trans_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
@@ -382,7 +399,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 	struct qstr *entry = &dentry->d_name;
 	unsigned short loglen;
 	int ret;
-	u64 curr_entry;
+	u64 curr_entry, alter_entry;
 	timing_t remove_dentry_time;
 
 	NOVA_START_TIMING(remove_dentry_t, remove_dentry_time);
@@ -396,7 +413,8 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 
 	loglen = NOVA_DIR_LOG_REC_LEN(entry->len);
 	ret = nova_append_dir_inode_entry(sb, pidir, dir, 0,
-				dentry, loglen, tail, &curr_entry,
+				dentry, loglen, tail, alter_tail,
+				&curr_entry, &alter_entry,
 				dec_link, trans_id);
 
 	if (ret) {
@@ -408,6 +426,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 	ret = nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0,
 					create_dentry);
 	*new_tail = curr_entry + loglen;
+	*alter_new_tail = alter_entry + loglen;
 	NOVA_END_TIMING(remove_dentry_t, remove_dentry_time);
 	return ret;
 }
