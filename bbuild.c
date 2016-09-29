@@ -830,21 +830,20 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	return 0;
 }
 
-static int nova_traverse_dir_inode_log(struct super_block *sb,
-	struct nova_inode *pi, struct scan_bitmap *bm)
+static int nova_traverse_inode_log(struct super_block *sb,
+	struct nova_inode *pi, struct scan_bitmap *bm, u64 head)
 {
 	struct nova_inode_log_page *curr_page;
 	u64 curr_p;
 	u64 next;
 
-	curr_p = pi->log_head;
+	curr_p = head;
+
 	if (curr_p == 0) {
-		nova_err(sb, "Dir %llu log is NULL!\n", pi->nova_ino);
+		nova_err(sb, "Inode %llu log is NULL!\n", pi->nova_ino);
 		BUG();
 	}
 
-	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, pi->log_tail);
 	BUG_ON(curr_p & (PAGE_SIZE - 1));
 	set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 
@@ -858,6 +857,13 @@ static int nova_traverse_dir_inode_log(struct super_block *sb,
 	}
 
 	return 0;
+}
+
+static void nova_traverse_dir_inode_log(struct super_block *sb,
+	struct nova_inode *pi, struct scan_bitmap *bm)
+{
+	nova_traverse_inode_log(sb, pi, bm, pi->log_head);
+	nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
 }
 
 static unsigned int nova_check_old_entry(struct super_block *sb,
@@ -1058,6 +1064,8 @@ static int nova_traverse_file_inode_log(struct super_block *sb,
 
 	btype = pi->i_blk_type;
 	data_bits = blk_type_to_shift[btype];
+
+	nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
 
 again:
 	sih->i_size = 0;
