@@ -450,6 +450,48 @@ void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode)
 	nova_print_nova_log_pages(sb, sih, pi);
 }
 
+int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi)
+{
+	struct nova_inode_log_page *curr_page;
+	int count = 0;
+	int main_count;
+	int both_checked = 0;
+	u64 curr_p;
+	u64 next;
+
+	curr_p = pi->log_head;
+again:
+	if (curr_p == 0) {
+		nova_err(sb, "Inode %llu log is NULL!\n", pi->nova_ino);
+		return 0;
+	}
+
+	BUG_ON(curr_p & (PAGE_SIZE - 1));
+	count++;
+
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
+	while ((next = curr_page->page_tail.next_page) != 0) {
+		curr_p = next;
+		BUG_ON(curr_p & (PAGE_SIZE - 1));
+		curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
+								curr_p);
+		count++;
+	}
+
+	if (both_checked == 0) {
+		curr_p = pi->alter_log_head;
+		main_count = count;
+		count = 0;
+		both_checked = 1;
+		goto again;
+	}
+
+	nova_dbg("%s: main log %d pages, alter log %d pages\n",
+				__func__, main_count, count);
+
+	return 0;
+}
+
 void nova_print_free_lists(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);

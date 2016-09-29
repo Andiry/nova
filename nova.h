@@ -1284,6 +1284,7 @@ void nova_print_timing_stats(struct super_block *sb);
 void nova_clear_stats(void);
 void nova_print_inode_log(struct super_block *sb, struct inode *inode);
 void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode);
+int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi);
 void nova_print_free_lists(struct super_block *sb);
 
 #endif /* __NOVA_H */
