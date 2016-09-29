@@ -1486,12 +1486,13 @@ out:
 /* Returns new tail after append */
 static int nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	u64 tail, u64 *new_tail, u64 *last_setattr, u64 trans_id)
+	u64 tail, u64 alter_tail, u64 *new_tail, u64 *alter_new_tail,
+	u64 *last_setattr, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_setattr_logentry *entry;
-	u64 curr_p;
+	struct nova_setattr_logentry *entry, *alter_entry;
+	u64 curr_p, alter_curr_p;
 	int extended = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
@@ -1509,7 +1510,18 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
 	nova_update_setattr_entry(inode, entry, attr, trans_id);
+
+	alter_curr_p = nova_get_append_head(sb, pi, sih, alter_tail, size,
+						ALTER_LOG, &extended);
+	if (alter_curr_p == 0)
+		return -ENOSPC;
+
+	alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
+						alter_curr_p);
+	nova_update_setattr_entry(inode, alter_entry, attr, trans_id);
+
 	*new_tail = curr_p + size;
+	*alter_new_tail = alter_curr_p + size;
 	*last_setattr = sih->last_setattr;
 	sih->last_setattr = curr_p;
 
@@ -1531,7 +1543,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	u64 last_setattr = 0;
 	loff_t oldsize = inode->i_size;
-	u64 new_tail;
+	u64 new_tail, alter_new_tail;
 	u64 trans_id;
 	timing_t setattr_time;
 
@@ -1559,7 +1571,8 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 
 	trans_id = nova_get_trans_id(sb);
 	/* We are holding i_mutex so OK to append the log */
-	ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, &new_tail,
+	ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, 0,
+						&new_tail, &alter_new_tail,
 						&last_setattr, trans_id);
 	if (ret) {
 		nova_dbg("%s: append setattr entry failure\n", __func__);
@@ -1567,6 +1580,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	}
 
 	nova_update_tail(pi, new_tail);
+	nova_update_alter_tail(pi, alter_new_tail);
 	nova_update_inode_checksum(pi);
 	nova_update_alter_inode(sb, inode, pi);
 
