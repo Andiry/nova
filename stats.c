@@ -497,10 +497,8 @@ again:
 		goto again;
 	}
 
-	nova_dbg("%s: main log %d pages tail @ page %d, "
-			"alter log %d pages, tail @ page %d\n",
-			__func__, main_count, main_tail_at,
-			count, tail_at);
+	nova_dbg("Log1 %d pages, tail @ page %d\n", main_count, main_tail_at);
+	nova_dbg("Log2 %d pages, tail @ page %d\n", count, tail_at);
 
 	return 0;
 }
