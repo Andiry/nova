@@ -839,8 +839,10 @@ static int nova_rename(struct inode *old_dir,
 	if (inc_link)
 		inc_nlink(new_dir);
 
-	if (old_dir == new_dir)
+	if (old_dir == new_dir) {
 		old_tail = new_tail;
+		old_alter_tail = new_alter_tail;
+	}
 
 	err = nova_remove_dentry(old_dentry, dec_link, old_tail, old_alter_tail,
 					&old_tail, &old_alter_tail,
