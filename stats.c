@@ -455,11 +455,15 @@ int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi)
 	struct nova_inode_log_page *curr_page;
 	int count = 0;
 	int main_count;
+	int tail_at = 0;
+	int main_tail_at;
 	int both_checked = 0;
 	u64 curr_p;
+	u64 tail;
 	u64 next;
 
 	curr_p = pi->log_head;
+	tail = pi->log_tail;
 again:
 	if (curr_p == 0) {
 		nova_err(sb, "Inode %llu log is NULL!\n", pi->nova_ino);
@@ -468,6 +472,8 @@ again:
 
 	BUG_ON(curr_p & (PAGE_SIZE - 1));
 	count++;
+	if ((curr_p >> PAGE_SHIFT) == (tail >> PAGE_SHIFT))
+		tail_at = count;
 
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
 	while ((next = curr_page->page_tail.next_page) != 0) {
@@ -476,18 +482,25 @@ again:
 		curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 								curr_p);
 		count++;
+		if ((curr_p >> PAGE_SHIFT) == (tail >> PAGE_SHIFT))
+			tail_at = count;
 	}
 
 	if (both_checked == 0) {
 		curr_p = pi->alter_log_head;
+		tail = pi->alter_log_tail;
 		main_count = count;
+		main_tail_at = tail_at;
 		count = 0;
+		tail_at = 0;
 		both_checked = 1;
 		goto again;
 	}
 
-	nova_dbg("%s: main log %d pages, alter log %d pages\n",
-				__func__, main_count, count);
+	nova_dbg("%s: main log %d pages tail @ page %d, "
+			"alter log %d pages, tail @ page %d\n",
+			__func__, main_count, main_tail_at,
+			count, tail_at);
 
 	return 0;
 }
