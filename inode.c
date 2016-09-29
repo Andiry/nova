@@ -2573,7 +2573,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 {
-	u64 curr_block;
+	u64 head, alter_head;
 	int freed = 0;
 	timing_t free_time;
 
@@ -2582,13 +2582,16 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 
 	NOVA_START_TIMING(free_inode_log_t, free_time);
 
-	curr_block = pi->log_head;
+	head = pi->log_head;
+	alter_head = pi->alter_log_head;
 
 	/* The inode is invalid now, no need to call PCOMMIT */
 	pi->log_head = pi->log_tail = 0;
+	pi->alter_log_head = pi->alter_log_tail = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
-	freed = nova_free_contiguous_log_blocks(sb, pi, curr_block);
+	freed = nova_free_contiguous_log_blocks(sb, pi, head);
+	freed += nova_free_contiguous_log_blocks(sb, pi, alter_head);
 
 	NOVA_END_TIMING(free_inode_log_t, free_time);
 }
