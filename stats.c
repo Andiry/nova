@@ -454,9 +454,7 @@ int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi)
 {
 	struct nova_inode_log_page *curr_page;
 	int count = 0;
-	int main_count;
 	int tail_at = 0;
-	int main_tail_at;
 	int both_checked = 0;
 	u64 curr_p;
 	u64 tail;
@@ -487,17 +485,15 @@ again:
 	}
 
 	if (both_checked == 0) {
+		nova_dbg("Log1 %d pages, tail @ page %d\n", count, tail_at);
 		curr_p = pi->alter_log_head;
 		tail = pi->alter_log_tail;
-		main_count = count;
-		main_tail_at = tail_at;
 		count = 0;
 		tail_at = 0;
 		both_checked = 1;
 		goto again;
 	}
 
-	nova_dbg("Log1 %d pages, tail @ page %d\n", main_count, main_tail_at);
 	nova_dbg("Log2 %d pages, tail @ page %d\n", count, tail_at);
 
 	return 0;
