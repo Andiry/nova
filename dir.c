@@ -143,33 +143,12 @@ void nova_delete_dir_tree(struct super_block *sb,
 
 /* ========================= Entry operations ============================= */
 
-/*
- * Append a nova_dentry to the current nova_inode_log_page.
- * Note unlike append_file_write_entry(), this method returns the tail pointer
- * after append.
- */
-static int nova_append_dir_inode_entry(struct super_block *sb,
-	struct nova_inode *pidir, struct inode *dir,
-	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
-	u64 *curr_entry, int link_change, u64 trans_id)
+static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
+	struct nova_dentry *entry, u64 ino, unsigned short de_len,
+	int link_change, u64 trans_id)
 {
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = &si->header;
-	struct nova_dentry *entry;
-	u64 curr_p;
-	size_t size = de_len;
-	int extended = 0;
 	unsigned short links_count;
-	timing_t append_time;
 
-	NOVA_START_TIMING(append_dir_entry_t, append_time);
-
-	curr_p = nova_get_append_head(sb, pidir, sih, tail, size,
-						MAIN_LOG, &extended);
-	if (curr_p == 0)
-		return -ENOSPC;
-
-	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 	entry->entry_type = DIR_LOG;
 	entry->trans_id = trans_id;
 	entry->ino = cpu_to_le64(ino);
@@ -195,13 +174,43 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	/* Update checksum */
 	nova_update_entry_csum(entry);
 
-	nova_dbg_verbose("dir entry @ 0x%llx: ino %llu, entry len %u, "
+	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
 			"name len %u, file type %u, csum 0x%x\n",
-			curr_p, entry->ino, entry->de_len,
+			entry->ino, entry->de_len,
 			entry->name_len, entry->file_type, entry->csum);
 
 	nova_flush_buffer(entry, de_len, 0);
+}
 
+/*
+ * Append a nova_dentry to the current nova_inode_log_page.
+ * Note unlike append_file_write_entry(), this method returns the tail pointer
+ * after append.
+ */
+static int nova_append_dir_inode_entry(struct super_block *sb,
+	struct nova_inode *pidir, struct inode *dir,
+	u64 ino, struct dentry *dentry, unsigned short de_len, u64 tail,
+	u64 *curr_entry, int link_change, u64 trans_id)
+{
+	struct nova_inode_info *si = NOVA_I(dir);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_dentry *entry;
+	u64 curr_p;
+	size_t size = de_len;
+	int extended = 0;
+	timing_t append_time;
+
+	NOVA_START_TIMING(append_dir_entry_t, append_time);
+
+	curr_p = nova_get_append_head(sb, pidir, sih, tail, size,
+						MAIN_LOG, &extended);
+	if (curr_p == 0)
+		return -ENOSPC;
+
+	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
+
+	nova_update_dentry(dir, dentry, entry, ino, de_len,
+						link_change, trans_id);
 	*curr_entry = curr_p;
 
 	dir->i_blocks = sih->i_blocks;
