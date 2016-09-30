@@ -69,6 +69,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
 							block2);
 	memcpy_to_pmem_nocache(alter_entry, entry, length);
+	nova_update_alter_pages(sb, pi, block1, block2);
 
 	sih->log_pages = 2;
 	sih->i_blocks = 3;

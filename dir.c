@@ -313,6 +313,9 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	nova_update_inode_checksum(pi);
 	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
 
+	nova_update_alter_pages(sb, pi, pi->log_head,
+						pi->alter_log_head);
+
 	/* Get alternate inode address */
 	ret = nova_get_alter_inode_address(sb, self_ino, &alter_pi_addr);
 	if (ret)

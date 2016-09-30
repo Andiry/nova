@@ -1704,6 +1704,25 @@ static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 	return ret;
 }
 
+int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
+	u64 curr, u64 alter_curr)
+{
+	if (curr == 0 || alter_curr == 0)
+		return 0;
+
+	while (curr && alter_curr) {
+		nova_set_alter_page_address(sb, curr, alter_curr);
+		curr = next_log_page(sb, curr);
+		alter_curr = next_log_page(sb, alter_curr);
+	}
+
+	if (curr || alter_curr)
+		nova_dbg("%s: curr 0x%llx, alter_curr 0x%llx\n",
+					__func__, curr, alter_curr);
+
+	return 0;
+}
+
 static int nova_coalesce_log_pages(struct super_block *sb,
 	unsigned long prev_blocknr, unsigned long first_blocknr,
 	unsigned long num_pages)
@@ -2158,6 +2177,8 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 		memcpy_to_pmem_nocache(nova_get_block(sb, new_curr),
 				nova_get_block(sb, curr_p), LAST_ENTRY);
 
+		nova_set_alter_page_address(sb, curr_p, new_curr);
+
 		curr_p = next_log_page(sb, curr_p);
 
 		if (curr_p >> PAGE_SHIFT == pi->log_tail >> PAGE_SHIFT) {
@@ -2420,6 +2441,9 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 		if (ret)
 			return 0;
 
+		nova_update_alter_pages(sb, pi, pi->log_head,
+						pi->alter_log_head);
+
 		return pi->log_head;
 	}
 
@@ -2449,6 +2473,8 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 					sih->log_pages);
 		return 0;
 	}
+
+	nova_update_alter_pages(sb, pi, new_block, alter_new_block);
 
 	nova_inode_log_fast_gc(sb, pi, sih, curr_p,
 					new_block, alter_new_block, allocated);

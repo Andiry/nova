@@ -1219,6 +1219,8 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry);
 void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi);
+int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
+	u64 curr, u64 alter_curr);
 int nova_allocate_inode_log_pages(struct super_block *sb,
 	struct nova_inode *pi, unsigned long num_pages,
 	u64 *new_block);
