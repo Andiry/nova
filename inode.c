@@ -314,6 +314,18 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
+static void nova_invalidate_file_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry, unsigned int num_free)
+{
+	struct nova_file_write_entry shdw_entry;
+
+	shdw_entry = *entry;
+	shdw_entry.reassigned = 1;
+	shdw_entry.invalid_pages += num_free;
+	nova_update_entry_csum(&shdw_entry);
+	memcpy_to_pmem_nocache(entry, &shdw_entry, 8);
+}
+
 static unsigned int nova_free_old_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
@@ -321,7 +333,6 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 	unsigned long pgoff, unsigned int num_free,
 	bool delete_dead, u64 trans_id)
 {
-	struct nova_file_write_entry shdw_entry;
 	unsigned long old_nvmm;
 	int ret;
 
@@ -330,12 +341,6 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
 
-	shdw_entry = *entry;
-	shdw_entry.reassigned = 1;
-	nova_update_entry_csum(&shdw_entry);
-	nova_memcpy_atomic(ADDR_ALIGN(&entry->reassigned, 8),
-			ADDR_ALIGN(&shdw_entry.reassigned, 8), 8);
-
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
 				num_free, trans_id);
@@ -343,11 +348,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 			goto out;
 	}
 
-	shdw_entry = *entry;
-	shdw_entry.invalid_pages += num_free;
-	nova_update_entry_csum(&shdw_entry);
-	nova_memcpy_atomic(ADDR_ALIGN(&entry->invalid_pages, 8),
-			ADDR_ALIGN(&shdw_entry.invalid_pages, 8), 8);
+	nova_invalidate_file_write_entry(sb, entry, num_free);
 
 	nova_dbgv("%s: pgoff %lu, free %u blocks\n",
 				__func__, pgoff, num_free);
