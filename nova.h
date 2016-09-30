@@ -195,7 +195,7 @@ struct nova_file_write_entry {
 struct nova_inode_page_tail {
 	__le64	trans_id;	/* For snapshot list page */
 	__le64	padding2;
-	__le64	padding3;
+	__le64	alter_page;	/* Corresponding page in the other log */
 	__le64	next_page;
 } __attribute((__packed__));
 
@@ -1000,6 +1000,14 @@ static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 	return ((struct nova_inode_page_tail *)page_tail)->next_page;
 }
 
+static inline u64 alter_log_page(struct super_block *sb, u64 curr_p)
+{
+	void *curr_addr = nova_get_block(sb, curr_p);
+	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+					+ LAST_ENTRY;
+	return ((struct nova_inode_page_tail *)page_tail)->alter_page;
+}
+
 static inline void nova_set_next_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page, int fence)
 {
@@ -1008,6 +1016,24 @@ static inline void nova_set_next_page_address(struct super_block *sb,
 				sizeof(struct nova_inode_page_tail), 0);
 	if (fence)
 		PERSISTENT_BARRIER();
+}
+
+static inline void nova_set_alter_page_address(struct super_block *sb,
+	u64 curr, u64 alter_curr)
+{
+	struct nova_inode_log_page *curr_page;
+	struct nova_inode_log_page *alter_page;
+
+	curr_page = nova_get_block(sb, (curr & ~INVALID_MASK));
+	alter_page = nova_get_block(sb, (alter_curr & ~INVALID_MASK));
+
+	curr_page->page_tail.alter_page = alter_curr;
+	nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
+
+	alter_page->page_tail.alter_page = curr;
+	nova_flush_buffer(&alter_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
 }
 
 #define	CACHE_ALIGN(p)	((p) & ~(CACHELINE_SIZE - 1))
