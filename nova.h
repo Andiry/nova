@@ -1008,6 +1008,17 @@ static inline u64 alter_log_page(struct super_block *sb, u64 curr_p)
 	return ((struct nova_inode_page_tail *)page_tail)->alter_page;
 }
 
+static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
+{
+	u64 alter_page;
+	void *curr_addr = nova_get_block(sb, curr_p);
+	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+					+ LAST_ENTRY;
+
+	alter_page = ((struct nova_inode_page_tail *)page_tail)->alter_page;
+	return alter_page + ENTRY_LOC(curr_p);
+}
+
 static inline void nova_set_next_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page, int fence)
 {
