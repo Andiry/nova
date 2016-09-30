@@ -1529,6 +1529,35 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	return 0;
 }
 
+/* Invalidate old link change entry */
+static void nova_invalidate_setattr_entry(struct super_block *sb,
+	struct inode *inode, u64 last_setattr)
+{
+	struct nova_setattr_logentry *old_entry;
+	struct nova_setattr_logentry shdw_entry;
+	void *addr;
+
+	if (last_setattr) {
+		addr = (void *)nova_get_block(sb, last_setattr);
+		old_entry = (struct nova_setattr_logentry *)addr;
+		/* Do not invalidate setsize entries */
+		if (old_entry_freeable(sb, old_entry->trans_id) &&
+				(old_entry->attr & ATTR_SIZE) == 0) {
+			shdw_entry = *old_entry;
+			shdw_entry.invalid = 1;
+			nova_update_entry_csum(&shdw_entry);
+			nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
+					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
+			nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
+					"ino %lu, attr %u, mode 0x%x, "
+					"csum 0x%x\n", last_setattr,
+					inode->i_ino, old_entry->attr,
+					old_entry->mode, old_entry->csum);
+		}
+	}
+}
+
 int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 {
 	struct inode *inode = dentry->d_inode;
@@ -1536,9 +1565,6 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_setattr_logentry *old_entry;
-	struct nova_setattr_logentry shdw_entry;
-	void *addr;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	u64 last_setattr = 0;
@@ -1585,25 +1611,8 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	nova_update_alter_inode(sb, inode, pi);
 
 	/* Invalidate old setattr entry */
-	if (last_setattr) {
-		addr = (void *)nova_get_block(sb, last_setattr);
-		old_entry = (struct nova_setattr_logentry *)addr;
-		/* Do not invalidate setsize entries */
-		if (old_entry_freeable(sb, old_entry->trans_id) &&
-				(old_entry->attr & ATTR_SIZE) == 0) {
-			shdw_entry = *old_entry;
-			shdw_entry.invalid = 1;
-			nova_update_entry_csum(&shdw_entry);
-			nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
-					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
-
-			nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
-					"ino %lu, attr %u, mode 0x%x, "
-					"csum 0x%x\n", last_setattr,
-					inode->i_ino, old_entry->attr,
-					old_entry->mode, old_entry->csum);
-		}
-	}
+	if (last_setattr)
+		nova_invalidate_setattr_entry(sb, inode, last_setattr);
 
 	/* Only after log entry is committed, we can truncate size */
 	if ((ia_valid & ATTR_SIZE) && (attr->ia_size != oldsize ||
