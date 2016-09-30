@@ -452,49 +452,53 @@ void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode)
 
 int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi)
 {
-	struct nova_inode_log_page *curr_page;
-	int count = 0;
-	int tail_at = 0;
-	int both_checked = 0;
-	u64 curr_p;
-	u64 tail;
-	u64 next;
+	int count1 = 0;
+	int count2 = 0;
+	int tail1_at = 0;
+	int tail2_at = 0;
+	u64 curr, alter_curr;
 
-	curr_p = pi->log_head;
-	tail = pi->log_tail;
-again:
-	if (curr_p == 0) {
-		nova_err(sb, "Inode %llu log is NULL!\n", pi->nova_ino);
-		return 0;
+	curr = pi->log_head;
+	alter_curr = pi->alter_log_head;
+
+	while (curr && alter_curr) {
+		if (alter_log_page(sb, curr) != alter_curr ||
+				alter_log_page(sb, alter_curr) != curr)
+			nova_dbg("Inode %llu page %d: curr 0x%llx, "
+					"alter 0x%llx, alter_curr 0x%llx, "
+					"alter 0x%llx\n", pi->nova_ino, count1,
+					curr, alter_log_page(sb, curr),
+					alter_curr,
+					alter_log_page(sb, alter_curr));
+
+		count1++;
+		count2++;
+		if ((curr >> PAGE_SHIFT) == (pi->log_tail >> PAGE_SHIFT))
+			tail1_at = count1;
+		if ((alter_curr >> PAGE_SHIFT) ==
+				(pi->alter_log_tail >> PAGE_SHIFT))
+			tail2_at = count2;
+		curr = next_log_page(sb, curr);
+		alter_curr = next_log_page(sb, alter_curr);
 	}
 
-	BUG_ON(curr_p & (PAGE_SIZE - 1));
-	count++;
-	if ((curr_p >> PAGE_SHIFT) == (tail >> PAGE_SHIFT))
-		tail_at = count;
-
-	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
-	while ((next = curr_page->page_tail.next_page) != 0) {
-		curr_p = next;
-		BUG_ON(curr_p & (PAGE_SIZE - 1));
-		curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
-								curr_p);
-		count++;
-		if ((curr_p >> PAGE_SHIFT) == (tail >> PAGE_SHIFT))
-			tail_at = count;
+	while (curr) {
+		count1++;
+		if ((curr >> PAGE_SHIFT) == (pi->log_tail >> PAGE_SHIFT))
+			tail1_at = count1;
+		curr = next_log_page(sb, curr);
 	}
 
-	if (both_checked == 0) {
-		nova_dbg("Log1 %d pages, tail @ page %d\n", count, tail_at);
-		curr_p = pi->alter_log_head;
-		tail = pi->alter_log_tail;
-		count = 0;
-		tail_at = 0;
-		both_checked = 1;
-		goto again;
+	while (alter_curr) {
+		count2++;
+		if ((alter_curr >> PAGE_SHIFT) ==
+				(pi->alter_log_tail >> PAGE_SHIFT))
+			tail2_at = count2;
+		alter_curr = next_log_page(sb, alter_curr);
 	}
 
-	nova_dbg("Log2 %d pages, tail @ page %d\n", count, tail_at);
+	nova_dbg("Log1 %d pages, tail @ page %d\n", count1, tail1_at);
+	nova_dbg("Log2 %d pages, tail @ page %d\n", count2, tail2_at);
 
 	return 0;
 }
