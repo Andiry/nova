@@ -336,7 +336,7 @@ void nova_print_curr_log_page(struct super_block *sb, u64 curr)
 	struct nova_inode_page_tail *tail;
 	u64 start, end;
 
-	start = curr & (~INVALID_MASK);
+	start = BLOCK_OFF(curr);
 	end = PAGE_TAIL(curr);
 
 	while (start < end) {

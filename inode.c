@@ -220,7 +220,7 @@ static int nova_free_contiguous_log_blocks(struct super_block *sb,
 	int freed = 0;
 
 	while (curr_block) {
-		if (curr_block & INVALID_MASK) {
+		if (ENTRY_LOC(curr_block)) {
 			nova_dbg("%s: ERROR: invalid block %llu\n",
 					__func__, curr_block);
 			break;

@@ -200,7 +200,7 @@ struct nova_inode_page_tail {
 } __attribute((__packed__));
 
 #define	LAST_ENTRY	4064
-#define	PAGE_TAIL(p)	(((p) & ~INVALID_MASK) + LAST_ENTRY)
+#define	PAGE_TAIL(p)	(BLOCK_OFF(p) + LAST_ENTRY)
 
 /* Fit in PAGE_SIZE */
 struct	nova_inode_log_page {
@@ -995,7 +995,7 @@ enum nova_new_inode_type {
 static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 {
 	void *curr_addr = nova_get_block(sb, curr_p);
-	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
 	return ((struct nova_inode_page_tail *)page_tail)->next_page;
 }
@@ -1003,7 +1003,7 @@ static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 static inline u64 alter_log_page(struct super_block *sb, u64 curr_p)
 {
 	void *curr_addr = nova_get_block(sb, curr_p);
-	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
 	return ((struct nova_inode_page_tail *)page_tail)->alter_page;
 }
@@ -1012,7 +1012,7 @@ static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
 {
 	u64 alter_page;
 	void *curr_addr = nova_get_block(sb, curr_p);
-	unsigned long page_tail = ((unsigned long)curr_addr & ~INVALID_MASK)
+	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
 
 	alter_page = ((struct nova_inode_page_tail *)page_tail)->alter_page;
@@ -1035,8 +1035,8 @@ static inline void nova_set_alter_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode_log_page *alter_page;
 
-	curr_page = nova_get_block(sb, (curr & ~INVALID_MASK));
-	alter_page = nova_get_block(sb, (alter_curr & ~INVALID_MASK));
+	curr_page = nova_get_block(sb, BLOCK_OFF(curr));
+	alter_page = nova_get_block(sb, BLOCK_OFF(alter_curr));
 
 	curr_page->page_tail.alter_page = alter_curr;
 	nova_flush_buffer(&curr_page->page_tail,
