@@ -364,16 +364,32 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr, u64 *alter_curr)
 	return ret;
 }
 
-static void nova_invalidate_file_write_entry(struct super_block *sb,
+static int nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_file_write_entry shdw_entry;
+	u64 curr, alter_curr = 0;
+	void *alter_addr;
+	int ret;
 
+	curr = nova_get_addr_off(sbi, entry);
 	shdw_entry = *entry;
 	shdw_entry.reassigned = 1;
 	shdw_entry.invalid_pages += num_free;
 	nova_update_entry_csum(&shdw_entry);
 	memcpy_to_pmem_nocache(entry, &shdw_entry, 8);
+
+	ret = nova_check_alter_entry(sb, curr, &alter_curr);
+	if (ret) {
+		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
+		return ret;
+	}
+
+	alter_addr = nova_get_block(sb, alter_curr);
+	memcpy_to_pmem_nocache(alter_addr, &shdw_entry, 8);
+
+	return 0;
 }
 
 static unsigned int nova_free_old_entry(struct super_block *sb,
@@ -1581,32 +1597,47 @@ static int nova_append_setattr_entry(struct super_block *sb,
 }
 
 /* Invalidate old link change entry */
-static void nova_invalidate_setattr_entry(struct super_block *sb,
+static int nova_invalidate_setattr_entry(struct super_block *sb,
 	struct inode *inode, u64 last_setattr)
 {
 	struct nova_setattr_logentry *old_entry;
+	struct nova_setattr_logentry *alter_entry;
 	struct nova_setattr_logentry shdw_entry;
+	u64 alter_curr;
 	void *addr;
+	int ret;
 
-	if (last_setattr) {
-		addr = (void *)nova_get_block(sb, last_setattr);
-		old_entry = (struct nova_setattr_logentry *)addr;
-		/* Do not invalidate setsize entries */
-		if (old_entry_freeable(sb, old_entry->trans_id) &&
-				(old_entry->attr & ATTR_SIZE) == 0) {
-			shdw_entry = *old_entry;
-			shdw_entry.invalid = 1;
-			nova_update_entry_csum(&shdw_entry);
-			nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
-					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+	addr = (void *)nova_get_block(sb, last_setattr);
+	old_entry = (struct nova_setattr_logentry *)addr;
+	/* Do not invalidate setsize entries */
+	if (!old_entry_freeable(sb, old_entry->trans_id) ||
+			(old_entry->attr & ATTR_SIZE))
+		return 0;
 
-			nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
+	shdw_entry = *old_entry;
+	shdw_entry.invalid = 1;
+	nova_update_entry_csum(&shdw_entry);
+	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
+				ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
+	nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
 					"ino %lu, attr %u, mode 0x%x, "
 					"csum 0x%x\n", last_setattr,
 					inode->i_ino, old_entry->attr,
 					old_entry->mode, old_entry->csum);
-		}
+
+	ret = nova_check_alter_entry(sb, last_setattr, &alter_curr);
+	if (ret) {
+		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
+		return ret;
 	}
+
+	alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
+					alter_curr);
+	nova_memcpy_atomic(ADDR_ALIGN(&alter_entry->invalid, 8),
+				ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
+	return 0;
 }
 
 int nova_notify_change(struct dentry *dentry, struct iattr *attr)
