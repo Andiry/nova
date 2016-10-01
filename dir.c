@@ -435,24 +435,58 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 }
 
 /* Create dentry and delete dentry must be invalidated together */
-void nova_invalidate_dentries(struct super_block *sb,
+int nova_invalidate_dentries(struct super_block *sb,
 	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_dentry shdw_dentry;
+	struct nova_dentry shdw_dentry1;
+	struct nova_dentry *alter_dentry;
+	u64 create_curr, delete_curr;
+	u64 create_alter = 0, delete_alter = 0;
+	int ret;
 
-	if (create_dentry && old_entry_freeable(sb, create_dentry->trans_id)) {
-		shdw_dentry = *create_dentry;
-		shdw_dentry.invalid = 1;
-		nova_update_entry_csum(&shdw_dentry);
-		nova_memcpy_atomic(ADDR_ALIGN(&create_dentry->invalid, 8),
+	if (!create_dentry || !old_entry_freeable(sb, create_dentry->trans_id))
+		return 0;
+
+	shdw_dentry = *create_dentry;
+	shdw_dentry.invalid = 1;
+	nova_update_entry_csum(&shdw_dentry);
+	nova_memcpy_atomic(ADDR_ALIGN(&create_dentry->invalid, 8),
 				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
 
-		shdw_dentry = *delete_dentry;
-		shdw_dentry.invalid = 1;
-		nova_update_entry_csum(&shdw_dentry);
-		nova_memcpy_atomic(ADDR_ALIGN(&delete_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
+	shdw_dentry1 = *delete_dentry;
+	shdw_dentry1.invalid = 1;
+	nova_update_entry_csum(&shdw_dentry1);
+	nova_memcpy_atomic(ADDR_ALIGN(&delete_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry1.invalid, 8), 8);
+
+	create_curr = nova_get_addr_off(sbi, create_dentry);
+	delete_curr = nova_get_addr_off(sbi, delete_dentry);
+
+	ret = nova_check_alter_entry(sb, create_curr, &create_alter);
+	if (ret) {
+		nova_dbg("%s: check create alter_entry returned %d\n",
+					__func__, ret);
+		return ret;
 	}
+
+	ret = nova_check_alter_entry(sb, delete_curr, &delete_alter);
+	if (ret) {
+		nova_dbg("%s: check delete alter_entry returned %d\n",
+					__func__, ret);
+		return ret;
+	}
+
+	alter_dentry = (struct nova_dentry *)nova_get_block(sb, create_alter);
+	nova_memcpy_atomic(ADDR_ALIGN(&alter_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
+
+	alter_dentry = (struct nova_dentry *)nova_get_block(sb, delete_alter);
+	nova_memcpy_atomic(ADDR_ALIGN(&alter_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry1.invalid, 8), 8);
+
+	return 0;
 }
 
 inline int nova_replay_add_dentry(struct super_block *sb,
