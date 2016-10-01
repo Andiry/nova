@@ -153,11 +153,13 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 	entry->trans_id = trans_id;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
+	memset(((char *)entry) + de_len - 8, 0, 8);
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
 				dentry->d_name.len);
 	entry->name[dentry->d_name.len] = '\0';
 	entry->file_type = 0;
 	entry->invalid = 0;
+	entry->padding = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
 
@@ -245,6 +247,8 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
+	de_entry->padding = 0;
+	memset(de_entry->name, 0, 8);
 	strncpy(de_entry->name, ".\0", 2);
 	nova_update_entry_csum(de_entry);
 
@@ -259,6 +263,8 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
+	de_entry->padding = 0;
+	memset(de_entry->name, 0, 8);
 	strncpy(de_entry->name, "..\0", 3);
 	nova_update_entry_csum(de_entry);
 	length += NOVA_DIR_LOG_REC_LEN(2);
