@@ -2273,7 +2273,6 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 	alter_next = alter_curr_page->page_tail.next_page;
 	if (alter_next)
 		nova_free_contiguous_log_blocks(sb, pi, alter_next);
-	nova_set_next_page_flag(sb, new_curr);
 	nova_set_next_page_address(sb, alter_curr_page, alter_tail_block, 0);
 	nova_flush_buffer(alter_curr_page, PAGE_SIZE, 0);
 
