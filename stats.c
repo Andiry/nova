@@ -277,9 +277,10 @@ static inline size_t nova_print_dentry(struct super_block *sb,
 	u64 curr, struct nova_dentry *entry)
 {
 	nova_dbg("dir logentry @ 0x%llx: trans %llu, inode %llu, "
-			"namelen %u, rec len %u\n", curr,
+			"namelen %u, rec len %u, name %s\n", curr,
 			entry->trans_id, le64_to_cpu(entry->ino),
-			entry->name_len, le16_to_cpu(entry->de_len));
+			entry->name_len, le16_to_cpu(entry->de_len),
+			entry->name);
 
 	return le16_to_cpu(entry->de_len);
 }
