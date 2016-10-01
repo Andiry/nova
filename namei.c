@@ -353,15 +353,16 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 	shdw_entry = *old_entry;
 	shdw_entry.invalid = 1;
 	nova_update_entry_csum(&shdw_entry);
-	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
-					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
-
 	nova_dbg_verbose("invalidate link_change entry @ "
 					"0x%llx: links %u csum 0x%x",
 					old_link_change, old_entry->links,
 					old_entry->csum);
 
 	ret = nova_check_alter_entry(sb, old_link_change, &alter_curr);
+
+	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
+					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;

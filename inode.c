@@ -378,9 +378,10 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 	shdw_entry.reassigned = 1;
 	shdw_entry.invalid_pages += num_free;
 	nova_update_entry_csum(&shdw_entry);
-	memcpy_to_pmem_nocache(entry, &shdw_entry, 8);
 
 	ret = nova_check_alter_entry(sb, curr, &alter_curr);
+	memcpy_to_pmem_nocache(entry, &shdw_entry, 8);
+
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;
@@ -1617,9 +1618,6 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 	shdw_entry = *old_entry;
 	shdw_entry.invalid = 1;
 	nova_update_entry_csum(&shdw_entry);
-	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
-				ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
-
 	nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
 					"ino %lu, attr %u, mode 0x%x, "
 					"csum 0x%x\n", last_setattr,
@@ -1627,6 +1625,9 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 					old_entry->mode, old_entry->csum);
 
 	ret = nova_check_alter_entry(sb, last_setattr, &alter_curr);
+	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
+				ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;

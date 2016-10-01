@@ -452,19 +452,19 @@ int nova_invalidate_dentries(struct super_block *sb,
 	shdw_dentry = *create_dentry;
 	shdw_dentry.invalid = 1;
 	nova_update_entry_csum(&shdw_dentry);
-	nova_memcpy_atomic(ADDR_ALIGN(&create_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
 
 	shdw_dentry1 = *delete_dentry;
 	shdw_dentry1.invalid = 1;
 	nova_update_entry_csum(&shdw_dentry1);
-	nova_memcpy_atomic(ADDR_ALIGN(&delete_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry1.invalid, 8), 8);
 
 	create_curr = nova_get_addr_off(sbi, create_dentry);
 	delete_curr = nova_get_addr_off(sbi, delete_dentry);
 
 	ret = nova_check_alter_entry(sb, create_curr, &create_alter);
+
+	nova_memcpy_atomic(ADDR_ALIGN(&create_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
+
 	if (ret) {
 		nova_dbg("%s: check create alter_entry returned %d\n",
 					__func__, ret);
@@ -472,6 +472,10 @@ int nova_invalidate_dentries(struct super_block *sb,
 	}
 
 	ret = nova_check_alter_entry(sb, delete_curr, &delete_alter);
+
+	nova_memcpy_atomic(ADDR_ALIGN(&delete_dentry->invalid, 8),
+				ADDR_ALIGN(&shdw_dentry1.invalid, 8), 8);
+
 	if (ret) {
 		nova_dbg("%s: check delete alter_entry returned %d\n",
 					__func__, ret);
