@@ -1557,6 +1557,7 @@ static int nova_append_setattr_entry(struct super_block *sb,
 
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
+	memset(entry, 0, size);
 	nova_update_setattr_entry(inode, entry, attr, trans_id);
 
 	alter_curr_p = nova_get_append_head(sb, pi, sih, alter_tail, size,
@@ -1566,6 +1567,7 @@ static int nova_append_setattr_entry(struct super_block *sb,
 
 	alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
 						alter_curr_p);
+	memset(alter_entry, 0, size);
 	nova_update_setattr_entry(inode, alter_entry, attr, trans_id);
 
 	*new_tail = curr_p + size;

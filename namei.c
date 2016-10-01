@@ -417,6 +417,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 				__func__, inode->i_ino, curr_p);
 
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
+	memset(entry, 0, size);
 	nova_update_link_change_entry(inode, entry, trans_id);
 
 	alter_curr_p = nova_get_append_head(sb, pi, sih, alter_tail, size,
@@ -426,6 +427,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
 						alter_curr_p);
+	memset(alter_entry, 0, size);
 	nova_update_link_change_entry(inode, alter_entry, trans_id);
 
 	*new_tail = curr_p + size;
