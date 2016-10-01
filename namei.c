@@ -332,28 +332,47 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 }
 
 /* Invalidate old link change entry */
-void nova_invalidate_link_change_entry(struct super_block *sb,
+int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
 	struct nova_link_change_entry *old_entry;
+	struct nova_link_change_entry *alter_entry;
 	struct nova_link_change_entry shdw_entry;
 	void *addr;
+	u64 alter_curr;
+	int ret;
 
-	if (old_link_change) {
-		addr = (void *)nova_get_block(sb, old_link_change);
-		old_entry = (struct nova_link_change_entry *)addr;
-		if (old_entry_freeable(sb, old_entry->trans_id))
-			shdw_entry = *old_entry;
-			shdw_entry.invalid = 1;
-			nova_update_entry_csum(&shdw_entry);
-			nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
+	if (old_link_change == 0)
+		return 0;
+
+	addr = (void *)nova_get_block(sb, old_link_change);
+	old_entry = (struct nova_link_change_entry *)addr;
+	if (!old_entry_freeable(sb, old_entry->trans_id))
+		return 0;
+
+	shdw_entry = *old_entry;
+	shdw_entry.invalid = 1;
+	nova_update_entry_csum(&shdw_entry);
+	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
 					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
 
-			nova_dbg_verbose("invalidate link_change entry @ "
+	nova_dbg_verbose("invalidate link_change entry @ "
 					"0x%llx: links %u csum 0x%x",
 					old_link_change, old_entry->links,
 					old_entry->csum);
+
+	ret = nova_check_alter_entry(sb, old_link_change, &alter_curr);
+	if (ret) {
+		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
+		return ret;
 	}
+
+	alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
+					alter_curr);
+	nova_memcpy_atomic(ADDR_ALIGN(&alter_entry->invalid, 8),
+					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+
+	return 0;
 }
 
 static void nova_update_link_change_entry(struct inode *inode,
