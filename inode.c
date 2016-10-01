@@ -3015,6 +3015,64 @@ void nova_update_entry_csum(void *entry)
 
 }
 
+static bool nova_try_alter_entry(struct super_block *sb, void *entry)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	void *alter_entry;
+	u64 curr, alter_curr;
+	u8 type;
+	u16 checksum;
+	u16 entry_csum;
+	bool match;
+	size_t size;
+
+	curr = nova_get_addr_off(sbi, entry);
+	alter_curr = alter_log_entry(sb, curr);
+	alter_entry = (void *)nova_get_block(sb, alter_curr);
+
+	checksum = nova_calc_entry_csum(alter_entry);
+	type = nova_get_entry_type(alter_entry);
+	switch (type) {
+		case DIR_LOG:
+			entry_csum = ((struct nova_dentry *)
+					alter_entry)->csum;
+			size = ((struct nova_dentry *)alter_entry)->de_len;
+			break;
+		case FILE_WRITE:
+			entry_csum = ((struct nova_file_write_entry *)
+					alter_entry)->csum;
+			size = sizeof(struct nova_file_write_entry);
+			break;
+		case SET_ATTR:
+			entry_csum = ((struct nova_setattr_logentry *)
+					alter_entry)->csum;
+			size = sizeof(struct nova_setattr_logentry);
+			break;
+		case LINK_CHANGE:
+			entry_csum = ((struct nova_link_change_entry *)
+					alter_entry)->csum;
+			size = sizeof(struct nova_link_change_entry);
+			break;
+		default:
+			entry_csum = 0;
+			size = 0;
+			nova_dbg("%s: unknown or unsupported entry type (%d)"
+				" for checksum, 0x%llx\n", __func__, type,
+				(u64) alter_entry);
+			break;
+	}
+
+	match = checksum == le16_to_cpu(entry_csum);
+
+	if (!match) {
+		nova_dbg("%s failed\n", __func__);
+		return match;
+	}
+
+	memcpy_to_pmem_nocache(entry, alter_entry, size);
+	return match;
+}
+
 /* Verify the log entry checksum. */
 bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 {
@@ -3051,6 +3109,9 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 	}
 
 	match = checksum == le16_to_cpu(entry_csum);
+
+	if (!match)
+		match = nova_try_alter_entry(sb, entry);
 
 	return match;
 }
