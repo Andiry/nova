@@ -590,7 +590,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			case LINK_CHANGE:
 				link_change_entry =
 					(struct nova_link_change_entry *)addr;
-				nova_apply_link_change_entry(pi,
+				nova_apply_link_change_entry(sb, pi,
 							link_change_entry);
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
@@ -610,7 +610,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			entry->name, entry->name_len, entry->csum,
 			le16_to_cpu(entry->de_len));
 
-		if (!nova_verify_entry_csum(entry)) {
+		if (!nova_verify_entry_csum(sb, entry)) {
 			nova_err(sb, "%s: nova_dentry checksum fail"
 				" inode %llu entry addr 0x%llx\n",
 				__func__, ino, (u64) entry);

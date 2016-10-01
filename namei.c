@@ -438,13 +438,13 @@ int nova_append_link_change_entry(struct super_block *sb,
 	return 0;
 }
 
-void nova_apply_link_change_entry(struct nova_inode *pi,
+void nova_apply_link_change_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_link_change_entry *entry)
 {
 	if (entry->entry_type != LINK_CHANGE)
 		BUG();
 
-	if (!nova_verify_entry_csum(entry)) {
+	if (!nova_verify_entry_csum(sb, entry)) {
 		printk("nova error: %s: nova_link_change_entry checksum fail"
 			" inode %llu entry addr 0x%llx\n",
 			__func__, pi->nova_ino, (u64) entry);

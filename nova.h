@@ -1260,7 +1260,7 @@ int nova_assign_write_entry(struct super_block *sb,
 	bool free);
 u16 nova_calc_entry_csum(void *entry);
 void nova_update_entry_csum(void *entry);
-bool nova_verify_entry_csum(void *entry);
+bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
@@ -1278,7 +1278,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, u64 tail, u64 alter_tail,
 	u64 *new_tail, u64 *alter_new_tail, u64 *old_linkc, u64 trans_id);
-void nova_apply_link_change_entry(struct nova_inode *pi,
+void nova_apply_link_change_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 
 /* snapshot.c */

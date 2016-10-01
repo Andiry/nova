@@ -1514,7 +1514,7 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	if (entry->entry_type != SET_ATTR)
 		BUG();
 
-	if (!nova_verify_entry_csum(entry)) {
+	if (!nova_verify_entry_csum(sb, entry)) {
 		nova_err(sb, "%s: nova_setattr_logentry checksum fail"
 			" inode %llu entry addr 0x%llx\n",
 			__func__, pi->nova_ino, (u64) entry);
@@ -2798,7 +2798,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			case LINK_CHANGE:
 				link_change_entry =
 					(struct nova_link_change_entry *)addr;
-				nova_apply_link_change_entry(pi,
+				nova_apply_link_change_entry(sb, pi,
 							link_change_entry);
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
@@ -2814,7 +2814,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		entry = (struct nova_file_write_entry *)addr;
-		if (!nova_verify_entry_csum(entry)) {
+		if (!nova_verify_entry_csum(sb, entry)) {
 			nova_err(sb, "%s: nova_file_write_entry checksum fail"
 					" inode %llu entry addr 0x%llx\n",
 					__func__, ino, (u64) entry);
@@ -3016,7 +3016,7 @@ void nova_update_entry_csum(void *entry)
 }
 
 /* Verify the log entry checksum. */
-bool nova_verify_entry_csum(void *entry)
+bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 {
 	u8 type;
 	u16 checksum;
