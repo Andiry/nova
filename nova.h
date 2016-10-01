@@ -1148,6 +1148,19 @@ void nova_init_header(struct super_block *sb,
 	struct nova_inode_info_header *sih, u16 i_mode);
 int nova_recovery(struct super_block *sb);
 
+/* checksum.c */
+int nova_get_entry_csum(struct super_block *sb, void *entry,
+	u16 *entry_csum, size_t *size);
+u16 nova_calc_entry_csum(void *entry);
+void nova_update_entry_csum(void *entry);
+bool nova_verify_entry_csum(struct super_block *sb, void *entry);
+u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);
+size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
+		void *wrbuf, size_t offset, size_t bytes);
+bool nova_verify_data_csum(struct inode *inode,
+		struct nova_file_write_entry *entry, pgoff_t index,
+		unsigned long blocks);
+
 /*
  * Inodes and files operations
  */
@@ -1163,12 +1176,6 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 int nova_dax_get_block(struct inode *inode, sector_t iblock,
 	struct buffer_head *bh, int create);
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
-u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);
-size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
-		void *wrbuf, size_t offset, size_t bytes);
-bool nova_verify_data_csum(struct inode *inode,
-		struct nova_file_write_entry *entry, pgoff_t index,
-		unsigned long blocks);
 
 /* dir.c */
 extern const struct file_operations nova_dir_operations;
@@ -1258,9 +1265,6 @@ int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	bool free);
-u16 nova_calc_entry_csum(void *entry);
-void nova_update_entry_csum(void *entry);
-bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
