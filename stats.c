@@ -284,7 +284,7 @@ static inline size_t nova_print_dentry(struct super_block *sb,
 	return le16_to_cpu(entry->de_len);
 }
 
-static u64 nova_print_log_entry(struct super_block *sb, u64 curr)
+u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 {
 	void *addr;
 	size_t size;

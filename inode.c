@@ -314,6 +314,56 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
+int nova_check_alter_entry(struct super_block *sb, u64 curr, u64 *alter_curr)
+{
+	struct nova_dentry *dentry;
+	void *addr, *alter_addr;
+	u64 alter;
+	u8 type;
+	size_t size;
+	int ret = 0;
+
+	addr = (void *)nova_get_block(sb, curr);
+	type = nova_get_entry_type(addr);
+	switch (type) {
+		case SET_ATTR:
+			size = sizeof(struct nova_setattr_logentry);
+			break;
+		case LINK_CHANGE:
+			size = sizeof(struct nova_link_change_entry);
+			break;
+		case FILE_WRITE:
+			size = sizeof(struct nova_file_write_entry);
+			break;
+		case DIR_LOG:
+			dentry = (struct nova_dentry *)addr;
+			size = dentry->de_len;
+			break;
+		default:
+			nova_dbg("%s: unknown type %d, 0x%llx\n",
+						__func__, type, curr);
+			NOVA_ASSERT(0);
+			return -EINVAL;
+			break;
+	}
+
+	alter = alter_log_entry(sb, curr);
+	alter_addr = (void *)nova_get_block(sb, alter);
+	ret = memcmp(addr, alter_addr, size);
+
+	if (ret) {
+		nova_dbg("%s: alter entry dismatch\n", __func__);
+		nova_dbg("Main entry:\n");
+		nova_print_log_entry(sb, curr);
+		nova_dbg("Alter entry:\n");
+		nova_print_log_entry(sb, alter);
+		return ret;
+	}
+
+	*alter_curr = alter;
+	return ret;
+}
+
 static void nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
