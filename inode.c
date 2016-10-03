@@ -319,7 +319,7 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr, u64 *alter_curr)
 	void *addr, *alter_addr;
 	u64 alter;
 	size_t size;
-	u16 entry_csum;
+	u32 entry_csum;
 	int ret = 0;
 
 	addr = (void *)nova_get_block(sb, curr);
@@ -348,27 +348,27 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_file_write_entry shdw_entry;
 	u64 curr, alter_curr = 0;
-	void *alter_addr;
+	struct nova_file_write_entry *alter_entry;
 	int ret;
 
 	curr = nova_get_addr_off(sbi, entry);
-	shdw_entry = *entry;
-	shdw_entry.reassigned = 1;
-	shdw_entry.invalid_pages += num_free;
-	nova_update_entry_csum(&shdw_entry);
 
 	ret = nova_check_alter_entry(sb, curr, &alter_curr);
-	memcpy_to_pmem_nocache(entry, &shdw_entry, 8);
-
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;
 	}
 
-	alter_addr = nova_get_block(sb, alter_curr);
-	memcpy_to_pmem_nocache(alter_addr, &shdw_entry, 8);
+	entry->reassigned = 1;
+	entry->invalid_pages += num_free;
+	nova_update_entry_csum(entry);
+
+	alter_entry = (struct nova_file_write_entry *)
+			nova_get_block(sb, alter_curr);
+	alter_entry->reassigned = 1;
+	alter_entry->invalid_pages += num_free;
+	nova_update_entry_csum(alter_entry);
 
 	return 0;
 }
@@ -1495,8 +1495,8 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 		BUG();
 
 	if (!nova_verify_entry_csum(sb, entry)) {
-		nova_err(sb, "%s: nova_setattr_logentry checksum fail"
-			" inode %llu entry addr 0x%llx\n",
+		nova_err(sb, "%s: nova_setattr_logentry checksum fail "
+			"inode %llu entry addr 0x%llx\n",
 			__func__, pi->nova_ino, (u64) entry);
 		goto out;
 	}
@@ -1585,7 +1585,6 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 {
 	struct nova_setattr_logentry *old_entry;
 	struct nova_setattr_logentry *alter_entry;
-	struct nova_setattr_logentry shdw_entry;
 	u64 alter_curr;
 	void *addr;
 	int ret;
@@ -1597,28 +1596,24 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 			(old_entry->attr & ATTR_SIZE))
 		return 0;
 
-	shdw_entry = *old_entry;
-	shdw_entry.invalid = 1;
-	nova_update_entry_csum(&shdw_entry);
+	ret = nova_check_alter_entry(sb, last_setattr, &alter_curr);
+	if (ret) {
+		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
+		return ret;
+	}
+
+	old_entry->invalid = 1;
+	nova_update_entry_csum(old_entry);
 	nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
 					"ino %lu, attr %u, mode 0x%x, "
 					"csum 0x%x\n", last_setattr,
 					inode->i_ino, old_entry->attr,
 					old_entry->mode, old_entry->csum);
 
-	ret = nova_check_alter_entry(sb, last_setattr, &alter_curr);
-	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
-				ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
-
-	if (ret) {
-		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
-		return ret;
-	}
-
 	alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
 					alter_curr);
-	nova_memcpy_atomic(ADDR_ALIGN(&alter_entry->invalid, 8),
-				ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+	alter_entry->invalid = 1;
+	nova_update_entry_csum(alter_entry);
 
 	return 0;
 }
@@ -2796,8 +2791,8 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 		entry = (struct nova_file_write_entry *)addr;
 		if (!nova_verify_entry_csum(sb, entry)) {
-			nova_err(sb, "%s: nova_file_write_entry checksum fail"
-					" inode %llu entry addr 0x%llx\n",
+			nova_err(sb, "%s: nova_file_write_entry checksum fail "
+					"inode %llu entry addr 0x%llx\n",
 					__func__, ino, (u64) entry);
 			break;
 		}

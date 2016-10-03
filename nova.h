@@ -39,7 +39,6 @@
 #include <linux/kthread.h>
 #include <linux/buffer_head.h>
 #include <linux/uio.h>
-#include <linux/crc16.h>
 #include <linux/crc32c.h>
 #include <asm/tlbflush.h>
 #include <linux/version.h>
@@ -173,23 +172,20 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 	*(u8 *)p = type;
 }
 
-/*
- * The 'reassigned', 'invalid_pages', and 'csum' fields must be in the same
- * 64-bit word for atomic in-place updates. If their locations change the
- * nova_free_old_entry() function has to be revised accordingly.
- */
 struct nova_file_write_entry {
 	u8	entry_type;
 	u8	reassigned;
-	__le16	csum;
-	__le32	invalid_pages;
+	u8	padding[2];
 	__le32	num_pages;
-	/* For both ctime and mtime */
-	__le32	mtime;
 	__le64	block;
 	__le64	pgoff;
+	__le32	invalid_pages;
+	/* For both ctime and mtime */
+	__le32	mtime;
 	__le64	size;
 	__le64	trans_id;
+	__le32	csumpadding;
+	__le32	csum;
 } __attribute((__packed__));
 
 struct nova_inode_page_tail {
@@ -213,22 +209,17 @@ struct	nova_inode_log_page {
 /*
  * Structure of a directory log entry in NOVA.
  * Update DIR_LOG_REC_LEN if modify this struct!
- *
- * The 'invalid' and 'csum' fields must be in the same 64-bit word for atomic
- * in-place invalidation. If their locations change the invalidation function
- * has to be revised accordingly.
  */
 struct nova_dentry {
 	u8	entry_type;
-	u8	name_len;               /* length of the dentry name */
-	u8	file_type;              /* file type */
+	u8	name_len;		/* length of the dentry name */
+	u8	file_type;		/* file type */
 	u8	invalid;		/* Invalid now? */
-	__le16  padding;
-	__le16  csum;			/* entry checksum */
-	__le16	de_len;                 /* length of this dentry */
+	__le16	de_len;			/* length of this dentry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */
-	__le64	ino;                    /* inode no pointed to by this entry */
+	__le32	csum;			/* entry checksum */
+	__le64	ino;			/* inode no pointed to by this entry */
 	__le64	size;
 	__le64	trans_id;
 	char	name[NOVA_NAME_LEN + 1];	/* File name */
@@ -239,11 +230,7 @@ struct nova_dentry {
 #define NOVA_DIR_LOG_REC_LEN(name_len)	(((name_len) + 40 + NOVA_DIR_ROUND) & \
 				      ~NOVA_DIR_ROUND)
 
-/* Struct of inode attributes change log (setattr)
- *
- * The 'invalid' and 'csum' fields must be in the same 64-bit word for atomic
- * in-place invalidation. Otherwise the invalidation function has to be revised.
- */
+/* Struct of inode attributes change log (setattr) */
 struct nova_setattr_logentry {
 	u8	entry_type;
 	u8	attr;
@@ -256,26 +243,21 @@ struct nova_setattr_logentry {
 	__le64	size;
 	__le64	trans_id;
 	u8	invalid;
-	u8	paddings[5];
-	__le16	csum;		/* entry checksum, should be the last 2 bytes */
+	u8	paddings[3];
+	__le32	csum;
 } __attribute((__packed__));
 
-/* Do we need this to be 32 bytes?
- *
- * The 'invalid' and 'csum' fields must be in the same 64-bit word for atomic
- * in-place invalidation. Otherwise the invalidation function has to be revised.
- */
+/* Do we need this to be 32 bytes? */
 struct nova_link_change_entry {
 	u8	entry_type;
-	u8	padding;
+	u8	invalid;
 	__le16	links;
 	__le32	ctime;
 	__le32	flags;
 	__le32	generation;
 	__le64	trans_id;
-	u8	invalid;
-	u8	paddings[5];
-	__le16	csum;		/* entry checksum, should be the last 2 bytes */
+	__le32	csumpadding;
+	__le32	csum;
 } __attribute((__packed__));
 
 enum alloc_type {
@@ -1150,8 +1132,8 @@ int nova_recovery(struct super_block *sb);
 
 /* checksum.c */
 int nova_get_entry_csum(struct super_block *sb, void *entry,
-	u16 *entry_csum, size_t *size);
-u16 nova_calc_entry_csum(void *entry);
+	u32 *entry_csum, size_t *size);
+u32 nova_calc_entry_csum(void *entry);
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);

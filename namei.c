@@ -337,7 +337,6 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 {
 	struct nova_link_change_entry *old_entry;
 	struct nova_link_change_entry *alter_entry;
-	struct nova_link_change_entry shdw_entry;
 	void *addr;
 	u64 alter_curr;
 	int ret;
@@ -350,28 +349,23 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 	if (!old_entry_freeable(sb, old_entry->trans_id))
 		return 0;
 
-	shdw_entry = *old_entry;
-	shdw_entry.invalid = 1;
-	nova_update_entry_csum(&shdw_entry);
-	nova_dbg_verbose("invalidate link_change entry @ "
-					"0x%llx: links %u csum 0x%x",
-					old_link_change, old_entry->links,
-					old_entry->csum);
-
 	ret = nova_check_alter_entry(sb, old_link_change, &alter_curr);
-
-	nova_memcpy_atomic(ADDR_ALIGN(&old_entry->invalid, 8),
-					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
-
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;
 	}
 
+	old_entry->invalid = 1;
+	nova_update_entry_csum(old_entry);
+	nova_dbg_verbose("invalidate link_change entry @ "
+					"0x%llx: links %u csum 0x%x",
+					old_link_change, old_entry->links,
+					old_entry->csum);
+
 	alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
 					alter_curr);
-	nova_memcpy_atomic(ADDR_ALIGN(&alter_entry->invalid, 8),
-					ADDR_ALIGN(&shdw_entry.invalid, 8), 8);
+	alter_entry->invalid = 1;
+	nova_update_entry_csum(alter_entry);
 
 	return 0;
 }
@@ -447,8 +441,8 @@ void nova_apply_link_change_entry(struct super_block *sb, struct nova_inode *pi,
 		BUG();
 
 	if (!nova_verify_entry_csum(sb, entry)) {
-		printk("nova error: %s: nova_link_change_entry checksum fail"
-			" inode %llu entry addr 0x%llx\n",
+		printk("nova error: %s: nova_link_change_entry checksum fail "
+			"inode %llu entry addr 0x%llx\n",
 			__func__, pi->nova_ino, (u64) entry);
 	} else {
 		pi->i_links_count	= entry->links;

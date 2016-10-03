@@ -159,7 +159,6 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 	entry->name[dentry->d_name.len] = '\0';
 	entry->file_type = 0;
 	entry->invalid = 0;
-	entry->padding = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
 
@@ -247,7 +246,6 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
-	de_entry->padding = 0;
 	memset(de_entry->name, 0, 8);
 	strncpy(de_entry->name, ".\0", 2);
 	nova_update_entry_csum(de_entry);
@@ -263,7 +261,6 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
-	de_entry->padding = 0;
 	memset(de_entry->name, 0, 8);
 	strncpy(de_entry->name, "..\0", 3);
 	nova_update_entry_csum(de_entry);
@@ -445,8 +442,6 @@ int nova_invalidate_dentries(struct super_block *sb,
 	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_dentry shdw_dentry;
-	struct nova_dentry shdw_dentry1;
 	struct nova_dentry *alter_dentry;
 	u64 create_curr, delete_curr;
 	u64 create_alter = 0, delete_alter = 0;
@@ -455,46 +450,36 @@ int nova_invalidate_dentries(struct super_block *sb,
 	if (!create_dentry || !old_entry_freeable(sb, create_dentry->trans_id))
 		return 0;
 
-	shdw_dentry = *create_dentry;
-	shdw_dentry.invalid = 1;
-	nova_update_entry_csum(&shdw_dentry);
-
-	shdw_dentry1 = *delete_dentry;
-	shdw_dentry1.invalid = 1;
-	nova_update_entry_csum(&shdw_dentry1);
-
 	create_curr = nova_get_addr_off(sbi, create_dentry);
 	delete_curr = nova_get_addr_off(sbi, delete_dentry);
 
 	ret = nova_check_alter_entry(sb, create_curr, &create_alter);
-
-	nova_memcpy_atomic(ADDR_ALIGN(&create_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
-
 	if (ret) {
 		nova_dbg("%s: check create alter_entry returned %d\n",
 					__func__, ret);
 		return ret;
 	}
 
+	create_dentry->invalid = 1;
+	nova_update_entry_csum(create_dentry);
+
 	ret = nova_check_alter_entry(sb, delete_curr, &delete_alter);
-
-	nova_memcpy_atomic(ADDR_ALIGN(&delete_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry1.invalid, 8), 8);
-
 	if (ret) {
 		nova_dbg("%s: check delete alter_entry returned %d\n",
 					__func__, ret);
 		return ret;
 	}
 
+	delete_dentry->invalid = 1;
+	nova_update_entry_csum(delete_dentry);
+
 	alter_dentry = (struct nova_dentry *)nova_get_block(sb, create_alter);
-	nova_memcpy_atomic(ADDR_ALIGN(&alter_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry.invalid, 8), 8);
+	alter_dentry->invalid = 1;
+	nova_update_entry_csum(alter_dentry);
 
 	alter_dentry = (struct nova_dentry *)nova_get_block(sb, delete_alter);
-	nova_memcpy_atomic(ADDR_ALIGN(&alter_dentry->invalid, 8),
-				ADDR_ALIGN(&shdw_dentry1.invalid, 8), 8);
+	alter_dentry->invalid = 1;
+	nova_update_entry_csum(alter_dentry);
 
 	return 0;
 }
@@ -617,8 +602,8 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			le16_to_cpu(entry->de_len));
 
 		if (!nova_verify_entry_csum(sb, entry)) {
-			nova_err(sb, "%s: nova_dentry checksum fail"
-				" inode %llu entry addr 0x%llx\n",
+			nova_err(sb, "%s: nova_dentry checksum fail "
+				"inode %llu entry addr 0x%llx\n",
 				__func__, ino, (u64) entry);
 			break;
 		}

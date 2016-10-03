@@ -18,7 +18,7 @@
 #include "nova.h"
 
 int nova_get_entry_csum(struct super_block *sb, void *entry,
-	u16 *entry_csum, size_t *size)
+	u32 *entry_csum, size_t *size)
 {
 	int ret = 0;
 	u8 type;
@@ -58,95 +58,101 @@ int nova_get_entry_csum(struct super_block *sb, void *entry,
 }
 
 /* Calculate the entry checksum. */
-u16 nova_calc_entry_csum(void *entry)
+u32 nova_calc_entry_csum(void *entry)
 {
 	u8 type;
-	u16 checksum;
-	unsigned int entry_len;
-	struct nova_dentry dentry;
-	struct nova_file_write_entry fw_entry;
-	u8 *entry_to_check;
+	u32 csum = 0;
+	int entry_len, check_len;
+	void *csum_addr, *remain;
 
-	/* Entry is checksummed on its copy with csum set to 0,
-	 * unless csum is the last field. */
+	/* Entry is checksummed excluding its csum field. */
 	type = nova_get_entry_type(entry);
 	switch (type) {
 		/* nova_dentry has variable length due to its name. */
 		case DIR_LOG:
-			dentry = *((struct nova_dentry *) entry);
-			dentry.csum = 0;
-			entry_len = dentry.de_len;
-			entry_to_check = (u8 *) &dentry;
+			entry_len =  ((struct nova_dentry *) entry)->de_len;
+			csum_addr = &((struct nova_dentry *) entry)->csum;
 			break;
 		case FILE_WRITE:
-			fw_entry = *((struct nova_file_write_entry*) entry);
-			fw_entry.csum = 0;
 			entry_len = sizeof(struct nova_file_write_entry);
-			entry_to_check = (u8 *) &fw_entry;
+			csum_addr = &((struct nova_file_write_entry *)
+					entry)->csum;
 			break;
 		case SET_ATTR:
-			entry_len = sizeof(struct nova_setattr_logentry) -
-					NOVA_META_CSUM_LEN; // excl. csum self
-			entry_to_check = (u8 *) entry;
+			entry_len = sizeof(struct nova_setattr_logentry);
+			csum_addr = &((struct nova_setattr_logentry *)
+					entry)->csum;
 			break;
 		case LINK_CHANGE:
-			entry_len = sizeof(struct nova_link_change_entry) -
-					NOVA_META_CSUM_LEN; // excl. csum self
-			entry_to_check = (u8 *) entry;
+			entry_len = sizeof(struct nova_link_change_entry);
+			csum_addr = &((struct nova_link_change_entry *)
+					entry)->csum;
 			break;
 		default:
 			entry_len = 0;
-			entry_to_check = (u8 *) entry;
-			nova_dbg("%s: unknown or unsupported entry type (%d)"
-				" for checksum, 0x%llx\n", __func__, type,
+			csum_addr = NULL;
+			nova_dbg("%s: unknown or unsupported entry type (%d) "
+				"for checksum, 0x%llx\n", __func__, type,
 				(u64) entry);
 			break;
 	}
 
-	/* TODO: Check if the function uses accelerated instructions for CRC. */
-	checksum = crc16(~1, entry_to_check, entry_len);
+	/* TODO: Check if crc32c() uses accelerated instructions for CRC. */
+	if (entry_len) {
+		check_len = ((u8 *) csum_addr) - ((u8 *) entry);
+		csum = crc32c(NOVA_INIT_CSUM, entry, check_len);
+		check_len = entry_len - (check_len + NOVA_META_CSUM_LEN);
+		if (check_len > 0) {
+			remain = ((u8 *) csum_addr) + NOVA_META_CSUM_LEN;
+			csum = crc32c(csum, remain, check_len);
+		}
 
-	return checksum;
+		if (check_len < 0) {
+			nova_dbg("%s: checksum run-length error %d < 0 ",
+				__func__, check_len);
+		}
+	}
+
+	return csum;
 }
 
 /* Update the log entry checksum. */
 void nova_update_entry_csum(void *entry)
 {
-	u8 type = nova_get_entry_type(entry);
-	u16 checksum = nova_calc_entry_csum(entry);
+	u8  type = nova_get_entry_type(entry);
+	u32 csum = nova_calc_entry_csum(entry);
 	switch (type) {
 		case DIR_LOG:
 			((struct nova_dentry *) entry)->csum =
-					cpu_to_le16(checksum);
-			nova_dbgv("%s: update nova_dentry (%s) csum to"
-				" 0x%04x\n", __func__,
-				((struct nova_dentry *) entry)->name, checksum);
+					cpu_to_le32(csum);
+			nova_dbgv("%s: update nova_dentry (%s) csum to "
+				"0x%04x\n", __func__,
+				((struct nova_dentry *) entry)->name, csum);
 			break;
 		case FILE_WRITE:
 			((struct nova_file_write_entry *) entry)->csum =
-					cpu_to_le16(checksum);
-			nova_dbgv("%s: update nova_file_write_entry csum to"
-				" 0x%04x\n", __func__, checksum);
+					cpu_to_le32(csum);
+			nova_dbgv("%s: update nova_file_write_entry csum to "
+				"0x%04x\n", __func__, csum);
 			break;
 		case SET_ATTR:
 			((struct nova_setattr_logentry *) entry)->csum =
-					cpu_to_le16(checksum);
-			nova_dbgv("%s: update nova_setattr_logentry csum to"
-				" 0x%04x\n", __func__, checksum);
+					cpu_to_le32(csum);
+			nova_dbgv("%s: update nova_setattr_logentry csum to "
+				"0x%04x\n", __func__, csum);
 			break;
 		case LINK_CHANGE:
 			((struct nova_link_change_entry *) entry)->csum =
-					cpu_to_le16(checksum);
-			nova_dbgv("%s: update nova_link_change_entry csum to"
-				" 0x%04x\n", __func__, checksum);
+					cpu_to_le32(csum);
+			nova_dbgv("%s: update nova_link_change_entry csum to "
+				"0x%04x\n", __func__, csum);
 			break;
 		default:
-			nova_dbg("%s: unknown or unsupported entry type (%d)"
-				" for checksum, 0x%llx\n", __func__, type,
+			nova_dbg("%s: unknown or unsupported entry type (%d) "
+				"for checksum, 0x%llx\n", __func__, type,
 				(u64) entry);
 			break;
 	}
-
 }
 
 static bool nova_try_alter_entry(struct super_block *sb, void *entry)
@@ -154,8 +160,8 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *alter_entry;
 	u64 curr, alter_curr;
-	u16 checksum;
-	u16 entry_csum;
+	u32 checksum;
+	u32 entry_csum;
 	bool match;
 	size_t size;
 	int ret;
@@ -170,7 +176,7 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry)
 	if (ret)
 		return ret;
 
-	match = checksum == le16_to_cpu(entry_csum);
+	match = checksum == le32_to_cpu(entry_csum);
 
 	if (!match) {
 		nova_dbg("%s failed\n", __func__);
@@ -184,8 +190,8 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry)
 /* Verify the log entry checksum. */
 bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 {
-	u16 checksum;
-	u16 entry_csum;
+	u32 checksum;
+	u32 entry_csum;
 	size_t size;
 	bool match;
 	int ret;
@@ -196,7 +202,7 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 	if (ret)
 		return ret;
 
-	match = checksum == le16_to_cpu(entry_csum);
+	match = checksum == le32_to_cpu(entry_csum);
 
 	if (!match)
 		match = nova_try_alter_entry(sb, entry);
