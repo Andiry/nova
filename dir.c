@@ -149,11 +149,11 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 {
 	unsigned short links_count;
 
+	memset(entry, 0, de_len);
 	entry->entry_type = DIR_LOG;
 	entry->trans_id = trans_id;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
-	memset(((char *)entry) + de_len - 8, 0, 8);
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
 				dentry->d_name.len);
 	entry->name[dentry->d_name.len] = '\0';
@@ -237,34 +237,37 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 {
 	struct nova_dentry *start = de_entry;
 	unsigned int length;
+	unsigned short de_len;
 
+	de_len = NOVA_DIR_LOG_REC_LEN(1);
+	memset(de_entry, 0, de_len);
 	de_entry->entry_type = DIR_LOG;
 	de_entry->trans_id = trans_id;
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
-	de_entry->de_len = cpu_to_le16(NOVA_DIR_LOG_REC_LEN(1));
+	de_entry->de_len = cpu_to_le16(de_len);
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 1;
-	memset(de_entry->name, 0, 8);
 	strncpy(de_entry->name, ".\0", 2);
 	nova_update_entry_csum(de_entry);
 
-	length = NOVA_DIR_LOG_REC_LEN(1);
+	length = de_len;
 
 	de_entry = (struct nova_dentry *)((char *)de_entry + length);
+	de_len = NOVA_DIR_LOG_REC_LEN(2);
+	memset(de_entry, 0, de_len);
 	de_entry->entry_type = DIR_LOG;
 	de_entry->trans_id = trans_id;
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
-	de_entry->de_len = cpu_to_le16(NOVA_DIR_LOG_REC_LEN(2));
+	de_entry->de_len = cpu_to_le16(de_len);
 	de_entry->mtime = CURRENT_TIME_SEC.tv_sec;
 	de_entry->size = sb->s_blocksize;
 	de_entry->links_count = 2;
-	memset(de_entry->name, 0, 8);
 	strncpy(de_entry->name, "..\0", 3);
 	nova_update_entry_csum(de_entry);
-	length += NOVA_DIR_LOG_REC_LEN(2);
+	length += de_len;
 
 	nova_flush_buffer(start, length, 0);
 	return length;
