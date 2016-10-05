@@ -451,6 +451,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 						buf, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+		memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
 		entry_data.entry_type = FILE_WRITE;
 		entry_data.reassigned = 0;
 		entry_data.trans_id = trans_id;
@@ -643,6 +644,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	}
 
 	num_blocks = allocated;
+	memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
 	entry_data.entry_type = FILE_WRITE;
 	entry_data.reassigned = 0;
 	entry_data.trans_id = trans_id;
@@ -855,6 +857,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 							kmem, blocknr);
 		NOVA_END_TIMING(memcpy_w_wb_t, memcpy_time);
 
+		memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
 		entry_data.entry_type = FILE_WRITE;
 		entry_data.reassigned = 0;
 		entry_data.trans_id = trans_id;

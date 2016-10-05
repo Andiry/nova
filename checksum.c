@@ -62,7 +62,7 @@ u32 nova_calc_entry_csum(void *entry)
 {
 	u8 type;
 	u32 csum = 0;
-	int entry_len, check_len;
+	size_t entry_len, check_len;
 	void *csum_addr, *remain;
 
 	/* Entry is checksummed excluding its csum field. */
@@ -98,7 +98,7 @@ u32 nova_calc_entry_csum(void *entry)
 	}
 
 	/* TODO: Check if crc32c() uses accelerated instructions for CRC. */
-	if (entry_len) {
+	if (entry_len > 0) {
 		check_len = ((u8 *) csum_addr) - ((u8 *) entry);
 		csum = crc32c(NOVA_INIT_CSUM, entry, check_len);
 		check_len = entry_len - (check_len + NOVA_META_CSUM_LEN);
@@ -108,7 +108,7 @@ u32 nova_calc_entry_csum(void *entry)
 		}
 
 		if (check_len < 0) {
-			nova_dbg("%s: checksum run-length error %d < 0 ",
+			nova_dbg("%s: checksum run-length error %ld < 0",
 				__func__, check_len);
 		}
 	}
@@ -121,38 +121,48 @@ void nova_update_entry_csum(void *entry)
 {
 	u8  type = nova_get_entry_type(entry);
 	u32 csum = nova_calc_entry_csum(entry);
+	size_t entry_len;
 	switch (type) {
 		case DIR_LOG:
 			((struct nova_dentry *) entry)->csum =
 					cpu_to_le32(csum);
+			entry_len = ((struct nova_dentry *) entry)->de_len;
 			nova_dbgv("%s: update nova_dentry (%s) csum to "
-				"0x%04x\n", __func__,
+				"0x%08x\n", __func__,
 				((struct nova_dentry *) entry)->name, csum);
 			break;
 		case FILE_WRITE:
 			((struct nova_file_write_entry *) entry)->csum =
 					cpu_to_le32(csum);
+			entry_len = sizeof(struct nova_file_write_entry);
 			nova_dbgv("%s: update nova_file_write_entry csum to "
-				"0x%04x\n", __func__, csum);
+				"0x%08x\n", __func__, csum);
 			break;
 		case SET_ATTR:
 			((struct nova_setattr_logentry *) entry)->csum =
 					cpu_to_le32(csum);
+			entry_len = sizeof(struct nova_setattr_logentry);
 			nova_dbgv("%s: update nova_setattr_logentry csum to "
-				"0x%04x\n", __func__, csum);
+				"0x%08x\n", __func__, csum);
 			break;
 		case LINK_CHANGE:
 			((struct nova_link_change_entry *) entry)->csum =
 					cpu_to_le32(csum);
+			entry_len = sizeof(struct nova_link_change_entry);
 			nova_dbgv("%s: update nova_link_change_entry csum to "
-				"0x%04x\n", __func__, csum);
+				"0x%08x\n", __func__, csum);
 			break;
 		default:
+			entry_len = 0;
 			nova_dbg("%s: unknown or unsupported entry type (%d) "
 				"for checksum, 0x%llx\n", __func__, type,
 				(u64) entry);
 			break;
 	}
+
+	if (entry_len > 0)
+		nova_flush_buffer(entry, entry_len, 0);
+
 }
 
 static bool nova_try_alter_entry(struct super_block *sb, void *entry)
