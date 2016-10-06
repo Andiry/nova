@@ -431,6 +431,9 @@ struct free_list {
  * The third/fourth block contains pointers to inode tables.
  * The fifth block contains snapshot timestamps.
  * The sixth block contains snapshot infos upon umount.
+ *
+ * If data block checksum is enabled, a bunch of more blocks are reserverd for
+ * checksums and the number is derived according to the whole storage size.
  */
 #define	RESERVED_BLOCKS		6
 
@@ -439,6 +442,7 @@ struct free_list {
 #define	INODE_TABLE1_START	3
 #define	SNAPSHOT_TABLE_START	4
 #define	SNAPSHOT_INFO_START	5
+
 
 struct inode_map {
 	struct mutex inode_table_mutex;
@@ -524,8 +528,10 @@ struct nova_sb_info {
 	unsigned long per_list_blocks;
 	struct free_list shared_free_list;
 
-	/* Storage for block checksums */
-	void *block_csum_base;
+	/* Byte offset of the data block checksum storage start */
+	unsigned long data_csum_base;
+	/* Number of blocks reserved to store data block checksums */
+	unsigned long data_csum_blocks;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)
@@ -1069,15 +1075,20 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 /* Checksum methods */
-static inline void *nova_get_block_csum_addr(struct super_block *sb, u64 block)
+static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 blocknr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	void *block_csum_addr = sbi->block_csum_base;
+	void *data_csum_addr;
 
-	if (block_csum_addr)
-		block_csum_addr += NOVA_DATA_CSUM_LEN * block;
+	if (sbi->data_csum_base) {
+		data_csum_addr = (u8 *) nova_get_block(sb, sbi->data_csum_base)
+				+ NOVA_DATA_CSUM_LEN * blocknr;
+	} else {
+		data_csum_addr = NULL;
+		nova_dbg("%s: data_csum_base error!\n", __func__);
+	}
 
-	return block_csum_addr;
+	return data_csum_addr;
 }
 
 #include "wprotect.h"

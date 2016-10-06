@@ -214,8 +214,11 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 
 	match = checksum == le32_to_cpu(entry_csum);
 
-	if (!match)
+	if (!match) {
+		nova_dbg("%s: nova entry mismatch detected, trying to recover "
+			"from the alternative entry.\n", __func__);
 		match = nova_try_alter_entry(sb, entry);
+	}
 
 	return match;
 }
@@ -284,7 +287,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 						blocksize - offset - csummed);
 
 		csum      = cpu_to_le32(csum);
-		csum_addr = nova_get_block_csum_addr(sb, blocknr);
+		csum_addr = nova_get_data_csum_addr(sb, blocknr);
 		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
 
 		blocknr  += 1;
@@ -296,7 +299,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 		while (csummed + blocksize < bytes) {
 			csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
 						bufptr, blocksize));
-			csum_addr = nova_get_block_csum_addr(sb, blocknr);
+			csum_addr = nova_get_data_csum_addr(sb, blocknr);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
 						NOVA_DATA_CSUM_LEN);
 
@@ -314,7 +317,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 						blocksize - (bytes - csummed));
 
 			csum      = cpu_to_le32(csum);
-			csum_addr = nova_get_block_csum_addr(sb, blocknr);
+			csum_addr = nova_get_data_csum_addr(sb, blocknr);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
 						NOVA_DATA_CSUM_LEN);
 
@@ -360,7 +363,7 @@ bool nova_verify_data_csum(struct inode *inode,
 	for (block = 0; block < blocks; block++) {
 		csum_calc = nova_calc_data_csum(NOVA_INIT_CSUM,
 						blockptr, blocksize);
-		csum_addr = nova_get_block_csum_addr(sb, blocknr);
+		csum_addr = nova_get_data_csum_addr(sb, blocknr);
 		csum_nvmm = le32_to_cpu(*csum_addr);
 		match     = (csum_calc == csum_nvmm);
 

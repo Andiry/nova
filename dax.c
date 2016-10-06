@@ -106,7 +106,7 @@ memcpy:
 		if (nr > len - copied)
 			nr = len - copied;
 
-		if ( (!zero) && (NOVA_SB(sb)->block_csum_base) ) {
+		if ( (!zero) && (NOVA_SB(sb)->data_csum_base > 0) ) {
 			/* only whole blocks can be verified */
 			csum_blks = ((offset + nr - 1) >> PAGE_SHIFT) + 1;
 			if (!nova_verify_data_csum(inode, entry,
@@ -476,7 +476,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 			goto out;
 		}
 
-		if ( (copied > 0) && (NOVA_SB(sb)->block_csum_base) ) {
+		if ( (copied > 0) && (NOVA_SB(sb)->data_csum_base > 0) ) {
 			csummed = copied - nova_update_cow_csum(inode, blocknr,
 						(void *) buf, offset, copied);
 			if (unlikely(csummed != copied)) {
@@ -757,7 +757,7 @@ static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
 
-		if ( (copied > 0) && (NOVA_SB(sb)->block_csum_base) ) {
+		if ( (copied > 0) && (NOVA_SB(sb)->data_csum_base > 0) ) {
 			csummed = copied - nova_update_cow_csum(inode,
 				blocknr, nvmm_addr + offset, offset, copied);
 			if (unlikely(csummed != copied)) {
