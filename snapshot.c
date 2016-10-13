@@ -1456,3 +1456,9 @@ int nova_snapshot_init(struct super_block *sb)
 
 	return ret;
 }
+
+u64 nova_get_latest_snapshot_trans_id(struct super_block *sb)
+{
+    struct nova_sb_info *sbi = NOVA_SB(sb);
+    return sbi->latest_snapshot_trans_id;
+}

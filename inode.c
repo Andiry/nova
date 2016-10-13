@@ -1637,6 +1637,10 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	u64 new_tail, alter_new_tail;
 	u64 trans_id;
 	timing_t setattr_time;
+    u64 last_log = 0, alter_last_log = 0;
+    struct nova_setattr_logentry *entry = NULL;
+    struct nova_setattr_logentry *alter_entry = NULL;
+    u64 latest_snapshot_trans_id = 0;
 
 	NOVA_START_TIMING(setattr_t, setattr_time);
 	if (!pi)
@@ -1661,18 +1665,48 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		return ret;
 
 	trans_id = nova_get_trans_id(sb);
-	/* We are holding i_mutex so OK to append the log */
-	ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, 0,
-						&new_tail, &alter_new_tail,
-						&last_setattr, trans_id);
-	if (ret) {
-		nova_dbg("%s: append setattr entry failure\n", __func__);
-		return ret;
-	}
 
-	nova_update_tail(pi, new_tail);
-	nova_update_alter_tail(pi, alter_new_tail);
-	nova_update_inode_checksum(pi);
+    /*
+     * Let's try to do inplace updates.
+     * If there are currently no snapshots holding this inode,
+     * we can update the inode in place.
+     */
+    latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+
+    if (!(ia_valid & ATTR_SIZE) &&
+        (latest_snapshot_trans_id == 0 ||
+        pi->create_trans_id > latest_snapshot_trans_id)) {
+           // printk("__func__: Modifying disk inode directly, ino = %lu\n", inode->i_ino);
+            setattr_copy_to_nova_inode(inode, pi, trans_id);
+    } else if (!(ia_valid & ATTR_SIZE) &&
+               (last_log = sih->last_setattr) != 0 &&
+               (entry = (struct nova_setattr_logentry *)nova_get_block(sb, last_log)) != NULL &&
+                entry->trans_id > latest_snapshot_trans_id) {
+       // printk("__func__: Modifying last log entry for inode ino = %lu\n", inode->i_ino); 
+        memset(entry, 0, sizeof(struct nova_setattr_logentry));
+        nova_update_setattr_entry(inode, entry, attr, trans_id);
+
+        // Also update the alter inode log entry.
+        alter_last_log = alter_log_entry(sb, last_log);
+        alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb, last_log);
+        memset(alter_entry, 0, sizeof(struct nova_setattr_logentry));
+        nova_update_setattr_entry(inode, alter_entry, attr, trans_id);
+    } else {
+        // printk("__func__: Appending last log entry for inode ino = %lu\n", inode->i_ino); 
+	    /* We are holding i_mutex so OK to append the log */
+	    ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, 0,
+						                &new_tail, &alter_new_tail,
+						                &last_setattr, trans_id);
+	    if (ret) {
+		    nova_dbg("%s: append setattr entry failure\n", __func__);
+		    return ret;
+	    }
+
+	    nova_update_tail(pi, new_tail);
+	    nova_update_alter_tail(pi, alter_new_tail);
+    }
+
+    nova_update_inode_checksum(pi);
 	nova_update_alter_inode(sb, inode, pi);
 
 	/* Invalidate old setattr entry */
@@ -2906,6 +2940,19 @@ unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 	}
 
 	return 0;
+}
+
+void setattr_copy_to_nova_inode(struct inode *inode,
+                                struct nova_inode *pi,
+                                u64 trans_id) {
+	pi->i_mode  = cpu_to_le16(inode->i_mode);
+	pi->i_uid	= cpu_to_le32(i_uid_read(inode));
+	pi->i_gid	= cpu_to_le32(i_gid_read(inode));
+	pi->i_atime	= cpu_to_le32(inode->i_atime.tv_sec);
+	pi->i_ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
+	pi->i_mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
+    pi->create_trans_id = trans_id;
+
 }
 
 const struct address_space_operations nova_aops_dax = {
