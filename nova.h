@@ -500,6 +500,7 @@ struct nova_sb_info {
 	int num_snapshots;
 	int curr_snapshot;
 	u64 latest_snapshot_trans_id;
+    u64 create_snapshot_trans_id;
 
 	int mount_snapshot;
 	int mount_snapshot_index;
@@ -1300,6 +1301,7 @@ int nova_create_snapshot(struct super_block *sb);
 int nova_delete_snapshot(struct super_block *sb, int index);
 int nova_snapshot_init(struct super_block *sb);
 u64 nova_get_latest_snapshot_trans_id(struct super_block *sb);
+u64 nova_get_create_snapshot_trans_id(struct super_block *sb);
 
 /* super.c */
 extern struct super_block *nova_read_super(struct super_block *sb, void *data,

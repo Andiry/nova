@@ -1667,22 +1667,26 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	trans_id = nova_get_trans_id(sb);
 
     /*
-     * Let's try to do inplace updates.
+     * Let's try to do inplace update.
      * If there are currently no snapshots holding this inode,
-     * we can update the inode in place.
+     * we can update the inode in place. If a snapshot creation
+     * is in progress, we will use the create_snapshot_trans_id
+     * as the latest snapshot id.
      */
-    latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+    latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+
+    if (latest_snapshot_trans_id == 0)
+        latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
 
     if (!(ia_valid & ATTR_SIZE) &&
-        (latest_snapshot_trans_id == 0 ||
-        pi->create_trans_id > latest_snapshot_trans_id)) {
-           // printk("__func__: Modifying disk inode directly, ino = %lu\n", inode->i_ino);
+        pi->create_trans_id > latest_snapshot_trans_id) {
+            printk("%s : Modifying disk inode directly, ino = %lu\n", __func__, inode->i_ino);
             setattr_copy_to_nova_inode(inode, pi, trans_id);
     } else if (!(ia_valid & ATTR_SIZE) &&
                (last_log = sih->last_setattr) != 0 &&
                (entry = (struct nova_setattr_logentry *)nova_get_block(sb, last_log)) != NULL &&
                 entry->trans_id > latest_snapshot_trans_id) {
-       // printk("__func__: Modifying last log entry for inode ino = %lu\n", inode->i_ino); 
+        printk("%s : Modifying last log entry for inode ino = %lu\n", __func__, inode->i_ino); 
         memset(entry, 0, sizeof(struct nova_setattr_logentry));
         nova_update_setattr_entry(inode, entry, attr, trans_id);
 
@@ -1692,8 +1696,8 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
         memset(alter_entry, 0, sizeof(struct nova_setattr_logentry));
         nova_update_setattr_entry(inode, alter_entry, attr, trans_id);
     } else {
-        // printk("__func__: Appending last log entry for inode ino = %lu\n", inode->i_ino); 
-	    /* We are holding i_mutex so OK to append the log */
+        /* We are holding i_mutex so OK to append the log */
+        printk("%s : Appending last log entry for inode ino = %lu\n", __func__, inode->i_ino); 
 	    ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, 0,
 						                &new_tail, &alter_new_tail,
 						                &last_setattr, trans_id);
