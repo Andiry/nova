@@ -534,7 +534,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	inode->i_blocks = sih->i_blocks;
 
 	ret = written;
-	NOVA_STATS_ADD(write_breaks, step);
+	NOVA_STATS_ADD(cow_write_breaks, step);
 	nova_dbgv("blocks: %lu, %lu\n", inode->i_blocks, sih->i_blocks);
 
 	*ppos = pos;
@@ -583,7 +583,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	u64 curr_entry, alter_curr_entry;
 	size_t bytes;
 	long status = 0;
-	timing_t cow_write_time, memcpy_time;
+	timing_t inplace_write_time, memcpy_time;
 	unsigned long step = 0;
 	u64 alter_temp_tail, temp_tail, begin_tail = 0;
 	u64 trans_id;
@@ -599,7 +599,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	if (mapping_mapped(mapping))
 		return -EACCES;
 
-	NOVA_START_TIMING(cow_write_t, cow_write_time);
+	NOVA_START_TIMING(inplace_write_t, inplace_write_time);
 
 	sb_start_write(inode->i_sb);
 	if (need_mutex)
@@ -789,7 +789,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	}
 
 	ret = written;
-	NOVA_STATS_ADD(write_breaks, step);
+	NOVA_STATS_ADD(inplace_write_breaks, step);
 	nova_dbgv("blocks: %lu, %lu\n", inode->i_blocks, sih->i_blocks);
 
 	*ppos = pos;
@@ -804,8 +804,8 @@ out:
 	if (need_mutex)
 		mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
-	NOVA_END_TIMING(cow_write_t, cow_write_time);
-	NOVA_STATS_ADD(cow_write_bytes, written);
+	NOVA_END_TIMING(inplace_write_t, inplace_write_time);
+	NOVA_STATS_ADD(inplace_write_bytes, written);
 	return ret;
 }
 

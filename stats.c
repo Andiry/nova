@@ -158,8 +158,15 @@ static void nova_print_IO_stats(struct super_block *sb)
 		Countstats[cow_write_t], IOstats[cow_write_bytes],
 		Countstats[cow_write_t] ?
 			IOstats[cow_write_bytes] / Countstats[cow_write_t] : 0,
-		IOstats[write_breaks], Countstats[cow_write_t] ?
-			IOstats[write_breaks] / Countstats[cow_write_t] : 0);
+		IOstats[cow_write_breaks], Countstats[cow_write_t] ?
+			IOstats[cow_write_breaks] / Countstats[cow_write_t] : 0);
+	printk("Inplace write %llu, bytes %llu, average %llu, "
+		"write breaks %llu, average %llu\n",
+		Countstats[inplace_write_t], IOstats[inplace_write_bytes],
+		Countstats[inplace_write_t] ?
+			IOstats[inplace_write_bytes] / Countstats[inplace_write_t] : 0,
+		IOstats[inplace_write_breaks], Countstats[inplace_write_t] ?
+			IOstats[inplace_write_breaks] / Countstats[inplace_write_t] : 0);
 }
 
 void nova_get_timing_stats(void)

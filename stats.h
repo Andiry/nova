@@ -45,6 +45,7 @@ enum timing_category {
 	/* I/O operations */
 	dax_read_t,
 	cow_write_t,
+	inplace_write_t,
 	copy_to_nvmm_t,
 	dax_get_block_t,
 
@@ -97,9 +98,11 @@ enum timing_category {
 
 enum stats_category {
 	alloc_steps,
-	write_breaks,
+	cow_write_breaks,
+	inplace_write_breaks,
 	read_bytes,
 	cow_write_bytes,
+	inplace_write_bytes,
 	fast_checked_pages,
 	thorough_checked_pages,
 	fast_gc_pages,
