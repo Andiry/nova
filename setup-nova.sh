@@ -3,7 +3,7 @@
 umount /mnt/ramdisk
 umount /mnt/scratch
 rmmod nova
-insmod nova.ko measure_timing=0
+insmod nova.ko measure_timing=0 inplace_data_updates=0
 
 sleep 1
 
