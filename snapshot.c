@@ -1022,13 +1022,13 @@ int nova_create_snapshot(struct super_block *sb)
 		return 0;
 	}
 
-    /*
-     * Mark the create_snapshot_trans_id before starting the snapshot
-     * creation. We will check this during in-place updates for metadata
-     * and data, to prevent overwriting logs that might belong to a
-     * snapshot that is being created.
-     */
-    sbi->create_snapshot_trans_id = trans_id;
+	/*
+	 * Mark the create_snapshot_trans_id before starting the snapshot
+	 * creation. We will check this during in-place updates for metadata
+	 * and data, to prevent overwriting logs that might belong to a
+	 * snapshot that is being created.
+	 */
+	sbi->create_snapshot_trans_id = trans_id;
 
 	timestamp = CURRENT_TIME_SEC.tv_sec;
 
@@ -1036,8 +1036,8 @@ int nova_create_snapshot(struct super_block *sb)
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);
-        // Reset the create_snapshot_trans_id
-        sbi->create_snapshot_trans_id = 0;
+		// Reset the create_snapshot_trans_id
+		sbi->create_snapshot_trans_id = 0;
 		return ret;
 	}
 
@@ -1068,8 +1068,8 @@ int nova_create_snapshot(struct super_block *sb)
 	ret = nova_insert_snapshot_info(sb, info);
 
 out:
-    // Reset the create_snapshot_trans_id
-    sbi->create_snapshot_trans_id = 0;
+	// Reset the create_snapshot_trans_id
+	sbi->create_snapshot_trans_id = 0;
 	mutex_unlock(&sbi->s_lock);
 
 	return ret;
@@ -1471,14 +1471,14 @@ int nova_snapshot_init(struct super_block *sb)
 
 u64 nova_get_latest_snapshot_trans_id(struct super_block *sb)
 {
-    struct nova_sb_info *sbi = NOVA_SB(sb);
-    return sbi->latest_snapshot_trans_id;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	return sbi->latest_snapshot_trans_id;
 }
 
 u64 nova_get_create_snapshot_trans_id(struct super_block *sb)
 {
-    struct nova_sb_info *sbi = NOVA_SB(sb);
-    return sbi->create_snapshot_trans_id;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	return sbi->create_snapshot_trans_id;
 }
 
 

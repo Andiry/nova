@@ -500,7 +500,7 @@ struct nova_sb_info {
 	int num_snapshots;
 	int curr_snapshot;
 	u64 latest_snapshot_trans_id;
-    u64 create_snapshot_trans_id;
+	u64 create_snapshot_trans_id;
 
 	int mount_snapshot;
 	int mount_snapshot_index;
