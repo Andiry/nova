@@ -1647,6 +1647,9 @@ static int nova_can_inplace_update_setattr(struct super_block *sb,
 	if (last_log) {
 		entry = (struct nova_setattr_logentry *)nova_get_block(sb,
 								last_log);
+		/* Do not overwrite setsize entry */
+		if (entry->attr & ATTR_SIZE)
+			return 0;
 		if (entry->trans_id > latest_snapshot_trans_id)
 			return 1;
 	}
