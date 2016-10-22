@@ -1255,9 +1255,6 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr, u64 trans_id);
-void setattr_copy_to_nova_inode(struct inode *inode,
-    struct nova_inode *pi,
-    u64 trans_id); 
 int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
