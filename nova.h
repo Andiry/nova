@@ -1153,6 +1153,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 bool nova_verify_data_csum(struct inode *inode,
 		struct nova_file_write_entry *entry, pgoff_t index,
 		unsigned long blocks);
+int nova_data_csum_init(struct super_block *sb);
 
 /*
  * Inodes and files operations

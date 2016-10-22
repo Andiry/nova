@@ -544,12 +544,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	/* allocating blocks to store data block checksums */
-	sbi->data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
-				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
-	/* putting data checksums immediately after reserved blocks */
-	/* setting this sbi->data_csum_base to zero disables data checksum */
-	sbi->data_csum_base = (sbi->reserved_blocks) << PAGE_SHIFT;
+	nova_data_csum_init(sb);
 
 	nova_snapshot_init(sb);
 

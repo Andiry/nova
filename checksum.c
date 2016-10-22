@@ -382,3 +382,21 @@ bool nova_verify_data_csum(struct inode *inode,
 
 	return match;
 }
+
+int nova_data_csum_init(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	/* allocating blocks to store data block checksums */
+//	sbi->data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
+//				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
+	/* putting data checksums immediately after reserved blocks */
+	/* setting this sbi->data_csum_base to zero disables data checksum */
+//	sbi->data_csum_base = (sbi->reserved_blocks) << PAGE_SHIFT;
+
+	/* Disable data checksum now as it conflicts with DAX-mmap */
+	sbi->data_csum_blocks = 0;
+	sbi->data_csum_base = 0;
+
+	return 0;
+}
