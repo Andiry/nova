@@ -385,6 +385,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	}
 
 	direntry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
+	sih->last_dentry = curr_entry;
 	ret = nova_insert_dir_radix_tree(sb, sih, name, namelen, direntry);
 	*new_tail = curr_entry + loglen;
 	*alter_new_tail = alter_entry + loglen;
@@ -432,6 +433,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 	}
 
 	*delete_dentry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
+	sih->last_dentry = curr_entry;
 	ret = nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0,
 					create_dentry);
 	*new_tail = curr_entry + loglen;
@@ -511,6 +513,21 @@ static inline void nova_rebuild_dir_time_and_size(struct super_block *sb,
 	pi->i_mtime = entry->mtime;
 	pi->i_size = entry->size;
 	pi->i_links_count = entry->links_count;
+}
+
+static void nova_reassign_last_dentry(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 curr_p)
+{
+	struct nova_dentry *dentry, *old_dentry;
+	if (sih->last_dentry == 0) {
+		sih->last_dentry = curr_p;
+	} else {
+		old_dentry = (struct nova_dentry *)nova_get_block(sb,
+							sih->last_dentry);
+		dentry = (struct nova_dentry *)nova_get_block(sb, curr_p);
+		if (dentry->trans_id >= old_dentry->trans_id)
+			sih->last_dentry = curr_p;
+	}
 }
 
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
@@ -604,6 +621,9 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				__func__, ino, (u64) entry);
 			break;
 		}
+
+		nova_reassign_last_dentry(sb, sih, curr_p);
+
 		if (entry->invalid == 0) {
 			if (entry->ino > 0)
 				ret = nova_replay_add_dentry(sb, sih, entry);

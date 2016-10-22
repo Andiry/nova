@@ -775,6 +775,7 @@ void nova_init_header(struct super_block *sb,
 	sih->valid_bytes = 0;
 	sih->last_setattr = 0;
 	sih->last_link_change = 0;
+	sih->last_dentry = 0;
 }
 
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,

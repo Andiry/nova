@@ -379,6 +379,7 @@ struct nova_inode_info_header {
 	unsigned long valid_bytes;	/* For thorough GC */
 	u64 last_setattr;		/* Last setattr entry */
 	u64 last_link_change;		/* Last link change entry */
+	u64 last_dentry;		/* Last updated dentry */
 };
 
 struct nova_inode_info {

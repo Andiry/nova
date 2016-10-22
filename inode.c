@@ -2015,6 +2015,8 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 			dentry = (struct nova_dentry *)addr;
 			if (dentry->invalid == 0)
 				ret = false;
+			if (sih->last_dentry == curr_p)
+				ret = false;
 			*length = le16_to_cpu(dentry->de_len);
 			break;
 		case NEXT_PAGE:
@@ -2167,6 +2169,8 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 			new_addr = (void *)nova_get_block(sb, new_curr);
 			old_dentry = (struct nova_dentry *)addr;
 			new_dentry = (struct nova_dentry *)new_addr;
+			if (sih->last_dentry == curr_p)
+				sih->last_dentry = new_curr;
 			ret = nova_gc_assign_dentry(sb, sih, old_dentry,
 							new_dentry);
 			break;
