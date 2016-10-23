@@ -615,7 +615,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_dentry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
-	struct nova_link_change_entry *link_change_entry = NULL;
+	struct nova_link_change_entry *lc_entry = NULL;
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode *alter_pi;
 	u64 ino = pi->nova_ino;
@@ -629,7 +629,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	int ret;
 
 	NOVA_START_TIMING(rebuild_dir_t, rebuild_time);
-	nova_dbg_verbose("Rebuild dir %llu tree\n", ino);
+	nova_dbgv("Rebuild dir %llu tree\n", ino);
 
 	sih->pi_addr = pi_addr;
 
@@ -672,10 +672,13 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
-				link_change_entry =
+				lc_entry =
 					(struct nova_link_change_entry *)addr;
-				nova_apply_link_change_entry(sb, pi,
-							link_change_entry);
+				if (lc_entry->trans_id >= curr_trans_id) {
+					nova_apply_link_change_entry(sb, pi,
+								lc_entry);
+					curr_trans_id = lc_entry->trans_id;
+				}
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
 				continue;

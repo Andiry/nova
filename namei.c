@@ -785,6 +785,7 @@ static int nova_rename(struct inode *old_dir,
 			__func__, S_ISDIR(old_inode->i_mode) ? "dir" : "normal",
 			old_inode->i_ino, old_dir->i_ino, new_dir->i_ino,
 			new_inode ? new_inode->i_ino : 0);
+
 	NOVA_START_TIMING(rename_t, rename_time);
 
 	if (new_inode) {
@@ -803,6 +804,17 @@ static int nova_rename(struct inode *old_dir,
 		dec_link = -1;
 		if (!new_inode)
 			inc_link = 1;
+		/*
+		 * Tricky for in-place update:
+		 * New dentry is always after renamed dentry, so we have to
+		 * make sure new dentry has the correct links count
+		 * to workaround the rebuild nlink issue.
+		 */
+		if (old_dir == new_dir) {
+			inc_link--;
+			if (inc_link == 0)
+				dec_link = 0;
+		}
 	}
 
 	trans_id = nova_get_trans_id(sb);
@@ -847,7 +859,7 @@ static int nova_rename(struct inode *old_dir,
 	if (err)
 		goto out;
 
-	if (inc_link)
+	if (inc_link > 0)
 		inc_nlink(new_dir);
 
 	if (old_dir == new_dir) {
