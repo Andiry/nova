@@ -197,6 +197,27 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry)
 	return match;
 }
 
+int nova_update_alter_entry(struct super_block *sb, void *entry)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	void *alter_entry;
+	u64 curr, alter_curr;
+	u32 entry_csum;
+	size_t size;
+	int ret;
+
+	curr = nova_get_addr_off(sbi, entry);
+	alter_curr = alter_log_entry(sb, curr);
+	alter_entry = (void *)nova_get_block(sb, alter_curr);
+
+	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size);
+	if (ret)
+		return ret;
+
+	memcpy_to_pmem_nocache(alter_entry, entry, size);
+	return 0;
+}
+
 /* Verify the log entry checksum. */
 bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 {

@@ -915,7 +915,8 @@ static int nova_rename(struct inode *old_dir,
 
 	if (change_parent && father_entry) {
 		father_entry->ino = cpu_to_le64(new_dir->i_ino);
-		nova_flush_buffer(father_entry, NOVA_DIR_LOG_REC_LEN(2), 0);
+		nova_update_entry_csum(father_entry);
+		nova_update_alter_entry(sb, father_entry);
 	}
 
 	if (new_inode) {

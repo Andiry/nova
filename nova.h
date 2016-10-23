@@ -1150,6 +1150,7 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 		void *wrbuf, size_t offset, size_t bytes);
+int nova_update_alter_entry(struct super_block *sb, void *entry);
 bool nova_verify_data_csum(struct inode *inode,
 		struct nova_file_write_entry *entry, pgoff_t index,
 		unsigned long blocks);
