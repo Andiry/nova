@@ -265,6 +265,15 @@ enum alloc_type {
 	DATA,
 };
 
+struct nova_dentry_update {
+	u64 tail;
+	u64 alter_tail;
+	u64 curr_entry;
+	u64 alter_entry;
+	struct nova_dentry *create_dentry;
+	struct nova_dentry *delete_dentry;
+};
+
 #define	MMAP_WRITE_BIT	0x20UL	// mmaped for write
 #define	IS_MAP_WRITE(p)	((p) & (MMAP_WRITE_BIT))
 #define	MMAP_ADDR(p)	((p) & (PAGE_MASK))
@@ -1178,14 +1187,11 @@ extern const struct file_operations nova_dir_operations;
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id);
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	u64 tail, u64 alter_tail, u64 *new_tail, u64 *alter_new_tail,
-	u64 trans_id);
-int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
-	u64 alter_tail, u64 *new_tail, u64 *alter_new_tail,
-	struct nova_dentry **create_dentry,
-	struct nova_dentry **delete_dentry, u64 trans_id);
+	struct nova_dentry_update *update, u64 trans_id);
+int nova_remove_dentry(struct dentry *dentry, int dec_link,
+	struct nova_dentry_update *update, u64 trans_id);
 int nova_invalidate_dentries(struct super_block *sb,
-	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry);
+	struct nova_dentry_update *update);
 void nova_print_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long ino);
 void nova_delete_dir_tree(struct super_block *sb,
@@ -1276,8 +1282,8 @@ extern struct dentry *nova_get_parent(struct dentry *child);
 int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change);
 int nova_append_link_change_entry(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode, u64 tail, u64 alter_tail,
-	u64 *new_tail, u64 *alter_new_tail, u64 *old_linkc, u64 trans_id);
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_dentry_update *update, u64 *old_linkc, u64 trans_id);
 void nova_apply_link_change_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 

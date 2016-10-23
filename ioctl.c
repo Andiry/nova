@@ -26,9 +26,8 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct inode    *inode = mapping->host;
 	struct nova_inode *pi;
 	struct super_block *sb = inode->i_sb;
+	struct nova_dentry_update update;
 	unsigned int flags;
-	u64 new_tail = 0;
-	u64 new_alter_tail = 0;
 	int ret;
 
 	pi = nova_get_inode(sb, inode);
@@ -80,12 +79,13 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		nova_set_inode_flags(inode, pi, flags);
 
 		nova_memunlock_inode(sb, pi);
-		ret = nova_append_link_change_entry(sb, pi, inode, 0, 0,
-					&new_tail, &new_alter_tail,
-					&old_linkc, trans_id);
+		update.tail = 0;
+		update.alter_tail = 0;
+		ret = nova_append_link_change_entry(sb, pi, inode,
+					&update, &old_linkc, trans_id);
 		if (!ret) {
-			nova_update_tail(pi, new_tail);
-			nova_update_alter_tail(pi, new_alter_tail);
+			nova_update_tail(pi, update.tail);
+			nova_update_alter_tail(pi, update.alter_tail);
 			nova_update_inode_checksum(pi);
 			nova_update_alter_inode(sb, inode, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
@@ -119,12 +119,13 @@ flags_out:
 		inode->i_generation = generation;
 
 		nova_memunlock_inode(sb, pi);
-		ret = nova_append_link_change_entry(sb, pi, inode, 0, 0,
-					&new_tail, &new_alter_tail,
-					&old_linkc, trans_id);
+		update.tail = 0;
+		update.alter_tail = 0;
+		ret = nova_append_link_change_entry(sb, pi, inode,
+					&update, &old_linkc, trans_id);
 		if (!ret) {
-			nova_update_tail(pi, new_tail);
-			nova_update_alter_tail(pi, new_alter_tail);
+			nova_update_tail(pi, update.tail);
+			nova_update_alter_tail(pi, update.alter_tail);
 			nova_update_inode_checksum(pi);
 			nova_update_alter_inode(sb, inode, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
