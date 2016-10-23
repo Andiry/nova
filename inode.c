@@ -931,6 +931,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 		nova_dbg("%s: inode %llu shadow mismatch\n", __func__, ino);
 		nova_print_inode(pi);
 		nova_print_inode(alter_pi);
+		nova_print_nova_log(sb, pi);
 		diff = 1;
 	}
 
@@ -2724,6 +2725,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
 	struct nova_inode_log_page *curr_page;
+	struct nova_inode *alter_pi;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	u64 ino = pi->nova_ino;
 	timing_t rebuild_time;
@@ -2814,7 +2816,10 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 	sih->i_size = le64_to_cpu(pi->i_size);
 	sih->i_mode = le16_to_cpu(pi->i_mode);
-	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
+
+	nova_update_inode_checksum(pi);
+	alter_pi = (struct nova_inode *)nova_get_block(sb, sih->alter_pi_addr);
+	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
