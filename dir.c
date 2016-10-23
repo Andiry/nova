@@ -393,6 +393,51 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	return ret;
 }
 
+static int nova_can_inplace_update_dentry(struct super_block *sb,
+	struct nova_dentry *dentry)
+{
+	u64 latest_snapshot_trans_id;
+
+	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+
+	if (latest_snapshot_trans_id == 0)
+		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+
+	if (dentry && dentry->trans_id > latest_snapshot_trans_id)
+		return 1;
+
+	return 0;
+}
+
+static void nova_inplace_update_dentry(struct inode *dir,
+	struct nova_dentry *dentry, int link_change, u64 trans_id)
+{
+	unsigned short links_count;
+
+	dentry->trans_id = trans_id;
+	/* Only used for remove_dentry */
+	dentry->ino = cpu_to_le64(0);
+	dentry->invalid = 1;
+	dentry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+
+	links_count = cpu_to_le16(dir->i_nlink);
+	if (links_count == 0 && link_change == -1)
+		links_count = 0;
+	else
+		links_count += link_change;
+	dentry->links_count = cpu_to_le16(links_count);
+
+	/* Update checksum */
+	nova_update_entry_csum(dentry);
+
+	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
+			"name len %u, file type %u, csum 0x%x\n",
+			dentry->ino, dentry->de_len,
+			dentry->name_len, dentry->file_type, dentry->csum);
+
+	nova_flush_buffer(dentry, dentry->de_len, 0);
+}
+
 /* removes a directory entry pointing to the inode. assumes the inode has
  * already been logged for consistency
  */
@@ -403,10 +448,12 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info *si = NOVA_I(dir);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
+	struct nova_dentry *old_dentry;
 	unsigned short loglen;
 	int ret;
 	u64 curr_entry, alter_entry;
@@ -414,12 +461,44 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 
 	NOVA_START_TIMING(remove_dentry_t, remove_dentry_time);
 
-	if (!dentry->d_name.len)
-		return -EINVAL;
+	if (!dentry->d_name.len) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ret = nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0,
+					create_dentry);
+
+	if (ret)
+		goto out;
 
 	pidir = nova_get_inode(sb, dir);
 
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+
+	if (nova_can_inplace_update_dentry(sb, *create_dentry)) {
+		old_dentry = *create_dentry;
+		nova_inplace_update_dentry(dir, old_dentry, dec_link,
+						trans_id);
+		curr_entry = nova_get_addr_off(sbi, old_dentry);
+		alter_entry = alter_log_entry(sb, curr_entry);
+
+		old_dentry = (struct nova_dentry *)nova_get_block(sb,
+						alter_entry);
+		memcpy_to_pmem_nocache(old_dentry, *create_dentry,
+						old_dentry->de_len);
+
+		*delete_dentry = *create_dentry;
+		sih->last_dentry = curr_entry;
+		if (tail == 0) {
+			*new_tail = pidir->log_tail;
+			*alter_new_tail = pidir->alter_log_tail;
+		} else {
+			*new_tail = tail;
+			*alter_new_tail = alter_tail;
+		}
+		goto out;
+	}
 
 	loglen = NOVA_DIR_LOG_REC_LEN(entry->len);
 	ret = nova_append_dir_inode_entry(sb, pidir, dir, 0,
@@ -429,15 +508,14 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link, u64 tail,
 
 	if (ret) {
 		nova_dbg("%s: append dir entry failure\n", __func__);
-		return ret;
+		goto out;
 	}
 
 	*delete_dentry = (struct nova_dentry *)nova_get_block(sb, curr_entry);
 	sih->last_dentry = curr_entry;
-	ret = nova_remove_dir_radix_tree(sb, sih, entry->name, entry->len, 0,
-					create_dentry);
 	*new_tail = curr_entry + loglen;
 	*alter_new_tail = alter_entry + loglen;
+out:
 	NOVA_END_TIMING(remove_dentry_t, remove_dentry_time);
 	return ret;
 }
