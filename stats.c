@@ -249,6 +249,24 @@ void nova_clear_stats(void)
 	nova_clear_IO_stats();
 }
 
+void nova_print_inode(struct nova_inode *pi)
+{
+	nova_dbg("%s: NOVA inode %llu\n", __func__, pi->nova_ino);
+	nova_dbg("valid %u, deleted %u, blk type %u, flags %u\n",
+		pi->valid, pi->deleted, pi->i_blk_type, pi->i_flags);
+	nova_dbg("size %llu, ctime %u, mtime %u, atime %u\n",
+		pi->i_size, pi->i_ctime, pi->i_mtime, pi->i_atime);
+	nova_dbg("mode %u, links %u, xattr 0x%llx, csum %u\n",
+		pi->i_mode, pi->i_links_count, pi->i_xattr, pi->csum);
+	nova_dbg("uid %u, gid %u, gen %u, create time %u\n",
+		pi->i_uid, pi->i_gid, pi->i_generation, pi->i_create_time);
+	nova_dbg("head 0x%llx, tail 0x%llx, alter head 0x%llx, tail 0x%llx\n",
+		pi->log_head, pi->log_tail, pi->alter_log_head,
+		pi->alter_log_tail);
+	nova_dbg("create trans id %llu, delete trans id %llu\n",
+		pi->create_trans_id, pi->delete_trans_id);
+}
+
 static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {

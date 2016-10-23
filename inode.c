@@ -929,6 +929,8 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
 	if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
 		nova_dbg("%s: inode %llu shadow mismatch\n", __func__, ino);
+		nova_print_inode(pi);
+		nova_print_inode(alter_pi);
 		diff = 1;
 	}
 
