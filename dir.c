@@ -623,6 +623,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
+	u64 curr_trans_id = 0;
 	u64 next;
 	u8 type;
 	int ret;
@@ -714,7 +715,10 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			break;
 		}
 
-		nova_rebuild_dir_time_and_size(sb, pi, entry);
+		if (entry->trans_id >= curr_trans_id) {
+			nova_rebuild_dir_time_and_size(sb, pi, entry);
+			curr_trans_id = entry->trans_id;
+		}
 
 		de_len = le16_to_cpu(entry->de_len);
 		curr_p += de_len;
