@@ -367,8 +367,7 @@ void nova_print_curr_log_page(struct super_block *sb, u64 curr)
 			start, tail->next_page);
 }
 
-void nova_print_nova_log(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_inode *pi)
+void nova_print_nova_log(struct super_block *sb, struct nova_inode *pi)
 {
 	u64 curr;
 
@@ -376,8 +375,8 @@ void nova_print_nova_log(struct super_block *sb,
 		return;
 
 	curr = pi->log_head;
-	nova_dbg("Pi %lu: log head 0x%llx, tail 0x%llx\n",
-			sih->ino, curr, pi->log_tail);
+	nova_dbg("Pi %llu: log head 0x%llx, tail 0x%llx\n",
+			pi->nova_ino, curr, pi->log_tail);
 	while (curr != pi->log_tail) {
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
 			struct nova_inode_page_tail *tail =
@@ -393,12 +392,10 @@ void nova_print_nova_log(struct super_block *sb,
 
 void nova_print_inode_log(struct super_block *sb, struct inode *inode)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
 
 	pi = nova_get_inode(sb, inode);
-	nova_print_nova_log(sb, sih, pi);
+	nova_print_nova_log(sb, pi);
 }
 
 int nova_get_nova_log_pages(struct super_block *sb,

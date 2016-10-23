@@ -804,8 +804,7 @@ nova_get_write_entry(struct super_block *sb,
 }
 
 void nova_print_curr_log_page(struct super_block *sb, u64 curr);
-void nova_print_nova_log(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_inode *pi);
+void nova_print_nova_log(struct super_block *sb, struct nova_inode *pi);
 int nova_get_nova_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode *pi);
 void nova_print_nova_log_pages(struct super_block *sb,
@@ -827,7 +826,7 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 			curr, pgoff, data->pgoff, data->num_pages);
 		pi = nova_get_block(sb, sih->pi_addr);
 		nova_print_nova_log_pages(sb, sih, pi);
-		nova_print_nova_log(sb, sih, pi);
+		nova_print_nova_log(sb, pi);
 		NOVA_ASSERT(0);
 	}
 
