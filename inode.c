@@ -1661,9 +1661,8 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 	struct inode *inode, struct nova_inode_info_header *sih,
 	struct iattr *attr, u64 trans_id)
 {
-	u64 last_log = 0, alter_last_log = 0;
+	u64 last_log = 0;
 	struct nova_setattr_logentry *entry = NULL;
-	struct nova_setattr_logentry *alter_entry = NULL;
 
 	nova_dbgv("%s : Modifying last log entry for inode %lu\n",
 				__func__, inode->i_ino);
@@ -1673,11 +1672,7 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 	nova_update_setattr_entry(inode, entry, attr, trans_id);
 
 	// Also update the alter inode log entry.
-	alter_last_log = alter_log_entry(sb, last_log);
-	alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
-							alter_last_log);
-	memcpy_to_pmem_nocache(alter_entry, entry,
-				sizeof(struct nova_setattr_logentry));
+	nova_update_alter_entry(sb, entry);
 
 	return 0;
 }

@@ -409,8 +409,9 @@ static int nova_can_inplace_update_dentry(struct super_block *sb,
 	return 0;
 }
 
-static void nova_inplace_update_dentry(struct inode *dir,
-	struct nova_dentry *dentry, int link_change, u64 trans_id)
+static void nova_inplace_update_dentry(struct super_block *sb,
+	struct inode *dir, struct nova_dentry *dentry, int link_change,
+	u64 trans_id)
 {
 	unsigned short links_count;
 
@@ -429,13 +430,13 @@ static void nova_inplace_update_dentry(struct inode *dir,
 
 	/* Update checksum */
 	nova_update_entry_csum(dentry);
+	nova_update_alter_entry(sb, dentry);
 
 	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
 			"name len %u, file type %u, csum 0x%x\n",
 			dentry->ino, dentry->de_len,
 			dentry->name_len, dentry->file_type, dentry->csum);
 
-	nova_flush_buffer(dentry, dentry->de_len, 0);
 }
 
 /* removes a directory entry pointing to the inode. assumes the inode has
@@ -454,7 +455,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	struct nova_dentry *old_dentry = NULL;
 	unsigned short loglen;
 	int ret;
-	u64 curr_entry, alter_entry;
+	u64 curr_entry;
 	timing_t remove_dentry_time;
 
 	NOVA_START_TIMING(remove_dentry_t, remove_dentry_time);
@@ -478,17 +479,9 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
 	if (nova_can_inplace_update_dentry(sb, old_dentry)) {
-		struct nova_dentry *alter_dentry;
-
-		nova_inplace_update_dentry(dir, old_dentry, dec_link,
-						trans_id);
+		nova_inplace_update_dentry(sb, dir, old_dentry,
+						dec_link, trans_id);
 		curr_entry = nova_get_addr_off(sbi, old_dentry);
-		alter_entry = alter_log_entry(sb, curr_entry);
-
-		alter_dentry = (struct nova_dentry *)nova_get_block(sb,
-						alter_entry);
-		memcpy_to_pmem_nocache(alter_dentry, old_dentry,
-						old_dentry->de_len);
 
 		sih->last_dentry = curr_entry;
 		/* Leave create/delete_dentry to NULL */
