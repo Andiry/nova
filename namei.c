@@ -370,8 +370,6 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 static void nova_update_link_change_entry(struct inode *inode,
 	struct nova_link_change_entry *entry, u64 trans_id)
 {
-	size_t size = sizeof(struct nova_link_change_entry);
-
 	entry->entry_type	= LINK_CHANGE;
 	entry->trans_id		= trans_id;
 	entry->invalid		= 0;
@@ -381,7 +379,41 @@ static void nova_update_link_change_entry(struct inode *inode,
 	entry->generation	= cpu_to_le32(inode->i_generation);
 
 	nova_update_entry_csum(entry);
-	nova_flush_buffer(entry, size, 0);
+}
+
+static int nova_can_inplace_update_lcentry(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 latest_snapshot_trans_id)
+{
+	u64 last_log = 0;
+	struct nova_link_change_entry *entry = NULL;
+
+	last_log = sih->last_link_change;
+	if (last_log) {
+		entry = (struct nova_link_change_entry *)nova_get_block(sb,
+								last_log);
+		if (entry->trans_id > latest_snapshot_trans_id)
+			return 1;
+	}
+
+	return 0;
+}
+
+static int nova_inplace_update_lcentry(struct super_block *sb,
+	struct inode *inode, struct nova_inode_info_header *sih,
+	u64 trans_id)
+{
+	u64 last_log = 0;
+	struct nova_link_change_entry *entry = NULL;
+
+	last_log = sih->last_link_change;
+	entry = (struct nova_link_change_entry *)nova_get_block(sb,
+							last_log);
+	nova_update_link_change_entry(inode, entry, trans_id);
+
+	// Also update the alter inode log entry.
+	nova_update_alter_entry(sb, entry);
+
+	return 0;
 }
 
 /* Returns new tail after append */
@@ -395,9 +427,25 @@ int nova_append_link_change_entry(struct super_block *sb,
 	u64 curr_p, alter_curr_p;
 	int extended = 0;
 	size_t size = sizeof(struct nova_link_change_entry);
+	u64 latest_snapshot_trans_id = 0;
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
+
+	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+
+	if (latest_snapshot_trans_id == 0)
+		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+
+	if (nova_can_inplace_update_lcentry(sb, sih,
+				latest_snapshot_trans_id)) {
+		nova_inplace_update_lcentry(sb, inode, sih, trans_id);
+		update->tail = pi->log_tail;
+		update->alter_tail = pi->alter_log_tail;
+
+		*old_linkc = 0;
+		goto out;
+	}
 
 	curr_p = nova_get_append_head(sb, pi, sih, update->tail, size,
 						MAIN_LOG, &extended);
@@ -426,7 +474,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	*old_linkc = sih->last_link_change;
 	sih->last_link_change = curr_p;
-
+out:
 	NOVA_END_TIMING(append_link_change_t, append_time);
 	return 0;
 }
