@@ -587,6 +587,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	unsigned long step = 0;
 	u64 alter_temp_tail, temp_tail = 0, begin_tail = 0;
 	u64 trans_id;
+	u64 size;
 	u32 time;
 
 	if (len == 0)
@@ -700,6 +701,11 @@ ssize_t nova_inplace_file_write(struct file *filp,
 						buf, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+		if (pos + copied > inode->i_size)
+			size = cpu_to_le64(pos + copied);
+		else
+			size = cpu_to_le64(inode->i_size);
+
 		/* Handle hole fill write */
 		if (hole_fill) {
 			memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
@@ -711,11 +717,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			entry_data.invalid_pages = 0;
 			entry_data.block = cpu_to_le64(blk_off);
 			entry_data.mtime = cpu_to_le32(time);
-
-			if (pos + copied > inode->i_size)
-				entry_data.size = cpu_to_le64(pos + copied);
-			else
-				entry_data.size = cpu_to_le64(inode->i_size);
+			entry_data.size = size;
 
 			ret = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail, alter_temp_tail,
@@ -725,6 +727,13 @@ ssize_t nova_inplace_file_write(struct file *filp,
 				ret = -ENOSPC;
 				goto out;
 			}
+		} else {
+			/* Update existing entry */
+			entry->trans_id = trans_id;
+			entry->mtime = cpu_to_le32(time);
+			entry->size = size;
+			nova_update_entry_csum(entry);
+			nova_update_alter_entry(sb, entry);
 		}
 
 		if ( (copied > 0) && (NOVA_SB(sb)->data_csum_base > 0) ) {
