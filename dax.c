@@ -689,6 +689,9 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			bytes = count;
 
 		kmem = nova_get_block(inode->i_sb, blk_off);
+		if (hole_fill && (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0))
+			nova_handle_head_tail_blocks(sb, pi, inode, pos, bytes,
+								kmem);
 
 		/* Now copy from user buf */
 //		nova_dbg("Write: %p\n", kmem);
