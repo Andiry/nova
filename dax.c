@@ -572,9 +572,9 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	ssize_t     written = 0;
 	loff_t pos;
 	size_t count, offset, copied, csummed, ret;
-	unsigned long start_blk, num_blocks, ent_blks;
+	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks;
-	unsigned long blocknr;
+	unsigned long blocknr = 0;
 	unsigned long next_pgoff;
 	unsigned int data_bits;
 	bool allocated = false, hole_fill = false;
@@ -585,7 +585,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	long status = 0;
 	timing_t inplace_write_time, memcpy_time;
 	unsigned long step = 0;
-	u64 alter_temp_tail, temp_tail, begin_tail = 0;
+	u64 alter_temp_tail, temp_tail = 0, begin_tail = 0;
 	u64 trans_id;
 	u32 time;
 
@@ -673,7 +673,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 							ent_blks, blocknr);
 
 			if (ent_blks <= 0) {
-				nova_err(sb, "%s alloc blocks failed!, %lu\n", __func__,
+				nova_dbg("%s alloc blocks failed!, %lu\n", __func__,
 								ent_blks);
 				ret = ent_blks;
 				goto out;
@@ -718,7 +718,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 						&entry_data, temp_tail, alter_temp_tail,
 						&curr_entry, &alter_curr_entry);
 			if (ret) {
-				nova_err(sb, "ERROR: append inode entry failed\n");
+				nova_dbg("%s: append inode entry failed\n", __func__);
+				ret = -ENOSPC;
 				goto out;
 			}
 		}
@@ -794,6 +795,10 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	nova_update_alter_inode(sb, inode, pi);
 
 out:
+	if (ret < 0)
+		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, ent_blks,
+						begin_tail, temp_tail);
+
 	if (need_mutex)
 		mutex_unlock(&inode->i_mutex);
 	sb_end_write(inode->i_sb);
