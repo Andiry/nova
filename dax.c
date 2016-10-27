@@ -577,7 +577,9 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	unsigned long blocknr = 0;
 	unsigned long next_pgoff;
 	unsigned int data_bits;
-	bool allocated = false, hole_fill = false;
+	int allocated = 0;
+	bool hole_fill = false;
+	bool update_log = false;
 	void* kmem;
 	u64 blk_off;
 	u64 curr_entry, alter_curr_entry;
@@ -649,6 +651,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT; 
+			allocated = ent_blks;
 		} else {
 			/* Possible Hole */
 			entry = nova_find_next_entry(sb, sih, start_blk);
@@ -668,15 +671,15 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			}
 
 			/* Allocate blocks to fill hole */
-			ent_blks = nova_new_data_blocks(sb, pi, &blocknr, ent_blks,
+			allocated = nova_new_data_blocks(sb, pi, &blocknr, ent_blks,
 							start_blk, 0, 0);
-			nova_dbg_verbose("%s: alloc %lu blocks @ %lu\n", __func__,
-							ent_blks, blocknr);
+			nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
+							allocated, blocknr);
 
-			if (ent_blks <= 0) {
-				nova_dbg("%s alloc blocks failed!, %lu\n", __func__,
-								ent_blks);
-				ret = ent_blks;
+			if (allocated <= 0) {
+				nova_dbg("%s alloc blocks failed!, %d\n", __func__,
+								allocated);
+				ret = allocated;
 				goto out;
 			}
 
@@ -685,7 +688,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		}
 
 		step++;
-		bytes = sb->s_blocksize * ent_blks - offset;
+		bytes = sb->s_blocksize * allocated - offset;
 		if (bytes > count)
 			bytes = count;
 
@@ -713,7 +716,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			entry_data.reassigned = 0;
 			entry_data.trans_id = trans_id;
 			entry_data.pgoff = cpu_to_le64(start_blk);
-			entry_data.num_pages = cpu_to_le32(ent_blks);
+			entry_data.num_pages = cpu_to_le32(allocated);
 			entry_data.invalid_pages = 0;
 			entry_data.block = cpu_to_le64(blk_off);
 			entry_data.mtime = cpu_to_le32(time);
@@ -754,7 +757,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			pos += copied;
 			buf += copied;
 			count -= copied;
-			num_blocks -= ent_blks;
+			num_blocks -= allocated;
 		}
 		if (unlikely(copied != bytes)) {
 			nova_dbg("%s ERROR!: %p, bytes %lu, copied %lu\n",
@@ -766,7 +769,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			break;
 
 		if (hole_fill) {
-			allocated = true;
+			update_log = true;
 			if (begin_tail == 0)
 				begin_tail = curr_entry;
 
@@ -783,7 +786,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 
 	inode->i_blocks = sih->i_blocks;
 
-	if (allocated) {
+	if (update_log) {
 		nova_update_tail(pi, temp_tail);
 		nova_update_alter_tail(pi, alter_temp_tail);
 
@@ -808,7 +811,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 
 out:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, ent_blks,
+		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
 						begin_tail, temp_tail);
 
 	if (need_mutex)
