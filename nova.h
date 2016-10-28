@@ -1214,7 +1214,7 @@ int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, pgoff_t pgoff);
-int nova_check_alter_entry(struct super_block *sb, u64 curr, u64 *alter_curr);
+int nova_check_alter_entry(struct super_block *sb, u64 curr);
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 	struct nova_inode *pi, u64 alter_pi_addr);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);

@@ -445,9 +445,7 @@ int nova_invalidate_dentries(struct super_block *sb,
 	struct nova_dentry *create_dentry, struct nova_dentry *delete_dentry)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_dentry *alter_dentry;
 	u64 create_curr, delete_curr;
-	u64 create_alter = 0, delete_alter = 0;
 	int ret;
 
 	if (!create_dentry || !old_entry_freeable(sb, create_dentry->trans_id))
@@ -456,7 +454,7 @@ int nova_invalidate_dentries(struct super_block *sb,
 	create_curr = nova_get_addr_off(sbi, create_dentry);
 	delete_curr = nova_get_addr_off(sbi, delete_dentry);
 
-	ret = nova_check_alter_entry(sb, create_curr, &create_alter);
+	ret = nova_check_alter_entry(sb, create_curr);
 	if (ret) {
 		nova_dbg("%s: check create alter_entry returned %d\n",
 					__func__, ret);
@@ -466,7 +464,7 @@ int nova_invalidate_dentries(struct super_block *sb,
 	create_dentry->invalid = 1;
 	nova_update_entry_csum(create_dentry);
 
-	ret = nova_check_alter_entry(sb, delete_curr, &delete_alter);
+	ret = nova_check_alter_entry(sb, delete_curr);
 	if (ret) {
 		nova_dbg("%s: check delete alter_entry returned %d\n",
 					__func__, ret);
@@ -476,13 +474,8 @@ int nova_invalidate_dentries(struct super_block *sb,
 	delete_dentry->invalid = 1;
 	nova_update_entry_csum(delete_dentry);
 
-	alter_dentry = (struct nova_dentry *)nova_get_block(sb, create_alter);
-	alter_dentry->invalid = 1;
-	nova_update_entry_csum(alter_dentry);
-
-	alter_dentry = (struct nova_dentry *)nova_get_block(sb, delete_alter);
-	alter_dentry->invalid = 1;
-	nova_update_entry_csum(alter_dentry);
+	nova_update_alter_entry(sb, create_dentry);
+	nova_update_alter_entry(sb, delete_dentry);
 
 	return 0;
 }

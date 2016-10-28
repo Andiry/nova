@@ -314,7 +314,7 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-int nova_check_alter_entry(struct super_block *sb, u64 curr, u64 *alter_curr)
+int nova_check_alter_entry(struct super_block *sb, u64 curr)
 {
 	void *addr, *alter_addr;
 	u64 alter;
@@ -340,7 +340,6 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr, u64 *alter_curr)
 		return ret;
 	}
 
-	*alter_curr = alter;
 	return ret;
 }
 
@@ -348,13 +347,12 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	u64 curr, alter_curr = 0;
-	struct nova_file_write_entry *alter_entry;
+	u64 curr;
 	int ret;
 
 	curr = nova_get_addr_off(sbi, entry);
 
-	ret = nova_check_alter_entry(sb, curr, &alter_curr);
+	ret = nova_check_alter_entry(sb, curr);
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;
@@ -364,11 +362,7 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 	entry->invalid_pages += num_free;
 	nova_update_entry_csum(entry);
 
-	alter_entry = (struct nova_file_write_entry *)
-			nova_get_block(sb, alter_curr);
-	alter_entry->reassigned = 1;
-	alter_entry->invalid_pages += num_free;
-	nova_update_entry_csum(alter_entry);
+	nova_update_alter_entry(sb, entry);
 
 	return 0;
 }
@@ -1587,8 +1581,6 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 	struct inode *inode, u64 last_setattr)
 {
 	struct nova_setattr_logentry *old_entry;
-	struct nova_setattr_logentry *alter_entry;
-	u64 alter_curr;
 	void *addr;
 	int ret;
 
@@ -1599,7 +1591,7 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 			(old_entry->attr & ATTR_SIZE))
 		return 0;
 
-	ret = nova_check_alter_entry(sb, last_setattr, &alter_curr);
+	ret = nova_check_alter_entry(sb, last_setattr);
 	if (ret) {
 		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
 		return ret;
@@ -1613,10 +1605,7 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 					inode->i_ino, old_entry->attr,
 					old_entry->mode, old_entry->csum);
 
-	alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
-					alter_curr);
-	alter_entry->invalid = 1;
-	nova_update_entry_csum(alter_entry);
+	nova_update_alter_entry(sb, old_entry);
 
 	return 0;
 }
