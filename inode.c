@@ -1844,8 +1844,8 @@ static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 
 	NOVA_START_TIMING(direct_IO_t, dio_time);
 
-	ret = dax_do_io(iocb, inode, iter, offset, nova_dax_get_block,
-				NULL, DIO_LOCKING);
+	ret = dax_do_io(iocb, inode, iter, offset, nova_dax_get_block_nolock,
+				NULL, 0);
 	NOVA_END_TIMING(direct_IO_t, dio_time);
 	return ret;
 }

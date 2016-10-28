@@ -838,7 +838,8 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
  * return < 0, error case.
  */
 static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
-	unsigned long max_blocks, struct buffer_head *bh, int create)
+	unsigned long max_blocks, struct buffer_head *bh, int create,
+	bool taking_lock)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
@@ -858,6 +859,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	u64 trans_id;
 	int num_blocks = 0;
 	int allocated = 0;
+	int locked = 0;
 	int ret = 0;
 
 	if (max_blocks == 0)
@@ -866,6 +868,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	nova_dbgv("%s: pgoff %lu, num %lu, create %d\n",
 				__func__, iblock, max_blocks, create);
 
+again:
 	entry = nova_get_write_entry(sb, si, iblock);
 	if (entry) {
 		/* Find contiguous blocks */
@@ -879,12 +882,20 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 
 		nvmm = get_nvmm(sb, sih, entry, iblock);
 		clear_buffer_new(bh);
-		nova_dbgv("%s: pgoff %lu, block %lu\n", __func__, iblock, nvmm);
+		nova_dbgv("%s: found pgoff %lu, block %lu\n",
+				__func__, iblock, nvmm);
 		goto out;
 	}
 
 	if (create == 0)
 		return 0;
+
+	if (taking_lock && locked == 0) {
+		mutex_lock(&inode->i_mutex);
+		locked = 1;
+		/* Check again incase someone has done it for us */
+		goto again;
+	}
 
 	pi = nova_get_inode(sb, inode);
 	num_blocks = max_blocks;
@@ -897,6 +908,10 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	if (entry) {
 		next_pgoff = entry->pgoff;
 		if (next_pgoff <= iblock) {
+			nova_err(sb, "iblock %lu, entry pgoff %lu, "
+					" num pages %lu\n", iblock,
+					next_pgoff, entry->num_pages);
+			nova_print_nova_log(sb, pi);
 			BUG();
 			ret = -EINVAL;
 			goto out;
@@ -965,17 +980,22 @@ out:
 	if (ret < 0) {
 		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
 						0, temp_tail);
-		return ret;
+		num_blocks = ret;
+		goto out1;
 	}
 
 	map_bh(bh, inode->i_sb, nvmm);
 	if (num_blocks > 1)
 		bh->b_size = sb->s_blocksize * num_blocks;
 
+out1:
+	if (taking_lock && locked)
+		mutex_unlock(&inode->i_mutex);
+
 	return num_blocks;
 }
 
-int nova_dax_get_block(struct inode *inode, sector_t iblock,
+int nova_dax_get_block_nolock(struct inode *inode, sector_t iblock,
 	struct buffer_head *bh, int create)
 {
 	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
@@ -984,7 +1004,27 @@ int nova_dax_get_block(struct inode *inode, sector_t iblock,
 
 	NOVA_START_TIMING(dax_get_block_t, gb_time);
 
-	ret = nova_dax_get_blocks(inode, iblock, max_blocks, bh, create);
+	ret = nova_dax_get_blocks(inode, iblock, max_blocks,
+						bh, create, false);
+	if (ret > 0) {
+		bh->b_size = ret << inode->i_blkbits;
+		ret = 0;
+	}
+	NOVA_END_TIMING(dax_get_block_t, gb_time);
+	return ret;
+}
+
+int nova_dax_get_block_lock(struct inode *inode, sector_t iblock,
+	struct buffer_head *bh, int create)
+{
+	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
+	int ret;
+	timing_t gb_time;
+
+	NOVA_START_TIMING(dax_get_block_t, gb_time);
+
+	ret = nova_dax_get_blocks(inode, iblock, max_blocks,
+						bh, create, true);
 	if (ret > 0) {
 		bh->b_size = ret << inode->i_blkbits;
 		ret = 0;
@@ -1368,15 +1408,12 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
-	struct inode *inode = file_inode(vma->vm_file);
 	int ret = 0;
 	timing_t fault_time;
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
-	mutex_lock(&inode->i_mutex);
-	ret = dax_fault(vma, vmf, nova_dax_get_block, NULL);
-	mutex_unlock(&inode->i_mutex);
+	ret = dax_fault(vma, vmf, nova_dax_get_block_lock, NULL);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
@@ -1385,15 +1422,13 @@ static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 static int nova_dax_pmd_fault(struct vm_area_struct *vma, unsigned long addr,
 	pmd_t *pmd, unsigned int flags)
 {
-	struct inode *inode = file_inode(vma->vm_file);
 	int ret = 0;
 	timing_t fault_time;
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
-	mutex_lock(&inode->i_mutex);
-	ret = dax_pmd_fault(vma, addr, pmd, flags, nova_dax_get_block, NULL);
-	mutex_unlock(&inode->i_mutex);
+	ret = dax_pmd_fault(vma, addr, pmd, flags, nova_dax_get_block_lock,
+							NULL);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;

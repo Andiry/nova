@@ -1182,7 +1182,7 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
 ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 		size_t len, loff_t *ppos);
-int nova_dax_get_block(struct inode *inode, sector_t iblock,
+int nova_dax_get_block_nolock(struct inode *inode, sector_t iblock,
 	struct buffer_head *bh, int create);
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
 
