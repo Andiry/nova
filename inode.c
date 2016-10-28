@@ -2784,13 +2784,13 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 }
 
 static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
-	struct nova_inode *pi, u32 mtime, u64 size)
+	struct nova_inode *pi, u32 mtime, u32 ctime, u64 size)
 {
 	if (!pi)
 		return;
 
-	pi->i_ctime = cpu_to_le32(mtime);
 	pi->i_mtime = cpu_to_le32(mtime);
+	pi->i_ctime = cpu_to_le32(ctime);
 	pi->i_size = cpu_to_le64(size);
 }
 
@@ -2855,6 +2855,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				if (attr_entry->trans_id >= curr_trans_id) {
 					nova_rebuild_file_time_and_size(sb, pi,
 							attr_entry->mtime,
+							attr_entry->ctime,
 							attr_entry->size);
 					curr_trans_id = attr_entry->trans_id;
 				}
@@ -2898,7 +2899,8 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 		if (entry->trans_id >= curr_trans_id) {
 			nova_rebuild_file_time_and_size(sb, pi,
-						entry->mtime, entry->size);
+						entry->mtime, entry->mtime,
+						entry->size);
 			curr_trans_id = entry->trans_id;
 		}
 
