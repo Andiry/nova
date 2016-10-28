@@ -441,7 +441,8 @@ int nova_delete_file_tree(struct super_block *sb,
 		nova_zero_cache_tree(sb, pi, sih, start_blocknr);
 
 	pgoff = start_blocknr;
-	while (pgoff <= last_blocknr) {
+	/* Handle EOF blocks */
+	do {
 		entry = radix_tree_lookup(&sih->tree, pgoff);
 		if (entry) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
@@ -469,7 +470,7 @@ int nova_delete_file_tree(struct super_block *sb,
 			pgoff++;
 			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
 		}
-	}
+	} while (1);
 
 	if (old_entry && delete_nvmm) {
 		nova_free_old_entry(sb, pi, sih, old_entry, old_pgoff,
@@ -935,7 +936,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 
 	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
 	if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
-		nova_dbg("%s: inode %llu shadow mismatch\n", __func__, ino);
+		nova_err(sb, "%s: inode %llu shadow mismatch\n", __func__, ino);
 		nova_print_inode(pi);
 		nova_print_inode(alter_pi);
 		nova_print_nova_log(sb, pi);
@@ -1508,17 +1509,15 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 		nova_err(sb, "%s: nova_setattr_logentry checksum fail "
 			"inode %llu entry addr 0x%llx\n",
 			__func__, pi->nova_ino, (u64) entry);
-		goto out;
+		return;
 	}
 
 	pi->i_mode	= entry->mode;
 	pi->i_uid	= entry->uid;
 	pi->i_gid	= entry->gid;
 	pi->i_atime	= entry->atime;
-	pi->i_ctime	= entry->ctime;
-	pi->i_mtime	= entry->mtime;
 
-	if (pi->i_size > entry->size && S_ISREG(pi->i_mode)) {
+	if (S_ISREG(pi->i_mode)) {
 		start = entry->size;
 		end = pi->i_size;
 
@@ -1529,16 +1528,9 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 		else
 			last_blocknr = 0;
 
-		if (first_blocknr > last_blocknr)
-			goto out;
-
 		freed = nova_delete_file_tree(sb, sih, first_blocknr,
 					last_blocknr, false, false, false, 0);
 	}
-out:
-	pi->i_size	= entry->size;
-	sih->i_size = le64_to_cpu(pi->i_size);
-	/* Do not flush now */
 }
 
 /* Returns new tail after append */
@@ -1623,6 +1615,7 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 	return 0;
 }
 
+#if 0
 static void setattr_copy_to_nova_inode(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi, u64 trans_id)
 {
@@ -1636,6 +1629,7 @@ static void setattr_copy_to_nova_inode(struct super_block *sb,
 
 	nova_update_alter_inode(sb, inode, pi);
 }
+#endif
 
 static int nova_can_inplace_update_setattr(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 latest_snapshot_trans_id)
@@ -1730,11 +1724,6 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
 
 	if (!(ia_valid & ATTR_SIZE) &&
-			pi->create_trans_id > latest_snapshot_trans_id) {
-		nova_dbgv("%s : Modifying disk inode directly, ino %lu\n",
-				__func__, inode->i_ino);
-		setattr_copy_to_nova_inode(sb, inode, pi, trans_id);
-	} else if (!(ia_valid & ATTR_SIZE) &&
 			nova_can_inplace_update_setattr(sb, sih,
 				latest_snapshot_trans_id)) {
 		nova_inplace_update_setattr_entry(sb, inode, sih,
@@ -2795,14 +2784,14 @@ void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
 }
 
 static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
-	struct nova_inode *pi, struct nova_file_write_entry *entry)
+	struct nova_inode *pi, u32 mtime, u64 size)
 {
-	if (!entry || !pi)
+	if (!pi)
 		return;
 
-	pi->i_ctime = cpu_to_le32(entry->mtime);
-	pi->i_mtime = cpu_to_le32(entry->mtime);
-	pi->i_size = cpu_to_le64(entry->size);
+	pi->i_ctime = cpu_to_le32(mtime);
+	pi->i_mtime = cpu_to_le32(mtime);
+	pi->i_size = cpu_to_le64(size);
 }
 
 int nova_rebuild_file_inode_tree(struct super_block *sb,
@@ -2817,6 +2806,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *alter_pi;
 	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
 	u64 ino = pi->nova_ino;
+	u64 curr_trans_id = 0;
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
@@ -2862,6 +2852,15 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				nova_apply_setattr_entry(sb, pi, sih,
 								attr_entry);
 				sih->last_setattr = curr_p;
+				if (attr_entry->trans_id >= curr_trans_id) {
+					nova_rebuild_file_time_and_size(sb, pi,
+							attr_entry->mtime,
+							attr_entry->size);
+					curr_trans_id = attr_entry->trans_id;
+				}
+
+				/* Update sih->i_size for setattr operation */
+				sih->i_size = le64_to_cpu(pi->i_size);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
@@ -2897,7 +2896,12 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			nova_assign_write_entry(sb, pi, sih, entry, false);
 		}
 
-		nova_rebuild_file_time_and_size(sb, pi, entry);
+		if (entry->trans_id >= curr_trans_id) {
+			nova_rebuild_file_time_and_size(sb, pi,
+						entry->mtime, entry->size);
+			curr_trans_id = entry->trans_id;
+		}
+
 		/* Update sih->i_size for setattr apply operations */
 		sih->i_size = le64_to_cpu(pi->i_size);
 		curr_p += sizeof(struct nova_file_write_entry);
