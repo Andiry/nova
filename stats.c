@@ -280,8 +280,10 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 static inline void nova_print_set_attr_entry(struct super_block *sb,
 	u64 curr, struct nova_setattr_logentry *entry)
 {
-	nova_dbg("set attr entry @ 0x%llx: trans %llu, mode %u, size %llu\n",
-			curr, entry->trans_id, entry->mode, entry->size);
+	nova_dbg("set attr entry @ 0x%llx: trans %llu, mode %u, size %llu, "
+			"atime %u, mtime %u, ctime %u\n",
+			curr, entry->trans_id, entry->mode, entry->size,
+			entry->atime, entry->mtime, entry->ctime);
 }
 
 static inline void nova_print_link_change_entry(struct super_block *sb,
