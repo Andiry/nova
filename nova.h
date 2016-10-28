@@ -139,6 +139,7 @@ extern unsigned int nova_dbgmask;
 #define FREE_BATCH			(16)
 
 extern int measure_timing;
+extern int inplace_data_updates;
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
@@ -1171,6 +1172,9 @@ int nova_data_csum_init(struct super_block *sb);
  */
 
 /* dax.c */
+int nova_cleanup_incomplete_write(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	unsigned long blocknr, int allocated, u64 begin_tail, u64 end_tail);
 int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 begin_tail);

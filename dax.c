@@ -301,7 +301,7 @@ int nova_reassign_file_tree(struct super_block *sb,
 	return 0;
 }
 
-static int nova_cleanup_incomplete_write(struct super_block *sb,
+int nova_cleanup_incomplete_write(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	unsigned long blocknr, int allocated, u64 begin_tail, u64 end_tail)
 {

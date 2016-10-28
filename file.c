@@ -390,6 +390,223 @@ static int nova_open(struct inode *inode, struct file *filp)
 	return generic_file_open(inode, filp);
 }
 
+static long nova_fallocate(struct file *file, int mode, loff_t offset,
+			    loff_t len)
+{
+	struct inode *inode = file->f_path.dentry->d_inode;
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	long ret = 0;
+	unsigned long blockoff;
+	int blocksize_mask;
+	struct nova_inode *pi;
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry entry_data;
+	loff_t new_size;
+	unsigned long start_blk, num_blocks, ent_blks = 0;
+	unsigned long total_blocks = 0;
+	unsigned long blocknr = 0;
+	unsigned long next_pgoff;
+	unsigned int data_bits;
+	int allocated = 0;
+	bool update_log = false;
+	u64 blk_off;
+	u64 curr_entry, alter_curr_entry;
+	u64 alter_temp_tail, temp_tail = 0, begin_tail = 0;
+	u64 trans_id;
+	u32 time;
+
+	/* No fallocate for CoW */
+	if (inplace_data_updates == 0)
+		return -EOPNOTSUPP;
+
+	/* We only support the FALLOC_FL_KEEP_SIZE mode */
+	if (mode & ~FALLOC_FL_KEEP_SIZE)
+		return -EOPNOTSUPP;
+
+	if (S_ISDIR(inode->i_mode))
+		return -ENODEV;
+
+	new_size = len + offset;
+	if (!(mode & FALLOC_FL_KEEP_SIZE) && new_size > inode->i_size) {
+		ret = inode_newsize_ok(inode, new_size);
+		if (ret)
+			return ret;
+	} else {
+		new_size = inode->i_size;
+	}
+
+	nova_dbgv("%s: inode %lu, offset %lld, count %lld, mode 0x%x\n",
+			__func__, inode->i_ino,	offset, len, mode);
+
+	mutex_lock(&inode->i_mutex);
+
+	pi = nova_get_inode(sb, inode);
+	if (!pi) {
+		ret = -EACCES;
+		goto out;
+	}
+
+	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+	time = CURRENT_TIME_SEC.tv_sec;
+
+	blocksize_mask = sb->s_blocksize - 1;
+	start_blk = offset >> sb->s_blocksize_bits;
+	blockoff = offset & blocksize_mask;
+	num_blocks = (blockoff + len + blocksize_mask) >> sb->s_blocksize_bits;
+
+	trans_id = nova_get_trans_id(sb);
+	temp_tail = pi->log_tail;
+	alter_temp_tail = pi->alter_log_tail;
+	while (num_blocks > 0) {
+		entry = nova_get_write_entry(sb, si, start_blk);
+
+		if (entry) {
+			/* Find contiguous blocks */
+			if (entry->invalid_pages == 0)
+				ent_blks = entry->num_pages -
+						(start_blk - entry->pgoff);
+			else
+				ent_blks = 1;
+
+			if (ent_blks > num_blocks)
+				ent_blks = num_blocks;
+
+			if (entry->size < new_size) {
+				entry->size = new_size;
+				nova_update_entry_csum(entry);
+				nova_update_alter_entry(sb, entry);
+			}
+			allocated = ent_blks;
+			goto next;
+		}
+
+		/* Possible Hole */
+		entry = nova_find_next_entry(sb, sih, start_blk);
+		if (entry) {
+			next_pgoff = entry->pgoff;
+			if (next_pgoff <= start_blk) {
+				nova_err(sb, "entry pgoff %llu, num pages %u, "
+					"blk %lu\n", entry->pgoff,
+					entry->num_pages, start_blk);
+				nova_print_nova_log(sb, pi);
+				BUG();
+				ret = -EINVAL;
+				goto out;
+			}
+			ent_blks = next_pgoff - start_blk;
+			if (ent_blks > num_blocks)
+				ent_blks = num_blocks;
+		} else {
+			/* File grow */
+			ent_blks = num_blocks;
+		}
+
+		/* Allocate zeroed blocks to fill hole */
+		allocated = nova_new_data_blocks(sb, pi, &blocknr, ent_blks,
+						start_blk, 1, 0);
+		nova_dbgv("%s: alloc %d blocks @ %lu\n", __func__,
+						allocated, blocknr);
+
+		if (allocated <= 0) {
+			nova_dbg("%s alloc blocks failed!, %d\n", __func__,
+							allocated);
+			ret = allocated;
+			goto out;
+		}
+
+		blk_off = nova_get_block_off(sb, blocknr, pi->i_blk_type);
+
+		/* Handle hole fill write */
+		memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
+		entry_data.entry_type = FILE_WRITE;
+		entry_data.reassigned = 0;
+		entry_data.trans_id = trans_id;
+		entry_data.pgoff = cpu_to_le64(start_blk);
+		entry_data.num_pages = cpu_to_le32(allocated);
+		entry_data.invalid_pages = 0;
+		entry_data.block = cpu_to_le64(blk_off);
+		entry_data.mtime = cpu_to_le32(time);
+		entry_data.size = new_size;
+
+		ret = nova_append_file_write_entry(sb, pi, inode,
+					&entry_data, temp_tail, alter_temp_tail,
+					&curr_entry, &alter_curr_entry);
+		if (ret) {
+			nova_dbg("%s: append inode entry failed\n", __func__);
+			ret = -ENOSPC;
+			goto out;
+		}
+
+#if 0
+		if (NOVA_SB(sb)->data_csum_base > 0) {
+			csummed = copied - nova_update_cow_csum(inode, blocknr,
+						(void *) buf, offset, copied);
+			if (unlikely(csummed != copied)) {
+				nova_dbg("%s: not all data bytes are "
+					"checksummed! copied %zu, "
+					"csummed %zu\n", __func__,
+					copied, csummed);
+			}
+		}
+#endif
+
+		update_log = true;
+		if (begin_tail == 0)
+			begin_tail = curr_entry;
+
+		temp_tail = curr_entry + sizeof(struct nova_file_write_entry);
+		alter_temp_tail = alter_curr_entry +
+					sizeof(struct nova_file_write_entry);
+
+		total_blocks += allocated;
+next:
+		num_blocks -= allocated;
+		start_blk += allocated;
+	}
+
+	nova_memunlock_inode(sb, pi);
+	data_bits = blk_type_to_shift[pi->i_blk_type];
+	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
+	nova_memlock_inode(sb, pi);
+
+	inode->i_blocks = sih->i_blocks;
+
+	if (update_log) {
+		nova_update_tail(pi, temp_tail);
+		nova_update_alter_tail(pi, alter_temp_tail);
+
+		/* Update file tree */
+		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
+		if (ret) {
+			goto out;
+		}
+	}
+
+	nova_dbgv("blocks: %lu, %lu\n", inode->i_blocks, sih->i_blocks);
+
+	if (ret || (mode & FALLOC_FL_KEEP_SIZE)) {
+		pi->i_flags |= cpu_to_le32(NOVA_EOFBLOCKS_FL);
+	}
+
+	if (!(mode & FALLOC_FL_KEEP_SIZE) && new_size > inode->i_size) {
+		inode->i_size = new_size;
+		sih->i_size = new_size;
+	}
+
+	nova_update_inode_checksum(pi);
+	nova_update_alter_inode(sb, inode, pi);
+
+out:
+	if (ret < 0)
+		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
+						begin_tail, temp_tail);
+
+	mutex_unlock(&inode->i_mutex);
+	return ret;
+}
+
 const struct file_operations nova_dax_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
@@ -401,6 +618,7 @@ const struct file_operations nova_dax_file_operations = {
 	.fsync			= nova_fsync,
 	.flush			= nova_flush,
 	.unlocked_ioctl		= nova_ioctl,
+	.fallocate		= nova_fallocate,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl		= nova_compat_ioctl,
 #endif
