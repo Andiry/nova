@@ -391,10 +391,12 @@ int nova_free_data_blocks(struct super_block *sb, struct nova_inode *pi,
 	}
 	NOVA_START_TIMING(free_data_t, free_time);
 	ret = nova_free_blocks(sb, blocknr, num, pi->i_blk_type, 0);
-	if (ret)
+	if (ret) {
 		nova_err(sb, "Inode %llu: free %d data block from %lu to %lu "
 				"failed!\n", pi->nova_ino, num, blocknr,
 				blocknr + num - 1);
+		nova_print_nova_log(sb, pi);
+	}
 	NOVA_END_TIMING(free_data_t, free_time);
 
 	return ret;
@@ -414,10 +416,12 @@ int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
 	}
 	NOVA_START_TIMING(free_log_t, free_time);
 	ret = nova_free_blocks(sb, blocknr, num, pi->i_blk_type, 1);
-	if (ret)
+	if (ret) {
 		nova_err(sb, "Inode %llu: free %d log block from %lu to %lu "
 				"failed!\n", pi->nova_ino, num, blocknr,
 				blocknr + num - 1);
+		nova_print_nova_log(sb, pi);
+	}
 	NOVA_END_TIMING(free_log_t, free_time);
 
 	return ret;
