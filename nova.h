@@ -956,12 +956,15 @@ static inline int nova_is_mounting(struct super_block *sb)
 }
 
 static inline void check_eof_blocks(struct super_block *sb,
-		struct nova_inode *pi, loff_t size)
+	struct nova_inode *pi, struct inode *inode)
 {
 	if ((pi->i_flags & cpu_to_le32(NOVA_EOFBLOCKS_FL)) &&
-		(size + sb->s_blocksize) > (le64_to_cpu(pi->i_blocks)
-			<< sb->s_blocksize_bits))
+		(inode->i_size + sb->s_blocksize) > (le64_to_cpu(pi->i_blocks)
+			<< sb->s_blocksize_bits)) {
 		pi->i_flags &= cpu_to_le32(~NOVA_EOFBLOCKS_FL);
+		nova_update_inode_checksum(pi);
+		nova_update_alter_inode(sb, inode, pi);
+	}
 }
 
 enum nova_new_inode_type {

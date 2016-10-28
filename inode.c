@@ -487,7 +487,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 
 	pi->i_blocks = cpu_to_le64(inode->i_blocks);
 	/* Check for the flag EOFBLOCKS is still valid after the set size */
-	check_eof_blocks(sb, pi, inode->i_size);
+	check_eof_blocks(sb, pi, inode);
 
 	return;
 }
