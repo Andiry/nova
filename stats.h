@@ -79,6 +79,7 @@ enum timing_category {
 	find_cache_t,
 	assign_t,
 	fsync_t,
+	fallocate_t,
 	direct_IO_t,
 	delete_file_tree_t,
 	delete_dir_tree_t,

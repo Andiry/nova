@@ -73,6 +73,7 @@ const char *Timingstring[TIMING_NUM] =
 	"find_cache_page",
 	"assign_blocks",
 	"fsync",
+	"fallocate",
 	"direct_IO",
 	"delete_file_tree",
 	"delete_dir_tree",

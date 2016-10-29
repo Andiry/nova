@@ -411,6 +411,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	unsigned int data_bits;
 	int allocated = 0;
 	bool update_log = false;
+	timing_t fallocate_time;
 	u64 blk_off;
 	u64 curr_entry, alter_curr_entry;
 	u64 alter_temp_tail, temp_tail = 0, begin_tail = 0;
@@ -440,6 +441,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	nova_dbgv("%s: inode %lu, offset %lld, count %lld, mode 0x%x\n",
 			__func__, inode->i_ino,	offset, len, mode);
 
+	NOVA_START_TIMING(fallocate_t, fallocate_time);
 	mutex_lock(&inode->i_mutex);
 
 	pi = nova_get_inode(sb, inode);
@@ -604,6 +606,7 @@ out:
 						begin_tail, temp_tail);
 
 	mutex_unlock(&inode->i_mutex);
+	NOVA_END_TIMING(fallocate_t, fallocate_time);
 	return ret;
 }
 
