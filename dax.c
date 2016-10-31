@@ -343,6 +343,24 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 	return 0;
 }
 
+static void nova_init_file_write_entry(struct super_block *sb,
+	struct nova_inode *pi, struct nova_file_write_entry *entry,
+	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size)
+{
+	memset(entry, 0, sizeof(struct nova_file_write_entry));
+	entry->entry_type = FILE_WRITE;
+	entry->reassigned = 0;
+	entry->trans_id = trans_id;
+	entry->pgoff = cpu_to_le64(pgoff);
+	entry->num_pages = cpu_to_le32(num_pages);
+	entry->invalid_pages = 0;
+	entry->block = cpu_to_le64(nova_get_block_off(sb, blocknr,
+							pi->i_blk_type));
+	entry->mtime = cpu_to_le32(time);
+
+	entry->size = size;
+}
+
 ssize_t nova_cow_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -364,6 +382,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	void* kmem;
 	u64 curr_entry;
 	u64 alter_curr_entry;
+	u64 entry_size;
 	size_t bytes;
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
@@ -457,21 +476,14 @@ ssize_t nova_cow_file_write(struct file *filp,
 						buf, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
-		entry_data.entry_type = FILE_WRITE;
-		entry_data.reassigned = 0;
-		entry_data.trans_id = trans_id;
-		entry_data.pgoff = cpu_to_le64(start_blk);
-		entry_data.num_pages = cpu_to_le32(allocated);
-		entry_data.invalid_pages = 0;
-		entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,
-							pi->i_blk_type));
-		entry_data.mtime = cpu_to_le32(time);
-
 		if (pos + copied > inode->i_size)
-			entry_data.size = cpu_to_le64(pos + copied);
+			entry_size = cpu_to_le64(pos + copied);
 		else
-			entry_data.size = cpu_to_le64(inode->i_size);
+			entry_size = cpu_to_le64(inode->i_size);
+
+		nova_init_file_write_entry(sb, pi, &entry_data, trans_id,
+					start_blk, allocated, blocknr, time,
+					entry_size);
 
 		ret = nova_append_file_write_entry(sb, pi, inode,
 					&entry_data, temp_tail, alter_temp_tail,
@@ -589,7 +601,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	unsigned long step = 0;
 	u64 alter_temp_tail, temp_tail = 0, begin_tail = 0;
 	u64 trans_id;
-	u64 size;
+	u64 entry_size;
 	u32 time;
 
 	if (len == 0)
@@ -705,22 +717,15 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		if (pos + copied > inode->i_size)
-			size = cpu_to_le64(pos + copied);
+			entry_size = cpu_to_le64(pos + copied);
 		else
-			size = cpu_to_le64(inode->i_size);
+			entry_size = cpu_to_le64(inode->i_size);
 
 		/* Handle hole fill write */
 		if (hole_fill) {
-			memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
-			entry_data.entry_type = FILE_WRITE;
-			entry_data.reassigned = 0;
-			entry_data.trans_id = trans_id;
-			entry_data.pgoff = cpu_to_le64(start_blk);
-			entry_data.num_pages = cpu_to_le32(allocated);
-			entry_data.invalid_pages = 0;
-			entry_data.block = cpu_to_le64(blk_off);
-			entry_data.mtime = cpu_to_le32(time);
-			entry_data.size = size;
+			nova_init_file_write_entry(sb, pi, &entry_data,
+						trans_id, start_blk, allocated,
+						blocknr, time, entry_size);
 
 			ret = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, temp_tail, alter_temp_tail,
@@ -734,7 +739,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			/* Update existing entry */
 			entry->trans_id = trans_id;
 			entry->mtime = cpu_to_le32(time);
-			entry->size = size;
+			entry->size = entry_size;
 			nova_update_entry_csum(entry);
 			nova_update_alter_entry(sb, entry);
 		}
@@ -933,19 +938,10 @@ again:
 	}
 
 	num_blocks = allocated;
-	memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
-	entry_data.entry_type = FILE_WRITE;
-	entry_data.reassigned = 0;
-	entry_data.trans_id = trans_id;
-	entry_data.pgoff = cpu_to_le64(iblock);
-	entry_data.num_pages = cpu_to_le32(num_blocks);
-	entry_data.invalid_pages = 0;
-	entry_data.block = cpu_to_le64(nova_get_block_off(sb, blocknr,
-							pi->i_blk_type));
-	entry_data.mtime = cpu_to_le32(time);
-
 	/* Do not extend file size */
-	entry_data.size = cpu_to_le64(inode->i_size);
+	nova_init_file_write_entry(sb, pi, &entry_data,
+					trans_id, iblock, num_blocks,
+					blocknr, time, inode->i_size);
 
 	ret = nova_append_file_write_entry(sb, pi, inode,
 				&entry_data, pi->log_tail, pi->alter_log_tail,
