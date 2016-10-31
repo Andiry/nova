@@ -191,7 +191,7 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 static int nova_append_dir_inode_entry(struct super_block *sb,
 	struct nova_inode *pidir, struct inode *dir,
 	u64 ino, struct dentry *dentry, unsigned short de_len,
-	struct nova_dentry_update *update,
+	struct nova_inode_update *update,
 	int link_change, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(dir);
@@ -343,7 +343,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	struct nova_dentry_update *update, u64 trans_id)
+	struct nova_inode_update *update, u64 trans_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -443,7 +443,7 @@ static void nova_inplace_update_dentry(struct super_block *sb,
  * already been logged for consistency
  */
 int nova_remove_dentry(struct dentry *dentry, int dec_link,
-	struct nova_dentry_update *update, u64 trans_id)
+	struct nova_inode_update *update, u64 trans_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -515,7 +515,7 @@ out:
 
 /* Create dentry and delete dentry must be invalidated together */
 int nova_invalidate_dentries(struct super_block *sb,
-	struct nova_dentry_update *update)
+	struct nova_inode_update *update)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_dentry *create_dentry;

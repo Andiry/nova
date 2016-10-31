@@ -266,7 +266,7 @@ enum alloc_type {
 	DATA,
 };
 
-struct nova_dentry_update {
+struct nova_inode_update {
 	u64 tail;
 	u64 alter_tail;
 	u64 curr_entry;
@@ -1191,11 +1191,11 @@ extern const struct file_operations nova_dir_operations;
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id);
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	struct nova_dentry_update *update, u64 trans_id);
+	struct nova_inode_update *update, u64 trans_id);
 int nova_remove_dentry(struct dentry *dentry, int dec_link,
-	struct nova_dentry_update *update, u64 trans_id);
+	struct nova_inode_update *update, u64 trans_id);
 int nova_invalidate_dentries(struct super_block *sb,
-	struct nova_dentry_update *update);
+	struct nova_inode_update *update);
 void nova_print_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long ino);
 void nova_delete_dir_tree(struct super_block *sb,
@@ -1287,7 +1287,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change);
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
-	struct nova_dentry_update *update, u64 *old_linkc, u64 trans_id);
+	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
 void nova_apply_link_change_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_link_change_entry *entry);
 

@@ -26,7 +26,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct inode    *inode = mapping->host;
 	struct nova_inode *pi;
 	struct super_block *sb = inode->i_sb;
-	struct nova_dentry_update update;
+	struct nova_inode_update update;
 	unsigned int flags;
 	int ret;
 

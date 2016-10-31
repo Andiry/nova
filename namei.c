@@ -68,7 +68,7 @@ static struct dentry *nova_lookup(struct inode *dir, struct dentry *dentry,
 
 static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode *pidir, struct inode *inode,
-	struct inode *dir, struct nova_dentry_update *update)
+	struct inode *dir, struct nova_inode_update *update)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	int cpu;
@@ -115,7 +115,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	int err = PTR_ERR(inode);
 	struct super_block *sb = dir->i_sb;
 	struct nova_inode *pidir, *pi;
-	struct nova_dentry_update update;
+	struct nova_inode_update update;
 	u64 pi_addr = 0;
 	u64 ino, trans_id;
 	timing_t create_time;
@@ -166,7 +166,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct super_block *sb = dir->i_sb;
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
-	struct nova_dentry_update update;
+	struct nova_inode_update update;
 	u64 ino;
 	u64 trans_id;
 	timing_t mknod_time;
@@ -222,7 +222,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	u64 log_block = 0;
 	unsigned long name_blocknr = 0;
 	int allocated;
-	struct nova_dentry_update update;
+	struct nova_inode_update update;
 	u64 ino;
 	u64 trans_id;
 	timing_t symlink_time;
@@ -295,8 +295,8 @@ out_fail1:
 
 static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode *pidir, struct inode *inode,
-	struct inode *dir, struct nova_dentry_update *update,
-	struct nova_dentry_update *update_dir, int invalidate, u64 trans_id)
+	struct inode *dir, struct nova_inode_update *update,
+	struct nova_inode_update *update_dir, int invalidate, u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	u64 journal_tail;
@@ -419,7 +419,7 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 /* Returns new tail after append */
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
-	struct nova_dentry_update *update, u64 *old_linkc, u64 trans_id)
+	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -506,8 +506,8 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	struct inode *inode = dest_dentry->d_inode;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode *pidir;
-	struct nova_dentry_update update_dir;
-	struct nova_dentry_update update;
+	struct nova_inode_update update_dir;
+	struct nova_inode_update update;
 	u64 old_linkc = 0;
 	u64 trans_id;
 	int err = -ENOMEM;
@@ -571,8 +571,8 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	int retval = -ENOMEM;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode *pidir;
-	struct nova_dentry_update update_dir;
-	struct nova_dentry_update update;
+	struct nova_inode_update update_dir;
+	struct nova_inode_update update;
 	u64 old_linkc = 0;
 	u64 trans_id;
 	int invalidate = 0;
@@ -632,7 +632,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct nova_inode *pidir, *pi;
 	struct nova_inode_info *si, *sidir;
 	struct nova_inode_info_header *sih = NULL;
-	struct nova_dentry_update update;
+	struct nova_inode_update update;
 	u64 pi_addr = 0;
 	u64 ino;
 	u64 trans_id;
@@ -732,8 +732,8 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	struct nova_dentry *de;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode), *pidir;
-	struct nova_dentry_update update_dir;
-	struct nova_dentry_update update;
+	struct nova_inode_update update_dir;
+	struct nova_inode_update update;
 	u64 old_linkc = 0;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -814,10 +814,10 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct nova_dentry *father_entry = NULL;
 	char *head_addr = NULL;
-	struct nova_dentry_update update_dir_new;
-	struct nova_dentry_update update_dir_old;
-	struct nova_dentry_update update_new;
-	struct nova_dentry_update update_old;
+	struct nova_inode_update update_dir_new;
+	struct nova_inode_update update_dir_old;
+	struct nova_inode_update update_new;
+	struct nova_inode_update update_old;
 	u64 old_linkc1 = 0, old_linkc2 = 0;
 	int err = -ENOENT;
 	int inc_link = 0, dec_link = 0;
