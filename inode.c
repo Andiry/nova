@@ -1536,18 +1536,21 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 /* Returns new tail after append */
 static int nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	u64 tail, u64 alter_tail, u64 *new_tail, u64 *alter_new_tail,
-	u64 *last_setattr, u64 trans_id)
+	struct nova_inode_update *update, u64 *last_setattr, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_setattr_logentry *entry, *alter_entry;
+	u64 tail, alter_tail;
 	u64 curr_p, alter_curr_p;
 	int extended = 0;
 	size_t size = sizeof(struct nova_setattr_logentry);
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_setattr_t, append_time);
+
+	tail = update->tail;
+	alter_tail = update->alter_tail;
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
 						MAIN_LOG, &extended);
@@ -1572,8 +1575,8 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	memset(alter_entry, 0, size);
 	nova_update_setattr_entry(inode, alter_entry, attr, trans_id);
 
-	*new_tail = curr_p + size;
-	*alter_new_tail = alter_curr_p + size;
+	update->tail = curr_p + size;
+	update->alter_tail = alter_curr_p + size;
 	*last_setattr = sih->last_setattr;
 	sih->last_setattr = curr_p;
 
@@ -1678,11 +1681,11 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_update update;
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	u64 last_setattr = 0;
 	loff_t oldsize = inode->i_size;
-	u64 new_tail, alter_new_tail;
 	u64 trans_id;
 	timing_t setattr_time;
 	u64 latest_snapshot_trans_id = 0;
@@ -1732,16 +1735,16 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		/* We are holding i_mutex so OK to append the log */
 		nova_dbgv("%s : Appending last log entry for inode ino = %lu\n",
 				__func__, inode->i_ino);
-		ret = nova_append_setattr_entry(sb, pi, inode, attr, 0, 0,
-				                &new_tail, &alter_new_tail,
+		update.tail = update.alter_tail = 0;
+		ret = nova_append_setattr_entry(sb, pi, inode, attr, &update,
 				                &last_setattr, trans_id);
 		if (ret) {
 			nova_dbg("%s: append setattr entry failure\n", __func__);
 			return ret;
 		}
 
-		nova_update_tail(pi, new_tail);
-		nova_update_alter_tail(pi, alter_new_tail);
+		nova_update_tail(pi, update.tail);
+		nova_update_alter_tail(pi, update.alter_tail);
 	}
 
 	nova_update_inode_checksum(pi);
