@@ -572,8 +572,14 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
+	u64 latest_snapshot_trans_id;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
+
+	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+
+	if (latest_snapshot_trans_id == 0)
+		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
 
 	*ret_entry = NULL;
 	entry = nova_get_write_entry(sb, si, start_blk);
@@ -588,7 +594,9 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		if (ent_blks > num_blocks)
 			ent_blks = num_blocks;
 
-		*ret_entry = entry;
+		if (entry->trans_id > latest_snapshot_trans_id)
+			*ret_entry = entry;
+
 	} else if (check_next) {
 		/* Possible Hole */
 		entry = nova_find_next_entry(sb, sih, start_blk);
