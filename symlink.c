@@ -31,6 +31,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode_log_page *log1_page;
+	struct nova_inode_update update;
 	size_t length = sizeof(struct nova_file_write_entry);
 	u64 block, block1, block2;
 	u32 time;
@@ -75,10 +76,10 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	sih->i_blocks = 3;
 	pi->log_head = block1;
 	pi->alter_log_head = block2;
-	nova_update_tail(pi, block1 + length);
-	nova_update_alter_tail(pi, block2 + length);
-	nova_update_inode_checksum(pi);
-	nova_update_alter_inode(sb, inode, pi);
+	update.tail = block1 + length;
+	update.alter_tail = block2 + length;
+
+	nova_update_inode(sb, inode, pi, &update, 1);
 
 	return 0;
 }

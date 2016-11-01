@@ -529,8 +529,7 @@ ssize_t nova_cow_file_write(struct file *filp,
 	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
 	nova_memlock_inode(sb, pi);
 
-	nova_update_tail(pi, update.tail);
-	nova_update_alter_tail(pi, update.alter_tail);
+	nova_update_inode(sb, inode, pi, &update, 1);
 
 	/* Free the overlap blocks after the write is committed */
 	ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
@@ -548,8 +547,6 @@ ssize_t nova_cow_file_write(struct file *filp,
 		i_size_write(inode, pos);
 		sih->i_size = pos;
 	}
-	nova_update_inode_checksum(pi);
-	nova_update_alter_inode(sb, inode, pi);
 
 out:
 	if (ret < 0)
@@ -781,8 +778,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	inode->i_blocks = sih->i_blocks;
 
 	if (update_log) {
-		nova_update_tail(pi, update.tail);
-		nova_update_alter_tail(pi, update.alter_tail);
+		nova_update_inode(sb, inode, pi, &update, 1);
 
 		/* Update file tree */
 		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
@@ -800,8 +796,6 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		i_size_write(inode, pos);
 		sih->i_size = pos;
 	}
-	nova_update_inode_checksum(pi);
-	nova_update_alter_inode(sb, inode, pi);
 
 out:
 	if (ret < 0)
@@ -943,8 +937,7 @@ again:
 	data_bits = blk_type_to_shift[pi->i_blk_type];
 	sih->i_blocks += (num_blocks << (data_bits - sb->s_blocksize_bits));
 
-	nova_update_tail(pi, update.tail);
-	nova_update_alter_tail(pi, update.alter_tail);
+	nova_update_inode(sb, inode, pi, &update, 1);
 
 	ret = nova_reassign_file_tree(sb, pi, sih, update.curr_entry);
 	if (ret)
@@ -953,9 +946,6 @@ again:
 	inode->i_blocks = sih->i_blocks;
 
 //	set_buffer_new(bh);
-	nova_update_inode_checksum(pi);
-	nova_update_alter_inode(sb, inode, pi);
-
 out:
 	if (ret < 0) {
 		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,

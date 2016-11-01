@@ -1743,12 +1743,8 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 			return ret;
 		}
 
-		nova_update_tail(pi, update.tail);
-		nova_update_alter_tail(pi, update.alter_tail);
+		nova_update_inode(sb, inode, pi, &update, 1);
 	}
-
-	nova_update_inode_checksum(pi);
-	nova_update_alter_inode(sb, inode, pi);
 
 	/* Invalidate old setattr entry */
 	if (last_setattr)

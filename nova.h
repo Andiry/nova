@@ -938,6 +938,18 @@ static inline int nova_update_alter_inode(struct super_block *sb,
 	return 0;
 }
 
+/* Update inode tails and checksums */
+static inline void nova_update_inode(struct super_block *sb,
+	struct inode *inode, struct nova_inode *pi,
+	struct nova_inode_update *update, int update_alter)
+{
+	nova_update_tail(pi, update->tail);
+	nova_update_alter_tail(pi, update->alter_tail);
+	nova_update_inode_checksum(pi);
+	if (update_alter)
+		nova_update_alter_inode(sb, inode, pi);
+}
+
 static inline unsigned long
 nova_get_numblocks(unsigned short btype)
 {
