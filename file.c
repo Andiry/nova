@@ -404,7 +404,6 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks = 0;
 	unsigned long blocknr = 0;
-	unsigned long next_pgoff;
 	unsigned long blockoff;
 	unsigned int data_bits;
 	loff_t new_size;
@@ -461,19 +460,10 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	update.tail = pi->log_tail;
 	update.alter_tail = pi->alter_log_tail;
 	while (num_blocks > 0) {
-		entry = nova_get_write_entry(sb, si, start_blk);
+		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
+						start_blk, &entry, 1);
 
 		if (entry) {
-			/* Find contiguous blocks */
-			if (entry->invalid_pages == 0)
-				ent_blks = entry->num_pages -
-						(start_blk - entry->pgoff);
-			else
-				ent_blks = 1;
-
-			if (ent_blks > num_blocks)
-				ent_blks = num_blocks;
-
 			if (entry->size < new_size) {
 				entry->size = new_size;
 				nova_update_entry_csum(entry);
@@ -481,27 +471,6 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 			}
 			allocated = ent_blks;
 			goto next;
-		}
-
-		/* Possible Hole */
-		entry = nova_find_next_entry(sb, sih, start_blk);
-		if (entry) {
-			next_pgoff = entry->pgoff;
-			if (next_pgoff <= start_blk) {
-				nova_err(sb, "entry pgoff %llu, num pages %u, "
-					"blk %lu\n", entry->pgoff,
-					entry->num_pages, start_blk);
-				nova_print_nova_log(sb, pi);
-				BUG();
-				ret = -EINVAL;
-				goto out;
-			}
-			ent_blks = next_pgoff - start_blk;
-			if (ent_blks > num_blocks)
-				ent_blks = num_blocks;
-		} else {
-			/* File grow */
-			ent_blks = num_blocks;
 		}
 
 		/* Allocate zeroed blocks to fill hole */

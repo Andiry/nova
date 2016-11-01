@@ -561,15 +561,21 @@ out:
 	return ret;
 }
 
-static unsigned long nova_get_write_length(struct super_block *sb,
-	struct nova_inode_info *si, unsigned long num_blocks,
-	unsigned long start_blk, struct nova_file_write_entry **ret_entry)
+/*
+ * Check if there is an existing entry for target page offset.
+ * Used for inplace write, direct IO, DAX-mmap and fallocate.
+ */
+unsigned long nova_check_existing_entry(struct super_block *sb,
+	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
+	struct nova_file_write_entry **ret_entry, int check_next)
 {
-	struct nova_file_write_entry *entry;
+	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_file_write_entry *entry;
 	unsigned long next_pgoff;
-	unsigned long ent_blks;
+	unsigned long ent_blks = 0;
 
+	*ret_entry = NULL;
 	entry = nova_get_write_entry(sb, si, start_blk);
 	if (entry) {
 		/* We can do inplace write. Find contiguous blocks */
@@ -583,12 +589,16 @@ static unsigned long nova_get_write_length(struct super_block *sb,
 			ent_blks = num_blocks;
 
 		*ret_entry = entry;
-	} else {
+	} else if (check_next) {
 		/* Possible Hole */
 		entry = nova_find_next_entry(sb, sih, start_blk);
 		if (entry) {
 			next_pgoff = entry->pgoff;
 			if (next_pgoff <= start_blk) {
+				nova_err(sb, "iblock %lu, entry pgoff %lu, "
+						" num pages %lu\n", start_blk,
+						next_pgoff, entry->num_pages);
+				nova_print_inode_log(sb, inode);
 				BUG();
 				ent_blks = num_blocks;
 				goto out;
@@ -600,8 +610,13 @@ static unsigned long nova_get_write_length(struct super_block *sb,
 			/* File grow */
 			ent_blks = num_blocks;
 		}
-		*ret_entry = NULL;
 	}
+
+	if (entry && ent_blks == 0) {
+		nova_dbg("%s: %d\n", __func__, check_next);
+		dump_stack();
+	}
+
 out:
 	return ent_blks;
 }
@@ -685,8 +700,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		offset = pos & (nova_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 
-		ent_blks = nova_get_write_length(sb, si, num_blocks,
-						start_blk, &entry);
+		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
+						start_blk, &entry, 1);
 
 		if (entry) {
 			/* We can do inplace write. Find contiguous blocks */
@@ -860,12 +875,12 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	u32 time;
 	unsigned int data_bits;
 	unsigned long nvmm = 0;
-	unsigned long next_pgoff;
 	unsigned long blocknr = 0;
 	u64 trans_id;
 	int num_blocks = 0;
 	int allocated = 0;
 	int locked = 0;
+	int check_next = 1;
 	int ret = 0;
 
 	if (max_blocks == 0)
@@ -874,18 +889,14 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	nova_dbgv("%s: pgoff %lu, num %lu, create %d\n",
 				__func__, iblock, max_blocks, create);
 
+	if (taking_lock)
+		check_next = 0;
+
 again:
-	entry = nova_get_write_entry(sb, si, iblock);
+	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
+						iblock, &entry, check_next);
+
 	if (entry) {
-		/* Find contiguous blocks */
-		if (entry->invalid_pages == 0)
-			num_blocks = entry->num_pages - (iblock - entry->pgoff);
-		else
-			num_blocks = 1;
-
-		if (num_blocks > max_blocks)
-			num_blocks = max_blocks;
-
 		nvmm = get_nvmm(sb, sih, entry, iblock);
 		clear_buffer_new(bh);
 		nova_dbgv("%s: found pgoff %lu, block %lu\n",
@@ -900,35 +911,16 @@ again:
 		mutex_lock(&inode->i_mutex);
 		locked = 1;
 		/* Check again incase someone has done it for us */
+		check_next = 1;
 		goto again;
 	}
 
 	pi = nova_get_inode(sb, inode);
-	num_blocks = max_blocks;
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 	trans_id = nova_get_trans_id(sb);
 	update.tail = pi->log_tail;
 	update.alter_tail = pi->alter_log_tail;
-
-	/* Fill the hole */
-	entry = nova_find_next_entry(sb, sih, iblock);
-	if (entry) {
-		next_pgoff = entry->pgoff;
-		if (next_pgoff <= iblock) {
-			nova_err(sb, "iblock %lu, entry pgoff %lu, "
-					" num pages %lu\n", iblock,
-					next_pgoff, entry->num_pages);
-			nova_print_nova_log(sb, pi);
-			BUG();
-			ret = -EINVAL;
-			goto out;
-		}
-
-		num_blocks = next_pgoff - iblock;
-		if (num_blocks > max_blocks)
-			num_blocks = max_blocks;
-	}
 
 	/* Return initialized blocks to the user */
 	allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
