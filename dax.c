@@ -343,7 +343,7 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 	return 0;
 }
 
-static void nova_init_file_write_entry(struct super_block *sb,
+void nova_init_file_write_entry(struct super_block *sb,
 	struct nova_inode *pi, struct nova_file_write_entry *entry,
 	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size)
 {

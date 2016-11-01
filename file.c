@@ -413,7 +413,6 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	int allocated = 0;
 	bool update_log = false;
 	timing_t fallocate_time;
-	u64 blk_off;
 	u64 begin_tail = 0;
 	u64 trans_id;
 	u32 time;
@@ -518,19 +517,10 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 			goto out;
 		}
 
-		blk_off = nova_get_block_off(sb, blocknr, pi->i_blk_type);
-
 		/* Handle hole fill write */
-		memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
-		entry_data.entry_type = FILE_WRITE;
-		entry_data.reassigned = 0;
-		entry_data.trans_id = trans_id;
-		entry_data.pgoff = cpu_to_le64(start_blk);
-		entry_data.num_pages = cpu_to_le32(allocated);
-		entry_data.invalid_pages = 0;
-		entry_data.block = cpu_to_le64(blk_off);
-		entry_data.mtime = cpu_to_le32(time);
-		entry_data.size = new_size;
+		nova_init_file_write_entry(sb, pi, &entry_data, trans_id,
+					start_blk, allocated, blocknr,
+					time, new_size);
 
 		ret = nova_append_file_write_entry(sb, pi, inode,
 					&entry_data, &update);

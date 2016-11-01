@@ -1175,6 +1175,9 @@ int nova_data_csum_init(struct super_block *sb);
 int nova_cleanup_incomplete_write(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	unsigned long blocknr, int allocated, u64 begin_tail, u64 end_tail);
+void nova_init_file_write_entry(struct super_block *sb,
+	struct nova_inode *pi, struct nova_file_write_entry *entry,
+	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size);
 int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 begin_tail);
