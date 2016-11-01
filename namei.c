@@ -81,14 +81,10 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	spin_lock(&sbi->journal_locks[cpu]);
 	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
 
-	pidir->log_tail = update->tail;
-	pidir->alter_log_tail = update->alter_tail;
-	nova_update_inode_checksum(pidir);
-	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
+	nova_update_inode(sb, dir, pidir, update, 0);
 
 	pi->valid = 1;
 	nova_update_inode_checksum(pi);
-	nova_flush_buffer(&pi->valid, CACHELINE_SIZE, 0);
 	PERSISTENT_BARRIER();
 
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
@@ -309,19 +305,13 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	spin_lock(&sbi->journal_locks[cpu]);
 	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
 
-	pi->log_tail = update->tail;
-	pi->alter_log_tail = update->alter_tail;
 	if (invalidate) {
 		pi->valid = 0;
 		pi->delete_trans_id = trans_id;
 	}
-	nova_update_inode_checksum(pi);
-	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
+	nova_update_inode(sb, inode, pi, update, 0);
 
-	pidir->log_tail = update_dir->tail;
-	pidir->alter_log_tail = update_dir->alter_tail;
-	nova_update_inode_checksum(pidir);
-	nova_flush_buffer(&pidir->log_tail, CACHELINE_SIZE, 0);
+	nova_update_inode(sb, dir, pidir, update_dir, 0);
 
 	PERSISTENT_BARRIER();
 
@@ -954,21 +944,11 @@ static int nova_rename(struct inode *old_dir,
 				father_entry ? &father_entry->ino : NULL,
 				cpu);
 
-	old_pi->log_tail = update_old.tail;
-	old_pi->alter_log_tail = update_old.alter_tail;
-	nova_update_inode_checksum(old_pi);
-	nova_flush_buffer(&old_pi->log_tail, CACHELINE_SIZE, 0);
-
-	old_pidir->log_tail = update_dir_old.tail;
-	old_pidir->alter_log_tail = update_dir_old.alter_tail;
-	nova_update_inode_checksum(old_pidir);
-	nova_flush_buffer(&old_pidir->log_tail, CACHELINE_SIZE, 0);
+	nova_update_inode(sb, old_inode, old_pi, &update_old, 0);
+	nova_update_inode(sb, old_dir, old_pidir, &update_dir_old, 0);
 
 	if (old_pidir != new_pidir) {
-		new_pidir->log_tail = update_dir_new.tail;
-		new_pidir->alter_log_tail = update_dir_new.alter_tail;
-		nova_update_inode_checksum(new_pidir);
-		nova_flush_buffer(&new_pidir->log_tail, CACHELINE_SIZE, 0);
+		nova_update_inode(sb, new_dir, new_pidir, &update_dir_new, 0);
 	}
 
 	if (change_parent && father_entry) {
@@ -978,14 +958,11 @@ static int nova_rename(struct inode *old_dir,
 	}
 
 	if (new_inode) {
-		new_pi->log_tail = update_new.tail;
-		new_pi->alter_log_tail = update_new.alter_tail;
 		if (!new_inode->i_nlink) {
 			new_pi->valid = 0;
 			new_pi->delete_trans_id = trans_id;
 		}
-		nova_update_inode_checksum(new_pi);
-		nova_flush_buffer(new_pi, sizeof(struct nova_inode), 0);
+		nova_update_inode(sb, new_inode, new_pi, &update_new, 0);
 	}
 
 	PERSISTENT_BARRIER();
