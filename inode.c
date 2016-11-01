@@ -2714,18 +2714,22 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
  * multiple entries.
  */
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, struct nova_file_write_entry *data, u64 tail,
-	u64 alter_tail, u64 *curr_entry, u64 *alter_curr_entry)
+	struct inode *inode, struct nova_file_write_entry *data,
+	struct nova_inode_update *update)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry, *alter_entry;
+	u64 tail, alter_tail;
 	u64 curr_p, alter_curr_p;
 	int extended = 0;
 	size_t size = sizeof(struct nova_file_write_entry);
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
+
+	tail = update->tail;
+	alter_tail = update->alter_tail;
 
 	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
 						MAIN_LOG, &extended);
@@ -2741,7 +2745,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 			curr_p, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT, entry->size, entry->csum);
 	/* entry->invalid is set to 0 */
-	*curr_entry = curr_p;
+	update->curr_entry = curr_p;
 
 	alter_curr_p = nova_get_append_head(sb, pi, sih, alter_tail, size,
 						ALTER_LOG, &extended);
@@ -2752,7 +2756,10 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 						alter_curr_p);
 	memcpy_to_pmem_nocache(alter_entry, data,
 			sizeof(struct nova_file_write_entry));
-	*alter_curr_entry = alter_curr_p;
+	update->alter_entry = alter_curr_p;
+
+	update->tail = curr_p + size;
+	update->alter_tail = alter_curr_p + size;
 
 	NOVA_END_TIMING(append_file_entry_t, append_time);
 	return 0;

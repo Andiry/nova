@@ -1257,8 +1257,8 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
 	int *extended);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, struct nova_file_write_entry *data, u64 tail,
-	u64 alter_tail, u64 *curr_entry, u64 *alter_curr_entry);
+	struct inode *inode, struct nova_file_write_entry *data,
+	struct nova_inode_update *update);
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih);
