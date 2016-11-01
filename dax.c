@@ -561,6 +561,51 @@ out:
 	return ret;
 }
 
+static unsigned long nova_get_write_length(struct super_block *sb,
+	struct nova_inode_info *si, unsigned long num_blocks,
+	unsigned long start_blk, struct nova_file_write_entry **ret_entry)
+{
+	struct nova_file_write_entry *entry;
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned long next_pgoff;
+	unsigned long ent_blks;
+
+	entry = nova_get_write_entry(sb, si, start_blk);
+	if (entry) {
+		/* We can do inplace write. Find contiguous blocks */
+		if (entry->invalid_pages == 0)
+			ent_blks = entry->num_pages -
+					(start_blk - entry->pgoff);
+		else
+			ent_blks = 1;
+
+		if (ent_blks > num_blocks)
+			ent_blks = num_blocks;
+
+		*ret_entry = entry;
+	} else {
+		/* Possible Hole */
+		entry = nova_find_next_entry(sb, sih, start_blk);
+		if (entry) {
+			next_pgoff = entry->pgoff;
+			if (next_pgoff <= start_blk) {
+				BUG();
+				ent_blks = num_blocks;
+				goto out;
+			}
+			ent_blks = next_pgoff - start_blk;
+			if (ent_blks > num_blocks)
+				ent_blks = num_blocks;
+		} else {
+			/* File grow */
+			ent_blks = num_blocks;
+		}
+		*ret_entry = NULL;
+	}
+out:
+	return ent_blks;
+}
+
 ssize_t nova_inplace_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -579,7 +624,6 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
-	unsigned long next_pgoff;
 	unsigned int data_bits;
 	int allocated = 0;
 	bool hole_fill = false;
@@ -640,39 +684,16 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		hole_fill = false;
 		offset = pos & (nova_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
-		entry = nova_get_write_entry(sb, si, start_blk);
+
+		ent_blks = nova_get_write_length(sb, si, num_blocks,
+						start_blk, &entry);
 
 		if (entry) {
-			/* Find contiguous blocks */
-			if (entry->invalid_pages == 0)
-				ent_blks = entry->num_pages - (start_blk - entry->pgoff);
-			else
-				ent_blks = 1;
-	
-			if (ent_blks > num_blocks)
-				ent_blks = num_blocks;
-
+			/* We can do inplace write. Find contiguous blocks */
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT; 
 			allocated = ent_blks;
 		} else {
-			/* Possible Hole */
-			entry = nova_find_next_entry(sb, sih, start_blk);
-			if (entry) {
-				next_pgoff = entry->pgoff;
-				if (next_pgoff <= start_blk) {
-					BUG();
-					ret = -EINVAL;
-					goto out;
-				}
-				ent_blks = next_pgoff - start_blk;
-				if (ent_blks > num_blocks)
-					ent_blks = num_blocks;
-			} else {
-				/* File grow */
-				ent_blks = num_blocks;
-			}
-
 			/* Allocate blocks to fill hole */
 			allocated = nova_new_data_blocks(sb, pi, &blocknr, ent_blks,
 							start_blk, 0, 0);
