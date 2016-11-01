@@ -753,7 +753,7 @@ static void nova_get_inode_flags(struct inode *inode, struct nova_inode *pi)
 	pi->i_flags = cpu_to_le32(nova_flags);
 }
 
-static void nova_update_inode(struct inode *inode, struct nova_inode *pi)
+static void nova_init_inode(struct inode *inode, struct nova_inode *pi)
 {
 	nova_memunlock_inode(inode->i_sb, pi);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
@@ -1325,7 +1325,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	sih->alter_pi_addr = alter_pi_addr;
 	sih->ino = ino;
 
-	nova_update_inode(inode, pi);
+	nova_init_inode(inode, pi);
 
 	nova_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 
