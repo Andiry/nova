@@ -567,7 +567,7 @@ out:
  */
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
-	struct nova_file_write_entry **ret_entry, int check_next)
+	struct nova_file_write_entry **ret_entry, int check_next, int *inplace)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -582,6 +582,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
 
 	*ret_entry = NULL;
+	*inplace = 0;
 	entry = nova_get_write_entry(sb, si, start_blk);
 	if (entry) {
 		/* We can do inplace write. Find contiguous blocks */
@@ -594,8 +595,10 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		if (ent_blks > num_blocks)
 			ent_blks = num_blocks;
 
+		*ret_entry = entry;
+
 		if (entry->trans_id > latest_snapshot_trans_id)
-			*ret_entry = entry;
+			*inplace = 1;
 
 	} else if (check_next) {
 		/* Possible Hole */
@@ -649,6 +652,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
 	int allocated = 0;
+	int inplace = 0;
 	bool hole_fill = false;
 	bool update_log = false;
 	void* kmem;
@@ -709,9 +713,9 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		start_blk = pos >> sb->s_blocksize_bits;
 
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
-						start_blk, &entry, 1);
+						start_blk, &entry, 1, &inplace);
 
-		if (entry) {
+		if (entry && inplace) {
 			/* We can do inplace write. Find contiguous blocks */
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT; 
@@ -886,6 +890,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long blocknr = 0;
 	u64 trans_id;
 	int num_blocks = 0;
+	int inplace = 0;
 	int allocated = 0;
 	int locked = 0;
 	int check_next = 1;
@@ -902,9 +907,9 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 
 again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
-						iblock, &entry, check_next);
+					iblock, &entry, check_next, &inplace);
 
-	if (entry) {
+	if (entry && inplace) {
 		nvmm = get_nvmm(sb, sih, entry, iblock);
 		clear_buffer_new(bh);
 		nova_dbgv("%s: found pgoff %lu, block %lu\n",

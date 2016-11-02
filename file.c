@@ -408,6 +408,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	unsigned int data_bits;
 	loff_t new_size;
 	long ret = 0;
+	int inplace = 0;
 	int blocksize_mask;
 	int allocated = 0;
 	bool update_log = false;
@@ -461,9 +462,9 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	update.alter_tail = pi->alter_log_tail;
 	while (num_blocks > 0) {
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
-						start_blk, &entry, 1);
+						start_blk, &entry, 1, &inplace);
 
-		if (entry) {
+		if (entry && inplace) {
 			if (entry->size < new_size) {
 				entry->size = new_size;
 				nova_update_entry_csum(entry);
