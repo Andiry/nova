@@ -909,16 +909,20 @@ again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
 					iblock, &entry, check_next, &inplace);
 
-	if (entry && inplace) {
-		nvmm = get_nvmm(sb, sih, entry, iblock);
-		clear_buffer_new(bh);
-		nova_dbgv("%s: found pgoff %lu, block %lu\n",
-				__func__, iblock, nvmm);
-		goto out;
+	if (entry) {
+		if (create == 0 || inplace) {
+			nvmm = get_nvmm(sb, sih, entry, iblock);
+			clear_buffer_new(bh);
+			nova_dbgv("%s: found pgoff %lu, block %lu\n",
+					__func__, iblock, nvmm);
+			goto out;
+		}
 	}
 
-	if (create == 0)
-		return 0;
+	if (create == 0) {
+		num_blocks = 0;
+		goto out1;
+	}
 
 	if (taking_lock && locked == 0) {
 		mutex_lock(&inode->i_mutex);
