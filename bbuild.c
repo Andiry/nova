@@ -423,6 +423,7 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 		return;
 	}
 
+	pi->alter_log_head = pi->alter_log_tail = 0;
 	pi->log_head = new_block;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
@@ -492,6 +493,7 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
 	/* Finally update log head and tail */
+	pi->alter_log_head = pi->alter_log_tail = 0;
 	pi->log_head = new_block;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 

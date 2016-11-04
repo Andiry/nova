@@ -897,6 +897,7 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 		nvmm_list = &nvmm_page->lists[i];
 		fake_pi.log_head = nvmm_list->head;
 		fake_pi.log_tail = nvmm_list->tail;
+		fake_pi.alter_log_head = fake_pi.alter_log_tail = 0;
 		nova_free_inode_log(sb, &fake_pi);
 	}
 
