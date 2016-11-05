@@ -358,10 +358,22 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 		return ret;
 	}
 
-	entry->reassigned = 1;
 	entry->invalid_pages += num_free;
 	nova_update_entry_csum(entry);
 
+	nova_update_alter_entry(sb, entry);
+
+	return 0;
+}
+
+static int nova_reassign_file_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry)
+{
+	if (entry->reassigned == 1)
+		return 0;
+
+	entry->reassigned = 1;
+	nova_update_entry_csum(entry);
 	nova_update_alter_entry(sb, entry);
 
 	return 0;
@@ -381,6 +393,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 		return 0;
 
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
+	nova_reassign_file_write_entry(sb, entry);
 
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
