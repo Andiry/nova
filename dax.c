@@ -586,7 +586,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	entry = nova_get_write_entry(sb, si, start_blk);
 	if (entry) {
 		/* We can do inplace write. Find contiguous blocks */
-		if (entry->invalid_pages == 0)
+		if (entry->reassigned == 0)
 			ent_blks = entry->num_pages -
 					(start_blk - entry->pgoff);
 		else

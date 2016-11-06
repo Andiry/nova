@@ -351,7 +351,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		}
 
 		/* Find contiguous blocks */
-		if (entry->invalid_pages == 0)
+		if (entry->reassigned == 0)
 			avail_bytes = (entry->num_pages - (pgoff - entry->pgoff))
 				* PAGE_SIZE - offset;
 		else
