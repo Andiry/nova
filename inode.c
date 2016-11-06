@@ -642,6 +642,7 @@ int nova_assign_write_entry(struct super_block *sb,
 							start_old_pgoff,
 							num_free, false,
 							entry->trans_id);
+				nova_reassign_write_entry(sb, start_old_entry);
 				start_old_entry = old_entry;
 				start_old_pgoff = curr_pgoff;
 				num_free = 1;
@@ -663,6 +664,8 @@ int nova_assign_write_entry(struct super_block *sb,
 		nova_free_old_entry(sb, pi, sih, start_old_entry,
 					start_old_pgoff, num_free, false,
 					entry->trans_id);
+
+	nova_reassign_write_entry(sb, start_old_entry);
 
 out:
 	NOVA_END_TIMING(assign_t, assign_time);
