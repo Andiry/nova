@@ -1325,6 +1325,9 @@ int nova_save_snapshots(struct super_block *sb)
 	if (sbi->snapshot_cleaner_thread)
 		kthread_stop(sbi->snapshot_cleaner_thread);
 
+	if (sbi->mount_snapshot)
+		return 0;
+
 	tree = &sbi->snapshot_info_tree;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	memset(nvmm_info_table, '0', PAGE_SIZE);
