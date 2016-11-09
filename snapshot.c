@@ -881,6 +881,7 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_list *nvmm_list;
 	struct nova_inode fake_pi;
+	unsigned long nvmm_blocknr;
 	int i;
 
 	if (nvmm_info->trans_id == 0 || nvmm_info->nvmm_page_addr == 0)
@@ -899,7 +900,8 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 		nova_free_inode_log(sb, &fake_pi);
 	}
 
-	nova_free_log_blocks(sb, &fake_pi, nvmm_info->nvmm_page_addr, 1);
+	nvmm_blocknr = nova_get_blocknr(sb, nvmm_info->nvmm_page_addr, 0);
+	nova_free_log_blocks(sb, &fake_pi, nvmm_blocknr, 1);
 	return 0;
 }
 
