@@ -214,7 +214,7 @@ struct	nova_inode_log_page {
 struct nova_dentry {
 	u8	entry_type;
 	u8	name_len;		/* length of the dentry name */
-	u8	file_type;		/* file type */
+	u8	reassigned;		/* Currently deleted */
 	u8	invalid;		/* Invalid now? */
 	__le16	de_len;			/* length of this dentry */
 	__le16	links_count;

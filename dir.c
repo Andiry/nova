@@ -157,7 +157,7 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
 				dentry->d_name.len);
 	entry->name[dentry->d_name.len] = '\0';
-	entry->file_type = 0;
+	entry->reassigned = 0;
 	entry->invalid = 0;
 	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
 	entry->size = cpu_to_le64(dir->i_size);
@@ -176,9 +176,9 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 	nova_update_entry_csum(entry);
 
 	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
-			"name len %u, file type %u, csum 0x%x\n",
+			"name len %u, reassigned %u, csum 0x%x\n",
 			entry->ino, entry->de_len,
-			entry->name_len, entry->file_type, entry->csum);
+			entry->name_len, entry->reassigned, entry->csum);
 
 	nova_flush_buffer(entry, de_len, 0);
 }
@@ -433,9 +433,9 @@ static void nova_inplace_update_dentry(struct super_block *sb,
 	nova_update_alter_entry(sb, dentry);
 
 	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
-			"name len %u, file type %u, csum 0x%x\n",
+			"name len %u, reassigned %u, csum 0x%x\n",
 			dentry->ino, dentry->de_len,
-			dentry->name_len, dentry->file_type, dentry->csum);
+			dentry->name_len, dentry->reassigned, dentry->csum);
 
 }
 
@@ -526,7 +526,14 @@ int nova_invalidate_dentries(struct super_block *sb,
 	create_dentry = update->create_dentry;
 	delete_dentry = update->delete_dentry;
 
-	if (!create_dentry || !old_entry_freeable(sb, create_dentry->trans_id))
+	if (!create_dentry)
+		return 0;
+
+	create_dentry->reassigned = 1;
+	nova_update_entry_csum(create_dentry);
+	nova_update_alter_entry(sb, create_dentry);
+
+	if (!old_entry_freeable(sb, create_dentry->trans_id))
 		return 0;
 
 	create_curr = nova_get_addr_off(sbi, create_dentry);
@@ -925,7 +932,8 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 			le16_to_cpu(entry->de_len));
 
 		de_len = le16_to_cpu(entry->de_len);
-		if (entry->ino > 0 && entry->invalid == 0) {
+		if (entry->ino > 0 && entry->invalid == 0
+					&& entry->reassigned == 0) {
 			ino = __le64_to_cpu(entry->ino);
 			pos = BKDRHash(entry->name, entry->name_len);
 
