@@ -756,8 +756,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	return 0;
 }
 
-#if 0
-static int nova_readdir(struct file *file, struct dir_context *ctx)
+static int nova_readdir_slow(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
@@ -829,7 +828,6 @@ out:
 	NOVA_END_TIMING(readdir_t, readdir_time);
 	return 0;
 }
-#endif
 
 static u64 nova_find_next_dentry_addr(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 pos)
@@ -850,7 +848,7 @@ static u64 nova_find_next_dentry_addr(struct super_block *sb,
 	return addr;
 }
 
-static int nova_readdir(struct file *file, struct dir_context *ctx)
+static int nova_readdir_fast(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
@@ -973,6 +971,18 @@ out:
 	NOVA_END_TIMING(readdir_t, readdir_time);
 	nova_dbgv("%s return\n", __func__);
 	return 0;
+}
+
+static int nova_readdir(struct file *file, struct dir_context *ctx)
+{
+	struct inode *inode = file_inode(file);
+	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (sbi->mount_snapshot == 0)
+		return nova_readdir_fast(file, ctx);
+	else
+		return nova_readdir_slow(file, ctx);
 }
 
 const struct file_operations nova_dir_operations = {
