@@ -39,11 +39,14 @@
 #include "nova.h"
 
 int measure_timing = 0;
+int replica_inode = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
 
 module_param(measure_timing, int, S_IRUGO);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
+module_param(replica_inode, int, S_IRUGO);
+MODULE_PARM_DESC(replica_inode, "Inode replication");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;
