@@ -790,10 +790,12 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	if (!pi)
 		NOVA_ASSERT(0);
 
-	/* Get alternate inode address */
-	ret = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
-	if (ret)
-		return ret;
+	if (replica_inode) {
+		/* Get alternate inode address */
+		ret = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
+		if (ret)
+			return ret;
+	}
 
 	ret = nova_check_inode_integrity(sb, ino, pi, alter_pi_addr);
 	if (ret)
@@ -1336,12 +1338,14 @@ static int failure_thread_func(void *data)
 		 * granularity, but not aligned on 2MB boundary.
 		 */
 		for (i = 0; i < 512; i++)
-			set_bm((curr >> PAGE_SHIFT) + i, global_bm[cpuid],
-					BM_4K);
+			set_bm((curr >> PAGE_SHIFT) + i,
+					global_bm[cpuid], BM_4K);
 
-		for (i = 0; i < 512; i++)
-			set_bm((curr1 >> PAGE_SHIFT) + i, global_bm[cpuid],
-					BM_4K);
+		if (replica_inode) {
+			for (i = 0; i < 512; i++)
+				set_bm((curr1 >> PAGE_SHIFT) + i,
+					global_bm[cpuid], BM_4K);
+		}
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
@@ -1392,14 +1396,19 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 	unsigned long curr_addr;
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 curr;
+	int num_tables;
 	int version;
 	int ret = 0;
 	int count;
 	int cpuid;
 
+	num_tables = 1;
+	if (replica_inode)
+		num_tables = 2;
+
 	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
 		ring = &task_rings[cpuid];
-		for (version = 0; version < 2; version++) {
+		for (version = 0; version < num_tables; version++) {
 			inode_table = nova_get_inode_table(sb, version,
 								cpuid);
 			if (!inode_table)

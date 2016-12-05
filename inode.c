@@ -97,6 +97,7 @@ static int nova_alloc_inode_table(struct super_block *sb, struct nova_inode *pi,
 int nova_init_inode_table(struct super_block *sb)
 {
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	int num_tables;
 	int ret;
 	int i;
 
@@ -109,7 +110,11 @@ int nova_init_inode_table(struct super_block *sb)
 
 	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
 
-	for (i = 0; i < 2; i++) {
+	num_tables = 1;
+	if (replica_inode)
+		num_tables = 2;
+
+	for (i = 0; i < num_tables; i++) {
 		ret = nova_alloc_inode_table(sb, pi, i);
 		if (ret)
 			return ret;
@@ -196,6 +201,11 @@ int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
 	u64 *alter_pi_addr)
 {
 	int ret;
+
+	if (replica_inode == 0) {
+		nova_err(sb, "Access alter inode when replica inode disabled\n");
+		return 0;
+	}
 
 	if (ino == NOVA_ROOT_INO) {
 		*alter_pi_addr = NOVA_SB_SIZE * 2 +
@@ -933,17 +943,21 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 	struct nova_inode *pi, u64 alter_pi_addr)
 {
-	struct nova_inode *alter_pi;
+	struct nova_inode *alter_pi = NULL;
 	int diff = 0;
 	int ret;
 
-	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
-	if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
-		nova_err(sb, "%s: inode %llu shadow mismatch\n", __func__, ino);
-		nova_print_inode(pi);
-		nova_print_inode(alter_pi);
-		nova_print_nova_log(sb, pi);
-		diff = 1;
+	if (replica_inode) {
+		alter_pi = (struct nova_inode *)nova_get_block(sb,
+							alter_pi_addr);
+		if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
+			nova_err(sb, "%s: inode %llu shadow mismatch\n",
+							__func__, ino);
+			nova_print_inode(pi);
+			nova_print_inode(alter_pi);
+			nova_print_nova_log(sb, pi);
+			diff = 1;
+		}
 	}
 
 	ret = nova_check_inode_checksum(pi);
@@ -956,6 +970,9 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 		return ret;
 	}
 
+	if (replica_inode == 0)
+		goto out;
+
 	ret = nova_check_inode_checksum(alter_pi);
 	if (ret == 0) {
 		if (diff) {
@@ -966,6 +983,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 		return ret;
 	}
 
+out:
 	/* We are in big trouble */
 	nova_err(sb, "%s: inode %llu check failure\n", __func__, ino);
 	return -EIO;
@@ -1263,10 +1281,12 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		goto fail1;
 	}
 
-	/* Get alternate inode address */
-	errval = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
-	if (errval)
-		goto fail1;
+	if (replica_inode) {
+		/* Get alternate inode address */
+		errval = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
+		if (errval)
+			goto fail1;
+	}
 
 	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
 	nova_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",

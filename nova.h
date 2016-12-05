@@ -923,6 +923,9 @@ static inline struct nova_inode *nova_get_alter_inode(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 
+	if (replica_inode == 0)
+		return NULL;
+
 	return (struct nova_inode *)nova_get_block(sb, sih->alter_pi_addr);
 }
 
@@ -930,6 +933,9 @@ static inline int nova_update_alter_inode(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi)
 {
 	struct nova_inode *alter_pi;
+
+	if (replica_inode == 0)
+		return 0;
 
 	alter_pi = nova_get_alter_inode(sb, inode);
 	if (!alter_pi)
