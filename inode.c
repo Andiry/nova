@@ -1338,7 +1338,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		goto fail1;
 	}
 
-	nova_flush_buffer(&pi, NOVA_INODE_SIZE, 0);
+	nova_flush_buffer(pi, NOVA_INODE_SIZE, 0);
 	NOVA_END_TIMING(new_vfs_inode_t, new_inode_time);
 	return inode;
 fail1:
