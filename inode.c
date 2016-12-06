@@ -1338,8 +1338,10 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->delete_trans_id = 0;
 	nova_memlock_inode(sb, pi);
 
-	alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
-	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	if (replica_inode) {
+		alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
+		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	}
 
 	si = NOVA_I(inode);
 	sih = &si->header;
