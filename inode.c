@@ -188,7 +188,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	}
 
 	/* Extend alternate inode table */
-	if (extended && extend_alternate)
+	if (extended && extend_alternate && replica_inode)
 		nova_get_inode_address(sb, ino, version + 1,
 					&alternate_pi_addr, extendable, 0);
 
