@@ -2942,8 +2942,11 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	sih->i_mode = le16_to_cpu(pi->i_mode);
 
 	nova_update_inode_checksum(pi);
-	alter_pi = (struct nova_inode *)nova_get_block(sb, sih->alter_pi_addr);
-	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	if (replica_inode) {
+		alter_pi = (struct nova_inode *)nova_get_block(sb,
+							sih->alter_pi_addr);
+		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	}
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
