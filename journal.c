@@ -109,6 +109,10 @@ static void nova_recover_journal_inode(struct super_block *sb,
 	struct nova_inode *pi, *alter_pi;
 	u64 pi_addr, alter_pi_addr;
 
+	/* FIXME: Journal the inode itself if not using replica inode */
+	if (replica_inode == 0)
+		return;
+
 	pi_addr = le64_to_cpu(entry->data1);
 	alter_pi_addr = le64_to_cpu(entry->data2);
 
@@ -181,7 +185,9 @@ static int nova_append_inode_journal(struct super_block *sb,
 	entry->type = cpu_to_le64(JOURNAL_INODE);
 	entry->padding = 0;
 	entry->data1 = cpu_to_le64(sih->pi_addr);
-	entry->data2 = cpu_to_le64(sih->alter_pi_addr);
+	/* FIXME */
+	if (replica_inode)
+		entry->data2 = cpu_to_le64(sih->alter_pi_addr);
 	return nova_update_entry_checksum(sb, entry);
 }
 
