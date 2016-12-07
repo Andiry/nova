@@ -298,6 +298,9 @@ static inline void nova_update_alter_tail(struct nova_inode *pi, u64 new_tail)
 {
 	timing_t update_time;
 
+	if (replica_log == 0)
+		return;
+
 	NOVA_START_TIMING(update_tail_t, update_time);
 
 	PERSISTENT_BARRIER();
@@ -1024,6 +1027,9 @@ static inline u64 alter_log_page(struct super_block *sb, u64 curr_p)
 	void *curr_addr = nova_get_block(sb, curr_p);
 	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
+	if (replica_log == 0)
+		return 0;
+
 	return ((struct nova_inode_page_tail *)page_tail)->alter_page;
 }
 
@@ -1033,6 +1039,8 @@ static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
 	void *curr_addr = nova_get_block(sb, curr_p);
 	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
+	if (replica_log == 0)
+		return 0;
 
 	alter_page = ((struct nova_inode_page_tail *)page_tail)->alter_page;
 	return alter_page + ENTRY_LOC(curr_p);
@@ -1053,6 +1061,9 @@ static inline void nova_set_alter_page_address(struct super_block *sb,
 {
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode_log_page *alter_page;
+
+	if (replica_log == 0)
+		return;
 
 	curr_page = nova_get_block(sb, BLOCK_OFF(curr));
 	alter_page = nova_get_block(sb, BLOCK_OFF(alter_curr));

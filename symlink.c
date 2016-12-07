@@ -62,22 +62,31 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	entry->size = cpu_to_le64(len + 1);
 	nova_update_entry_csum(entry);
 	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
-
-	block2 = next_log_page(sb, block1);
-	log1_page = (struct nova_inode_log_page *)nova_get_block(sb, block1);
-	nova_set_next_page_address(sb, log1_page, 0, 1);
-
-	alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
-							block2);
-	memcpy_to_pmem_nocache(alter_entry, entry, length);
-	nova_update_alter_pages(sb, pi, block1, block2);
-
-	sih->log_pages = 2;
-	sih->i_blocks = 3;
 	pi->log_head = block1;
-	pi->alter_log_head = block2;
 	update.tail = block1 + length;
-	update.alter_tail = block2 + length;
+
+	update.alter_tail = 0;
+	if (replica_log) {
+		block2 = next_log_page(sb, block1);
+		log1_page = (struct nova_inode_log_page *)nova_get_block(sb,
+							block1);
+		nova_set_next_page_address(sb, log1_page, 0, 1);
+
+		alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
+							block2);
+		memcpy_to_pmem_nocache(alter_entry, entry, length);
+		nova_update_alter_pages(sb, pi, block1, block2);
+		pi->alter_log_head = block2;
+		update.alter_tail = block2 + length;
+	}
+
+	sih->log_pages = 1;
+	sih->i_blocks = 2;
+
+	if (replica_log) {
+		sih->log_pages++;
+		sih->i_blocks++;
+	}
 
 	nova_update_inode(sb, inode, pi, &update, 1);
 

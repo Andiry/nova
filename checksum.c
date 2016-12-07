@@ -206,6 +206,9 @@ int nova_update_alter_entry(struct super_block *sb, void *entry)
 	size_t size;
 	int ret;
 
+	if (replica_log == 0)
+		return 0;
+
 	curr = nova_get_addr_off(sbi, entry);
 	alter_curr = alter_log_entry(sb, curr);
 	alter_entry = (void *)nova_get_block(sb, alter_curr);
@@ -236,9 +239,12 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 	match = checksum == le32_to_cpu(entry_csum);
 
 	if (!match) {
-		nova_dbg("%s: nova entry mismatch detected, trying to recover "
-			"from the alternative entry.\n", __func__);
-		match = nova_try_alter_entry(sb, entry);
+		if (replica_log) {
+			nova_dbg("%s: nova entry mismatch detected, trying to "
+				"recover from the alternative entry.\n",
+				__func__);
+			match = nova_try_alter_entry(sb, entry);
+		}
 	}
 
 	return match;

@@ -218,6 +218,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	u64 log_block = 0;
 	unsigned long name_blocknr = 0;
 	int allocated;
+	int num_logs;
 	struct nova_inode_update update;
 	u64 ino;
 	u64 trans_id;
@@ -255,10 +256,14 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	}
 
 	pi = nova_get_inode(sb, inode);
-	/* Two blocks for logs */
+
+	num_logs = 1;
+	if (replica_log)
+		num_logs = 2;
+
 	allocated = nova_allocate_inode_log_pages(sb, pi,
-					2, &log_block);
-	if (allocated != 2 || log_block == 0) {
+					num_logs, &log_block);
+	if (allocated != num_logs || log_block == 0) {
 		err = allocated;
 		goto out_fail1;
 	}
@@ -448,19 +453,21 @@ int nova_append_link_change_entry(struct super_block *sb,
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
 	memset(entry, 0, size);
 	nova_update_link_change_entry(inode, entry, trans_id);
-
-	alter_curr_p = nova_get_append_head(sb, pi, sih, update->alter_tail,
-						size, ALTER_LOG, &extended);
-	if (alter_curr_p == 0)
-		return -ENOSPC;
-
-	alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
-						alter_curr_p);
-	memset(alter_entry, 0, size);
-	nova_update_link_change_entry(inode, alter_entry, trans_id);
-
 	update->tail = curr_p + size;
-	update->alter_tail = alter_curr_p + size;
+
+	if (replica_log) {
+		alter_curr_p = nova_get_append_head(sb, pi, sih,
+						update->alter_tail, size,
+						ALTER_LOG, &extended);
+		if (alter_curr_p == 0)
+			return -ENOSPC;
+
+		alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
+						alter_curr_p);
+		memset(alter_entry, 0, size);
+		nova_update_link_change_entry(inode, alter_entry, trans_id);
+		update->alter_tail = alter_curr_p + size;
+	}
 
 	*old_linkc = sih->last_link_change;
 	sih->last_link_change = curr_p;

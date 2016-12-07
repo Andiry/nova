@@ -868,7 +868,8 @@ static void nova_traverse_dir_inode_log(struct super_block *sb,
 	struct nova_inode *pi, struct scan_bitmap *bm)
 {
 	nova_traverse_inode_log(sb, pi, bm, pi->log_head);
-	nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
+	if (replica_log)
+		nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
 }
 
 static unsigned int nova_check_old_entry(struct super_block *sb,
@@ -1070,7 +1071,8 @@ static int nova_traverse_file_inode_log(struct super_block *sb,
 	btype = pi->i_blk_type;
 	data_bits = blk_type_to_shift[btype];
 
-	nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
+	if (replica_log)
+		nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
 
 again:
 	sih->i_size = 0;
