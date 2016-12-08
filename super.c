@@ -514,6 +514,10 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	if (nova_get_block_info(sb, sbi))
 		goto out;
 
+	nova_dbg("measure timing %d, replica inode %d, replica log %d, "
+		"inplace update %d\n", measure_timing, replica_inode,
+		replica_log, inplace_data_updates);
+
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
 
