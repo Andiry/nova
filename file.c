@@ -75,19 +75,19 @@ static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 	if (origin != SEEK_DATA && origin != SEEK_HOLE)
 		return generic_file_llseek(file, offset, origin);
 
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 	switch (origin) {
 	case SEEK_DATA:
 		retval = nova_find_region(inode, &offset, 0);
 		if (retval) {
-			mutex_unlock(&inode->i_mutex);
+			inode_unlock(inode);
 			return retval;
 		}
 		break;
 	case SEEK_HOLE:
 		retval = nova_find_region(inode, &offset, 1);
 		if (retval) {
-			mutex_unlock(&inode->i_mutex);
+			inode_unlock(inode);
 			return retval;
 		}
 		break;
@@ -95,7 +95,7 @@ static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 
 	if ((offset < 0 && !(file->f_mode & FMODE_UNSIGNED_OFFSET)) ||
 	    offset > inode->i_sb->s_maxbytes) {
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 		return -EINVAL;
 	}
 
@@ -104,7 +104,7 @@ static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 		file->f_version = 0;
 	}
 
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 	return offset;
 }
 
@@ -201,7 +201,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	if (!mapping_mapped(mapping))
 		goto out;
 
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 
 	/* Check the dirty range */
 	pi = nova_get_inode(sb, inode);
@@ -217,7 +217,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		nova_dbg_verbose("[%s:%d] : (ERR) isize(%llx), start(%llx),"
 			" end(%llx)\n", __func__, __LINE__, isize, start, end);
 		NOVA_END_TIMING(fsync_t, fsync_time);
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 		return 0;
 	}
 
@@ -261,7 +261,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		inode->i_blocks = sih->i_blocks;
 	}
 
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 
 out:
 	NOVA_END_TIMING(fsync_t, fsync_time);

@@ -1760,7 +1760,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		nova_inplace_update_setattr_entry(sb, inode, sih,
 						attr, trans_id);
 	} else {
-		/* We are holding i_mutex so OK to append the log */
+		/* We are holding inode lock so OK to append the log */
 		nova_dbgv("%s : Appending last log entry for inode ino = %lu\n",
 				__func__, inode->i_ino);
 		update.tail = update.alter_tail = 0;
