@@ -106,7 +106,12 @@ static int nova_get_block_info(struct super_block *sb,
 	sbi->s_bdev = sb->s_bdev;
 
 	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
-					0, &virt_addr, &__pfn_t);
+					0, &virt_addr, &__pfn_t, 0);
+
+	if (size == 0) {
+		nova_dbg("%s failed \n", __func__);
+		return -EINVAL;
+	}
 
 	if (size <= 0) {
 		nova_err(sb, "direct_access failed\n");
