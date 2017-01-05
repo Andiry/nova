@@ -93,6 +93,22 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	return 0;
 }
 
+/* FIXME: Temporary workaround */
+static int nova_readlink_copy(char __user *buffer, int buflen, const char *link)
+{
+	int len = PTR_ERR(link);
+	if (IS_ERR(link))
+		goto out;
+
+	len = strlen(link);
+	if (len > (unsigned) buflen)
+		len = buflen;
+	if (copy_to_user(buffer, link, len))
+		len = -EFAULT;
+out:
+	return len;
+}
+
 static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 {
 	struct nova_file_write_entry *entry;
@@ -105,10 +121,11 @@ static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 							pi->log_head);
 	blockp = (char *)nova_get_block(sb, BLOCK_OFF(entry->block));
 
-	return readlink_copy(buffer, buflen, blockp);
+	return nova_readlink_copy(buffer, buflen, blockp);
 }
 
-static const char *nova_get_link(struct dentry *dentry, struct inode *inode, void **cookie)
+static const char *nova_get_link(struct dentry *dentry, struct inode *inode,
+	struct delayed_call *done)
 {
 	struct nova_file_write_entry *entry;
 	struct super_block *sb = inode->i_sb;
