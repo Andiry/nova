@@ -1860,12 +1860,12 @@ err:
 }
 #endif
 
-static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
-	loff_t offset)
+static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct file *filp = iocb->ki_filp;
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
+	loff_t offset = iocb->ki_pos;
 	ssize_t ret;
 	timing_t dio_time;
 
