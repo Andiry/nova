@@ -441,7 +441,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 			__func__, inode->i_ino,	offset, len, mode);
 
 	NOVA_START_TIMING(fallocate_t, fallocate_time);
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
 
 	pi = nova_get_inode(sb, inode);
 	if (!pi) {
@@ -560,8 +560,56 @@ out:
 		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
 						begin_tail, update.tail);
 
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
 	NOVA_END_TIMING(fallocate_t, fallocate_time);
+	return ret;
+}
+
+static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
+{
+	struct inode *inode = iocb->ki_filp->f_mapping->host;
+	ssize_t ret;
+
+	if (!iov_iter_count(to))
+		return 0;
+
+	inode_lock_shared(inode);
+	ret = dax_iomap_rw(iocb, to, &nova_iomap_ops);
+	inode_unlock_shared(inode);
+
+	file_accessed(iocb->ki_filp);
+	return ret;
+}
+
+static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
+{
+	struct file *file = iocb->ki_filp;
+	struct inode *inode = file->f_mapping->host;
+	ssize_t ret;
+
+	inode_lock(inode);
+	ret = generic_write_checks(iocb, from);
+	if (ret <= 0)
+		goto out_unlock;
+
+	ret = file_remove_privs(file);
+	if (ret)
+		goto out_unlock;
+
+	ret = file_update_time(file);
+	if (ret)
+		goto out_unlock;
+
+	ret = dax_iomap_rw(iocb, from, &nova_iomap_ops);
+	if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
+		i_size_write(inode, iocb->ki_pos);
+		mark_inode_dirty(inode);
+	}
+
+out_unlock:
+	inode_unlock(inode);
+	if (ret > 0)
+		ret = generic_write_sync(iocb, ret);
 	return ret;
 }
 
@@ -569,8 +617,8 @@ const struct file_operations nova_dax_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
 	.write			= nova_dax_file_write,
-	.read_iter		= generic_file_read_iter,
-	.write_iter		= generic_file_write_iter,
+	.read_iter		= nova_dax_read_iter,
+	.write_iter		= nova_dax_write_iter,
 	.mmap			= nova_dax_file_mmap,
 	.open			= nova_open,
 	.fsync			= nova_fsync,

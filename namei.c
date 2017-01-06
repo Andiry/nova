@@ -801,7 +801,8 @@ end_rmdir:
 
 static int nova_rename(struct inode *old_dir,
 			struct dentry *old_dentry,
-			struct inode *new_dir, struct dentry *new_dentry)
+			struct inode *new_dir, struct dentry *new_dentry,
+			unsigned int flags)
 {
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
@@ -830,6 +831,9 @@ static int nova_rename(struct inode *old_dir,
 			__func__, S_ISDIR(old_inode->i_mode) ? "dir" : "normal",
 			old_inode->i_ino, old_dir->i_ino, new_dir->i_ino,
 			new_inode ? new_inode->i_ino : 0);
+
+	if (flags & ~RENAME_NOREPLACE)
+		return -EINVAL;
 
 	NOVA_START_TIMING(rename_t, rename_time);
 

@@ -39,6 +39,7 @@
 #include <linux/kthread.h>
 #include <linux/buffer_head.h>
 #include <linux/uio.h>
+#include <linux/iomap.h>
 #include <linux/crc32c.h>
 #include <asm/tlbflush.h>
 #include <linux/version.h>
@@ -143,6 +144,8 @@ extern int inplace_data_updates;
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
+
+extern struct iomap_ops nova_iomap_ops;
 
 /* ======================= Log entry ========================= */
 /* Inode entry in the log */
@@ -1217,8 +1220,9 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
 ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 		size_t len, loff_t *ppos);
-int nova_dax_get_block_nolock(struct inode *inode, sector_t iblock,
-	struct buffer_head *bh, int create);
+int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
+	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary,
+	int create);
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
 
 /* dir.c */

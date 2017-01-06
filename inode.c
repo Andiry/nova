@@ -660,7 +660,7 @@ int nova_assign_write_entry(struct super_block *sb,
 				num_free++;
 			}
 
-			radix_tree_replace_slot(pentry, entry);
+			radix_tree_replace_slot(&sih->tree, pentry, entry);
 		} else {
 			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
 			if (ret) {
@@ -1722,7 +1722,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	if (!pi)
 		return -EACCES;
 
-	ret = inode_change_ok(inode, attr);
+	ret = setattr_prepare(dentry, attr);
 	if (ret)
 		return ret;
 
@@ -1860,19 +1860,39 @@ err:
 }
 #endif
 
+static int nova_legacy_get_blocks(struct inode *inode, sector_t iblock,
+	struct buffer_head *bh, int create)
+{
+	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
+	bool new = false, boundary = false;
+	u32 bno;
+	int ret;
+
+	ret = nova_dax_get_blocks(inode, iblock, max_blocks, &bno, &new,
+				&boundary, create);
+	if (ret <= 0)
+		return ret;
+
+	map_bh(bh, inode->i_sb, bno);
+	bh->b_size = ret << inode->i_blkbits;
+	return 0;
+}
+
 static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct file *filp = iocb->ki_filp;
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
-	loff_t offset = iocb->ki_pos;
 	ssize_t ret;
 	timing_t dio_time;
 
+	if (WARN_ON_ONCE(IS_DAX(inode)))
+		return -EIO;
+
 	NOVA_START_TIMING(direct_IO_t, dio_time);
 
-	ret = dax_do_io(iocb, inode, iter, offset, nova_dax_get_block_nolock,
-				NULL, 0);
+	ret = blockdev_direct_IO(iocb, inode, iter, nova_legacy_get_blocks);
+
 	NOVA_END_TIMING(direct_IO_t, dio_time);
 	return ret;
 }
@@ -2119,7 +2139,8 @@ int nova_gc_assign_file_entry(struct super_block *sb,
 		if (pentry) {
 			temp = radix_tree_deref_slot(pentry);
 			if (temp == old_entry)
-				radix_tree_replace_slot(pentry, new_entry);
+				radix_tree_replace_slot(&sih->tree, pentry,
+							new_entry);
 		}
 	}
 
@@ -2144,7 +2165,7 @@ static int nova_gc_assign_dentry(struct super_block *sb,
 	if (pentry) {
 		temp = radix_tree_deref_slot(pentry);
 		if (temp == old_dentry)
-			radix_tree_replace_slot(pentry, new_dentry);
+			radix_tree_replace_slot(&sih->tree, pentry, new_dentry);
 	}
 
 	return ret;
