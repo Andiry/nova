@@ -1869,7 +1869,7 @@ static int nova_legacy_get_blocks(struct inode *inode, sector_t iblock,
 	int ret;
 
 	ret = nova_dax_get_blocks(inode, iblock, max_blocks, &bno, &new,
-				&boundary, create);
+				&boundary, create, false);
 	if (ret <= 0)
 		return ret;
 

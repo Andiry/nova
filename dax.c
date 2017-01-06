@@ -875,7 +875,7 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
  */
 int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary,
-	int create)
+	int create, bool taking_lock)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
@@ -888,7 +888,6 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned int data_bits;
 	unsigned long nvmm = 0;
 	unsigned long blocknr = 0;
-	bool taking_lock = false;
 	u64 trans_id;
 	int num_blocks = 0;
 	int inplace = 0;
@@ -1402,6 +1401,63 @@ static int nova_dax_file_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 }
 #endif
 
+int nova_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
+	unsigned flags, struct iomap *iomap, bool taking_lock)
+{
+	unsigned int blkbits = inode->i_blkbits;
+	unsigned long first_block = offset >> blkbits;
+	unsigned long max_blocks = (length + (1 << blkbits) - 1) >> blkbits;
+	bool new = false, boundary = false;
+	u32 bno;
+	int ret;
+
+	ret = nova_dax_get_blocks(inode, first_block, max_blocks, &bno, &new,
+				&boundary, flags & IOMAP_WRITE, taking_lock);
+	if (ret < 0)
+		return ret;
+
+	iomap->flags = 0;
+	iomap->bdev = inode->i_sb->s_bdev;
+	iomap->offset = (u64)first_block << blkbits;
+
+	if (ret == 0) {
+		iomap->type = IOMAP_HOLE;
+		iomap->blkno = IOMAP_NULL_BLOCK;
+		iomap->length = 1 << blkbits;
+	} else {
+		iomap->type = IOMAP_MAPPED;
+		iomap->blkno = (sector_t)bno << (blkbits - 9);
+		iomap->length = (u64)ret << blkbits;
+		iomap->flags |= IOMAP_F_MERGED;
+	}
+
+	if (new)
+		iomap->flags |= IOMAP_F_NEW;
+	return 0;
+}
+
+int nova_iomap_end(struct inode *inode, loff_t offset, loff_t length,
+	ssize_t written, unsigned flags, struct iomap *iomap)
+{
+	if (iomap->type == IOMAP_MAPPED &&
+			written < length &&
+			(flags & IOMAP_WRITE))
+		truncate_pagecache(inode, inode->i_size);
+	return 0;
+}
+
+
+static int nova_iomap_begin_lock(struct inode *inode, loff_t offset,
+	loff_t length, unsigned flags, struct iomap *iomap)
+{
+	return nova_iomap_begin(inode, offset, length, flags, iomap, true);
+}
+
+static struct iomap_ops nova_iomap_ops_lock = {
+	.iomap_begin	= nova_iomap_begin_lock,
+	.iomap_end	= nova_iomap_end,
+};
+
 static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	int ret = 0;
@@ -1409,7 +1465,7 @@ static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
-	ret = dax_iomap_fault(vma, vmf, &nova_iomap_ops);
+	ret = dax_iomap_fault(vma, vmf, &nova_iomap_ops_lock);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
@@ -1423,7 +1479,7 @@ static int nova_dax_pmd_fault(struct vm_area_struct *vma, unsigned long addr,
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
-	ret = dax_iomap_pmd_fault(vma, addr, pmd, flags, &nova_iomap_ops);
+	ret = dax_iomap_pmd_fault(vma, addr, pmd, flags, &nova_iomap_ops_lock);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
 	return ret;
@@ -1474,52 +1530,3 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
-static int nova_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
-	unsigned flags, struct iomap *iomap)
-{
-	unsigned int blkbits = inode->i_blkbits;
-	unsigned long first_block = offset >> blkbits;
-	unsigned long max_blocks = (length + (1 << blkbits) - 1) >> blkbits;
-	bool new = false, boundary = false;
-	u32 bno;
-	int ret;
-
-	ret = nova_dax_get_blocks(inode, first_block, max_blocks, &bno, &new,
-				&boundary, flags & IOMAP_WRITE);
-	if (ret < 0)
-		return ret;
-
-	iomap->flags = 0;
-	iomap->bdev = inode->i_sb->s_bdev;
-	iomap->offset = (u64)first_block << blkbits;
-
-	if (ret == 0) {
-		iomap->type = IOMAP_HOLE;
-		iomap->blkno = IOMAP_NULL_BLOCK;
-		iomap->length = 1 << blkbits;
-	} else {
-		iomap->type = IOMAP_MAPPED;
-		iomap->blkno = (sector_t)bno << (blkbits - 9);
-		iomap->length = (u64)ret << blkbits;
-		iomap->flags |= IOMAP_F_MERGED;
-	}
-
-	if (new)
-		iomap->flags |= IOMAP_F_NEW;
-	return 0;
-}
-
-static int nova_iomap_end(struct inode *inode, loff_t offset, loff_t length,
-	ssize_t written, unsigned flags, struct iomap *iomap)
-{
-	if (iomap->type == IOMAP_MAPPED &&
-			written < length &&
-			(flags & IOMAP_WRITE))
-		truncate_pagecache(inode, inode->i_size);
-	return 0;
-}
-
-struct iomap_ops nova_iomap_ops = {
-	.iomap_begin	= nova_iomap_begin,
-	.iomap_end	= nova_iomap_end,
-};

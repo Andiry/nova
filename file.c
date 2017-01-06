@@ -565,6 +565,17 @@ out:
 	return ret;
 }
 
+static int nova_iomap_begin_nolock(struct inode *inode, loff_t offset,
+	loff_t length, unsigned flags, struct iomap *iomap)
+{
+	return nova_iomap_begin(inode, offset, length, flags, iomap, false);
+}
+
+static struct iomap_ops nova_iomap_ops_nolock = {
+	.iomap_begin	= nova_iomap_begin_nolock,
+	.iomap_end	= nova_iomap_end,
+};
+
 static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
 	struct inode *inode = iocb->ki_filp->f_mapping->host;
@@ -574,7 +585,7 @@ static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 		return 0;
 
 	inode_lock_shared(inode);
-	ret = dax_iomap_rw(iocb, to, &nova_iomap_ops);
+	ret = dax_iomap_rw(iocb, to, &nova_iomap_ops_nolock);
 	inode_unlock_shared(inode);
 
 	file_accessed(iocb->ki_filp);
@@ -600,7 +611,7 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (ret)
 		goto out_unlock;
 
-	ret = dax_iomap_rw(iocb, from, &nova_iomap_ops);
+	ret = dax_iomap_rw(iocb, from, &nova_iomap_ops_nolock);
 	if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
 		i_size_write(inode, iocb->ki_pos);
 		mark_inode_dirty(inode);
