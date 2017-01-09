@@ -183,6 +183,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	struct nova_inode_update update;
 	struct free_list *free_list;
 	struct nova_range_node_lowhigh *entry;
 	struct nova_range_node *blknode;
@@ -191,13 +192,18 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 	u64 cpuid;
 	int ret = 0;
 
-	curr_p = pi->log_head;
+	/* FIXME: Backup inode for BLOCKNODE */
+	ret = nova_get_head_tail(sb, pi, &update);
+	if (ret)
+		goto out;
+
+	curr_p = update.head;
 	if (curr_p == 0) {
 		nova_dbg("%s: pi head is 0!\n", __func__);
 		return -EINVAL;
 	}
 
-	while (curr_p != pi->log_tail) {
+	while (curr_p != update.tail) {
 		if (is_last_entry(curr_p, size)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -260,6 +266,7 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODELIST1_INO);
+	struct nova_inode_update update;
 	struct nova_range_node_lowhigh *entry;
 	struct nova_range_node *range_node;
 	struct inode_map *inode_map;
@@ -269,14 +276,19 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 	unsigned long cpuid;
 	int ret;
 
+	/* FIXME: Backup inode for INODELIST */
+	ret = nova_get_head_tail(sb, pi, &update);
+	if (ret)
+		goto out;
+
 	sbi->s_inodes_used_count = 0;
-	curr_p = pi->log_head;
+	curr_p = update.head;
 	if (curr_p == 0) {
 		nova_dbg("%s: pi head is 0!\n", __func__);
 		return -EINVAL;
 	}
 
-	while (curr_p != pi->log_tail) {
+	while (curr_p != update.tail) {
 		if (is_last_entry(curr_p, size)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -786,10 +798,6 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 alter_pi_addr = 0;
 	int ret;
 
-	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
-	if (!pi)
-		NOVA_ASSERT(0);
-
 	if (replica_inode) {
 		/* Get alternate inode address */
 		ret = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
@@ -797,9 +805,11 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 			return ret;
 	}
 
-	ret = nova_check_inode_integrity(sb, ino, pi, alter_pi_addr);
+	ret = nova_check_inode_integrity(sb, ino, pi_addr, alter_pi_addr);
 	if (ret)
 		return ret;
+
+	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
 
 	if (pi->deleted == 1)
 		return -EINVAL;
@@ -1164,14 +1174,9 @@ again:
 
 static int nova_recover_inode_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct task_ring *ring,
-	u64 pi_addr, struct scan_bitmap *bm)
+	struct nova_inode *pi, struct scan_bitmap *bm)
 {
-	struct nova_inode *pi;
 	unsigned long nova_ino;
-
-	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
-	if (!pi)
-		NOVA_ASSERT(0);
 
 	if (pi->deleted == 1)
 		return 0;
@@ -1182,9 +1187,8 @@ static int nova_recover_inode_pages(struct super_block *sb,
 	sih->i_mode = __le16_to_cpu(pi->i_mode);
 	sih->ino = nova_ino;
 
-	nova_dbgv("%s: inode %lu, addr 0x%llx, head 0x%llx, tail 0x%llx\n",
-			__func__, nova_ino, pi_addr, pi->log_head,
-			pi->log_tail);
+	nova_dbgv("%s: inode %lu, head 0x%llx, tail 0x%llx\n",
+			__func__, nova_ino, pi->log_head, pi->log_tail);
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFDIR:
@@ -1310,7 +1314,7 @@ static int failure_thread_func(void *data)
 	struct super_block *sb = data;
 	struct nova_inode_info_header sih;
 	struct task_ring *ring;
-	struct nova_inode *pi;
+	struct nova_inode *pi, fake_pi;
 	unsigned long num_inodes_per_page;
 	unsigned long ino_low, ino_high;
 	unsigned long last_blocknr;
@@ -1351,20 +1355,27 @@ static int failure_thread_func(void *data)
 
 		for (i = 0; i < num_inodes_per_page; i++) {
 			pi_addr = curr + i * NOVA_INODE_SIZE;
-			pi = nova_get_block(sb, pi_addr);
-			if (pi->i_mode && pi->deleted == 0) {
-				if (pi->valid == 0) {
+			ret = nova_get_reference(sb, pi_addr, &fake_pi,
+				(void **)&pi, sizeof(struct nova_inode));
+			if (ret) {
+				nova_dbg("Recover pi @ 0x%llx failed\n",
+						pi_addr);
+				continue;
+			}
+			if (fake_pi.i_mode && fake_pi.deleted == 0) {
+				if (fake_pi.valid == 0) {
 					ret = nova_append_inode_to_snapshot(sb,
 									pi);
 					if (ret != 0) {
 						/* Deleteable */
 						pi->deleted = 1;
+						fake_pi.deleted = 1;
 						continue;
 					}
 				}
 
 				nova_recover_inode_pages(sb, &sih, ring,
-						pi_addr, global_bm[cpuid]);
+						&fake_pi, global_bm[cpuid]);
 				nova_failure_update_inodetree(sb, pi,
 						&ino_low, &ino_high);
 				if (sih.i_size > max_size)
@@ -1395,6 +1406,7 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 	struct nova_inode_info_header sih;
 	struct inode_table *inode_table;
 	struct task_ring *ring;
+	struct nova_inode *pi, fake_pi;
 	unsigned long curr_addr;
 	u64 root_addr = NOVA_ROOT_INO_START;
 	u64 curr;
@@ -1449,8 +1461,15 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 
 	nova_init_header(sb, &sih, 0);
 	/* Recover the root iode */
+	ret = nova_get_reference(sb, root_addr, &fake_pi,
+			(void **)&pi, sizeof(struct nova_inode));
+	if (ret) {
+		nova_dbg("Recover root pi failed\n");
+		return ret;
+	}
+
 	nova_recover_inode_pages(sb, &sih, &task_rings[0],
-					root_addr, global_bm[1]);
+					&fake_pi, global_bm[1]);
 
 	return ret;
 }

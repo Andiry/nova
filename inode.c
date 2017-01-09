@@ -687,12 +687,19 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	u64 pi_addr)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode *pi;
+	struct nova_inode *pi, fake_pi;
 	struct nova_inode_info_header *sih = &si->header;
 	int ret = -EIO;
 	unsigned long ino;
 
-	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
+	ret = nova_get_reference(sb, pi_addr, &fake_pi,
+			(void **)&pi, sizeof(struct nova_inode));
+	if (ret) {
+		nova_dbg("%s: read pi @ 0x%llx failed\n",
+				__func__, pi_addr);
+		goto bad_inode;
+	}
+
 	inode->i_mode = sih->i_mode;
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
@@ -941,15 +948,45 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 }
 
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,
-	struct nova_inode *pi, u64 alter_pi_addr)
+	u64 pi_addr, u64 alter_pi_addr)
 {
-	struct nova_inode *alter_pi = NULL;
+	struct nova_inode *pi = NULL, *alter_pi = NULL;
+	struct nova_inode fake_pi, alter_fake_pi;
 	int diff = 0;
 	int ret;
+	int pi_good = 1, alter_pi_good = 0;
+
+	ret = nova_get_reference(sb, pi_addr, &fake_pi,
+			(void **)&pi, sizeof(struct nova_inode));
+	if (ret) {
+		nova_dbg("%s: read pi @ 0x%llx failed\n",
+				__func__, pi_addr);
+		pi_good = 0;
+
+		if (replica_inode == 0)
+			goto out;
+	}
 
 	if (replica_inode) {
-		alter_pi = (struct nova_inode *)nova_get_block(sb,
-							alter_pi_addr);
+		alter_pi_good = 1;
+		ret = nova_get_reference(sb, alter_pi_addr, &alter_fake_pi,
+				(void **)&alter_pi, sizeof(struct nova_inode));
+		if (ret) {
+			nova_dbg("%s: read alter pi @ 0x%llx failed\n",
+					__func__, alter_pi_addr);
+			alter_pi_good = 0;
+		}
+
+		if (pi_good == 0 && alter_pi_good == 0)
+			goto out;
+
+		if (pi_good == 0)
+			memcpy_to_pmem_nocache(pi, alter_pi,
+						sizeof(struct nova_inode));
+		else if (alter_pi_good == 0)
+			memcpy_to_pmem_nocache(alter_pi, pi,
+						sizeof(struct nova_inode));
+
 		if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
 			nova_err(sb, "%s: inode %llu shadow mismatch\n",
 							__func__, ino);
@@ -960,7 +997,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 		}
 	}
 
-	ret = nova_check_inode_checksum(pi);
+	ret = nova_check_inode_checksum(&fake_pi);
 	if (ret == 0) {
 		if (diff) {
 			nova_dbg("Update shadow inode with original inode\n");
@@ -970,10 +1007,10 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 		return ret;
 	}
 
-	if (replica_inode == 0)
+	if (replica_inode == 0 || alter_pi_good == 0)
 		goto out;
 
-	ret = nova_check_inode_checksum(alter_pi);
+	ret = nova_check_inode_checksum(&alter_fake_pi);
 	if (ret == 0) {
 		if (diff) {
 			nova_dbg("Update original inode with shadow inode\n");
@@ -1041,13 +1078,22 @@ fail:
 unsigned long nova_get_last_blocknr(struct super_block *sb,
 	struct nova_inode_info_header *sih)
 {
-	struct nova_inode *pi;
+	struct nova_inode *pi, fake_pi;
 	unsigned long last_blocknr;
 	unsigned int btype;
 	unsigned int data_bits;
+	int ret;
 
-	pi = nova_get_block(sb, sih->pi_addr);
-	btype = pi->i_blk_type;
+	ret = nova_get_reference(sb, sih->pi_addr, &fake_pi,
+			(void **)&pi, sizeof(struct nova_inode));
+	if (ret) {
+		nova_dbg("%s: read pi @ 0x%lx failed\n",
+				__func__, sih->pi_addr);
+		btype = 0;
+	} else {
+		btype = pi->i_blk_type;
+	}
+
 	data_bits = blk_type_to_shift[btype];
 
 	if (sih->i_size == 0)

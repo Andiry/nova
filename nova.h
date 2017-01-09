@@ -269,6 +269,8 @@ enum alloc_type {
 };
 
 struct nova_inode_update {
+	u64 head;
+	u64 alter_head;
 	u64 tail;
 	u64 alter_tail;
 	u64 curr_entry;
@@ -593,6 +595,24 @@ static inline int nova_get_reference(struct super_block *sb, u64 block,
 
 	*nvmm = nova_get_block(sb, block);
 	rc = memcpy_from_pmem(dram, *nvmm, size);
+	return rc;
+}
+
+static inline int nova_get_head_tail(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_update *update)
+{
+	struct nova_inode fake_pi;
+	int rc;
+
+	rc = memcpy_from_pmem(&fake_pi, pi, sizeof(struct nova_inode));
+	if (rc)
+		return rc;
+
+	update->head = fake_pi.log_head;
+	update->tail = fake_pi.log_tail;
+	update->alter_head = fake_pi.alter_log_head;
+	update->alter_tail = fake_pi.alter_log_tail;
+
 	return rc;
 }
 
@@ -1280,7 +1300,7 @@ struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, pgoff_t pgoff);
 int nova_check_alter_entry(struct super_block *sb, u64 curr);
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,
-	struct nova_inode *pi, u64 alter_pi_addr);
+	u64 pi_addr, u64 alter_pi_addr);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 extern void nova_evict_inode(struct inode *inode);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);
