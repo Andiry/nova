@@ -39,6 +39,7 @@
 #include <linux/kthread.h>
 #include <linux/buffer_head.h>
 #include <linux/uio.h>
+#include <linux/pmem.h>
 #include <linux/iomap.h>
 #include <linux/crc32c.h>
 #include <asm/tlbflush.h>
@@ -583,6 +584,16 @@ static inline void *nova_get_block(struct super_block *sb, u64 block)
 	struct nova_super_block *ps = nova_get_super(sb);
 
 	return block ? ((void *)ps + block) : NULL;
+}
+
+static inline int nova_get_reference(struct super_block *sb, u64 block,
+	void *dram, void **nvmm, size_t size)
+{
+	int rc;
+
+	*nvmm = nova_get_block(sb, block);
+	rc = memcpy_from_pmem(dram, *nvmm, size);
+	return rc;
 }
 
 static inline u64
