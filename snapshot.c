@@ -702,12 +702,13 @@ int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
 	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list)
 {
-	struct nova_inode_log_page *nvmm_page, *dram_page;
+	struct nova_inode_log_page *dram_page;
 	void *curr_nvmm_addr;
 	u64 curr_nvmm_block;
 	u64 prev_dram_addr;
 	u64 curr_dram_addr;
 	unsigned long i;
+	int ret;
 
 	curr_dram_addr = list->head;
 	prev_dram_addr = list->head;
@@ -716,13 +717,20 @@ static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
 
 	for (i = 0; i < nvmm_list->num_pages; i++) {
 		/* Leave next_page field alone */
-		memcpy((void *)curr_dram_addr, curr_nvmm_addr,
+		ret = memcpy_mcsafe((void *)curr_dram_addr, curr_nvmm_addr,
 						LAST_ENTRY);
 
-		nvmm_page = (struct nova_inode_log_page *)curr_nvmm_addr;
+		if (ret < 0) {
+			nova_dbg("%s: Copy nvmm page %lu failed\n",
+					__func__, i);
+			continue;
+		}
+
 		dram_page = (struct nova_inode_log_page *)curr_dram_addr;
 		prev_dram_addr = curr_dram_addr;
-		curr_nvmm_block = nvmm_page->page_tail.next_page;
+		curr_nvmm_block = next_log_page(sb, curr_nvmm_block);
+		if (curr_nvmm_block < 0)
+			break;
 		curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
 		curr_dram_addr = dram_page->page_tail.next_page;
 	}
@@ -1200,7 +1208,7 @@ static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list,
 	u64 new_block)
 {
-	struct nova_inode_log_page *nvmm_page, *dram_page;
+	struct nova_inode_log_page *dram_page;
 	void *curr_nvmm_addr;
 	u64 curr_nvmm_block;
 	u64 prev_nvmm_block;
@@ -1217,10 +1225,11 @@ static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 		memcpy_to_pmem_nocache(curr_nvmm_addr, (void *)curr_dram_addr,
 						LAST_ENTRY);
 
-		nvmm_page = (struct nova_inode_log_page *)curr_nvmm_addr;
 		dram_page = (struct nova_inode_log_page *)curr_dram_addr;
 		prev_nvmm_block = curr_nvmm_block;
-		curr_nvmm_block = nvmm_page->page_tail.next_page;
+		curr_nvmm_block = next_log_page(sb, curr_nvmm_block);
+		if (curr_nvmm_block < 0)
+			break;
 		curr_nvmm_addr = nova_get_block(sb, curr_nvmm_block);
 		curr_dram_addr = dram_page->page_tail.next_page;
 	}

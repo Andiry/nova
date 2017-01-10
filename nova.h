@@ -1044,6 +1044,42 @@ enum nova_new_inode_type {
 	TYPE_MKDIR
 };
 
+static inline u64 next_log_page(struct super_block *sb, u64 curr)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 next = 0;
+	int rc;
+
+	curr = BLOCK_OFF(curr);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
+	rc = memcpy_from_pmem(&next, &curr_page->page_tail.next_page,
+				sizeof(u64));
+	if (rc)
+		return rc;
+
+	return next;
+}
+
+static inline u64 alter_log_page(struct super_block *sb, u64 curr)
+{
+	struct nova_inode_log_page *curr_page;
+	u64 next = 0;
+	int rc;
+
+	if (replica_log == 0)
+		return 0;
+
+	curr = BLOCK_OFF(curr);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
+	rc = memcpy_from_pmem(&next, &curr_page->page_tail.alter_page,
+				sizeof(u64));
+	if (rc)
+		return rc;
+
+	return next;
+}
+
+#if 0
 static inline u64 next_log_page(struct super_block *sb, u64 curr_p)
 {
 	void *curr_addr = nova_get_block(sb, curr_p);
@@ -1062,6 +1098,7 @@ static inline u64 alter_log_page(struct super_block *sb, u64 curr_p)
 
 	return ((struct nova_inode_page_tail *)page_tail)->alter_page;
 }
+#endif
 
 static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
 {
@@ -1122,13 +1159,18 @@ static inline bool goto_next_page(struct super_block *sb, u64 curr_p)
 {
 	void *addr;
 	u8 type;
+	int rc;
 
 	/* Each kind of entry takes at least 32 bytes */
 	if (ENTRY_LOC(curr_p) + 32 > LAST_ENTRY)
 		return true;
 
 	addr = nova_get_block(sb, curr_p);
-	type = nova_get_entry_type(addr);
+	rc = memcpy_from_pmem(&type, addr, sizeof(u8));
+
+	if (rc < 0)
+		return true;
+
 	if (type == NEXT_PAGE)
 		return true;
 

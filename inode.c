@@ -222,26 +222,23 @@ int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
 static int nova_free_contiguous_log_blocks(struct super_block *sb,
 	struct nova_inode *pi, u64 head)
 {
-	struct nova_inode_log_page *curr_page;
 	unsigned long blocknr, start_blocknr = 0;
 	u64 curr_block = head;
 	u32 btype = pi->i_blk_type;
 	int num_free = 0;
 	int freed = 0;
 
-	while (curr_block) {
+	while (curr_block > 0) {
 		if (ENTRY_LOC(curr_block)) {
 			nova_dbg("%s: ERROR: invalid block %llu\n",
 					__func__, curr_block);
 			break;
 		}
-		curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
-							curr_block);
 
 		blocknr = nova_get_blocknr(sb, le64_to_cpu(curr_block),
 				    btype);
 		nova_dbg_verbose("%s: free page %llu\n", __func__, curr_block);
-		curr_block = curr_page->page_tail.next_page;
+		curr_block = next_log_page(sb, curr_block);
 
 		if (start_blocknr == 0) {
 			start_blocknr = blocknr;
@@ -2341,8 +2338,8 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 	tail_block = BLOCK_OFF(pi->log_tail);
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							BLOCK_OFF(new_curr));
-	next = curr_page->page_tail.next_page;
-	if (next)
+	next = next_log_page(sb, new_curr);
+	if (next > 0)
 		nova_free_contiguous_log_blocks(sb, pi, next);
 	nova_set_next_page_flag(sb, new_curr);
 	nova_set_next_page_address(sb, curr_page, tail_block, 0);
@@ -2355,7 +2352,7 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 	/* Step 3: Unlink the old log */
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							BLOCK_OFF(old_curr_p));
-	next = curr_page->page_tail.next_page;
+	next = next_log_page(sb, old_curr_p);
 	if (next != tail_block) {
 		nova_err(sb, "Old log error: old curr_p 0x%lx, next 0x%lx ",
 			"curr_p 0x%lx, tail block 0x%lx\n", old_curr_p,
@@ -2442,8 +2439,8 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 	alter_tail_block = BLOCK_OFF(pi->alter_log_tail);
 	alter_curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							BLOCK_OFF(new_curr));
-	alter_next = alter_curr_page->page_tail.next_page;
-	if (alter_next)
+	alter_next = next_log_page(sb, new_curr);
+	if (alter_next > 0)
 		nova_free_contiguous_log_blocks(sb, pi, alter_next);
 	nova_set_next_page_address(sb, alter_curr_page, alter_tail_block, 0);
 	nova_flush_buffer(alter_curr_page, PAGE_SIZE, 0);
@@ -2471,7 +2468,7 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 	/* Step 4: Unlink the old log */
 	alter_curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
 						BLOCK_OFF(old_alter_curr_p));
-	alter_next = alter_curr_page->page_tail.next_page;
+	alter_next = next_log_page(sb, old_alter_curr_p);
 	if (alter_next != alter_tail_block) {
 		nova_err(sb, "Old log error: old curr_p 0x%lx, next 0x%lx ",
 			"curr_p 0x%lx, tail block 0x%lx\n", old_alter_curr_p,
@@ -2544,12 +2541,16 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 
 		curr_page = (struct nova_inode_log_page *)
 					nova_get_block(sb, curr);
-		next = curr_page->page_tail.next_page;
+		next = next_log_page(sb, curr);
+		if (next < 0)
+			break;
 
 		if (replica_log) {
 			alter_curr_page = (struct nova_inode_log_page *)
 						nova_get_block(sb, alter_curr);
-			alter_next = alter_curr_page->page_tail.next_page;
+			alter_next = next_log_page(sb, alter_curr);
+			if (alter_next < 0)
+				break;
 		}
 		nova_dbg_verbose("curr 0x%llx, next 0x%llx\n", curr, next);
 		if (curr_page_invalid(sb, pi, sih, curr)) {
@@ -2597,7 +2598,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 
 	if (replica_log) {
 		alter_curr = BLOCK_OFF(pi->alter_log_tail);
-		while (next_log_page(sb, alter_curr))
+		while (next_log_page(sb, alter_curr) > 0)
 			alter_curr = next_log_page(sb, alter_curr);
 
 		alter_curr_page = (struct nova_inode_log_page *)nova_get_block(sb,
@@ -3045,11 +3046,9 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
-	while ((next = curr_page->page_tail.next_page) != 0) {
+	while ((next = next_log_page(sb, curr_p)) > 0) {
 		sih->log_pages++;
 		curr_p = next;
-		curr_page = (struct nova_inode_log_page *)
-			nova_get_block(sb, curr_p);
 	}
 
 	sih->i_blocks = sih->log_pages + (sih->i_size >> data_bits);

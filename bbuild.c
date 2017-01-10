@@ -848,7 +848,6 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 static int nova_traverse_inode_log(struct super_block *sb,
 	struct nova_inode *pi, struct scan_bitmap *bm, u64 head)
 {
-	struct nova_inode_log_page *curr_page;
 	u64 curr_p;
 	u64 next;
 
@@ -862,13 +861,12 @@ static int nova_traverse_inode_log(struct super_block *sb,
 	BUG_ON(curr_p & (PAGE_SIZE - 1));
 	set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 
-	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
-	while ((next = curr_page->page_tail.next_page) != 0) {
+	next = next_log_page(sb, curr_p);
+	while (next > 0) {
 		curr_p = next;
 		BUG_ON(curr_p & (PAGE_SIZE - 1));
 		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-		curr_page = (struct nova_inode_log_page *)
-			nova_get_block(sb, curr_p);
+		next = next_log_page(sb, curr_p);
 	}
 
 	return 0;
@@ -1067,7 +1065,6 @@ static int nova_traverse_file_inode_log(struct super_block *sb,
 {
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
-	struct nova_inode_log_page *curr_page;
 	unsigned long base = 0;
 	unsigned long last_blocknr;
 	u64 ino = pi->nova_ino;
@@ -1149,13 +1146,12 @@ again:
 	if (base == 0) {
 		/* Keep traversing until log ends */
 		curr_p &= PAGE_MASK;
-		curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
-		while ((next = curr_page->page_tail.next_page) != 0) {
+		next = next_log_page(sb, curr_p);
+		while (next > 0) {
 			curr_p = next;
 			BUG_ON(curr_p & (PAGE_SIZE - 1));
 			set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
-			curr_page = (struct nova_inode_log_page *)
-				nova_get_block(sb, curr_p);
+			next = next_log_page(sb, curr_p);
 		}
 	}
 
