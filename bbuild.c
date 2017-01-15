@@ -1109,6 +1109,13 @@ again:
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
+		if (!nova_verify_entry_csum(sb, addr)) {
+			nova_err(sb, "%s: entry checksum fail "
+					"inode %llu entry addr 0x%llx\n",
+					__func__, ino, (u64)addr);
+			break;
+		}
+
 		type = nova_get_entry_type(addr);
 		switch (type) {
 			case SET_ATTR:

@@ -1573,13 +1573,6 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	if (entry->entry_type != SET_ATTR)
 		BUG();
 
-	if (!nova_verify_entry_csum(sb, entry)) {
-		nova_err(sb, "%s: nova_setattr_logentry checksum fail "
-			"inode %llu entry addr 0x%llx\n",
-			__func__, pi->nova_ino, (u64) entry);
-		return;
-	}
-
 	pi->i_mode	= entry->mode;
 	pi->i_uid	= entry->uid;
 	pi->i_gid	= entry->gid;
@@ -2962,6 +2955,13 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
+		if (!nova_verify_entry_csum(sb, addr)) {
+			nova_err(sb, "%s: entry checksum fail "
+					"inode %llu entry addr 0x%llx\n",
+					__func__, ino, (u64)addr);
+			break;
+		}
+
 		type = nova_get_entry_type(addr);
 
 		if (sbi->mount_snapshot) {
@@ -3007,12 +3007,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		entry = (struct nova_file_write_entry *)addr;
-		if (!nova_verify_entry_csum(sb, entry)) {
-			nova_err(sb, "%s: nova_file_write_entry checksum fail "
-					"inode %llu entry addr 0x%llx\n",
-					__func__, ino, (u64) entry);
-			break;
-		}
+
 		if (entry->num_pages != entry->invalid_pages) {
 			/*
 			 * The overlaped blocks are already freed.

@@ -672,6 +672,13 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
+		if (!nova_verify_entry_csum(sb, addr)) {
+			nova_err(sb, "%s: entry checksum fail "
+				"inode %llu entry addr 0x%llx\n",
+				__func__, ino, (u64)addr);
+			break;
+		}
+
 		type = nova_get_entry_type(addr);
 
 		if (sbi->mount_snapshot) {
@@ -707,19 +714,12 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				NOVA_ASSERT(0);
 		}
 
-		entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
+		entry = (struct nova_dentry *)addr;
 		nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
 			"name %s, namelen %u, csum 0x%x, rec len %u\n", curr_p,
 			entry->entry_type, le64_to_cpu(entry->ino),
 			entry->name, entry->name_len, entry->csum,
 			le16_to_cpu(entry->de_len));
-
-		if (!nova_verify_entry_csum(sb, entry)) {
-			nova_err(sb, "%s: nova_dentry checksum fail "
-				"inode %llu entry addr 0x%llx\n",
-				__func__, ino, (u64) entry);
-			break;
-		}
 
 		nova_reassign_last_dentry(sb, sih, curr_p);
 
