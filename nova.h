@@ -947,8 +947,16 @@ static inline struct nova_inode *nova_get_inode(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode fake_pi;
+	void *addr;
+	int rc;
 
-	return (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
+	addr = nova_get_block(sb, sih->pi_addr);
+	rc = memcpy_from_pmem(&fake_pi, addr, sizeof(struct nova_inode));
+	if (rc)
+		return NULL;
+
+	return (struct nova_inode *)addr;
 }
 
 static inline struct nova_inode *nova_get_alter_inode(struct super_block *sb,
@@ -956,11 +964,19 @@ static inline struct nova_inode *nova_get_alter_inode(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode fake_pi;
+	void *addr;
+	int rc;
 
 	if (replica_inode == 0)
 		return NULL;
 
-	return (struct nova_inode *)nova_get_block(sb, sih->alter_pi_addr);
+	addr = nova_get_block(sb, sih->alter_pi_addr);
+	rc = memcpy_from_pmem(&fake_pi, addr, sizeof(struct nova_inode));
+	if (rc)
+		return NULL;
+
+	return (struct nova_inode *)addr;
 }
 
 static inline int nova_update_alter_inode(struct super_block *sb,
