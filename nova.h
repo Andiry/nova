@@ -167,7 +167,14 @@ enum nova_entry_type {
 
 static inline u8 nova_get_entry_type(void *p)
 {
-	return *(u8 *)p;
+	u8 type;
+	int rc;
+
+	rc = memcpy_from_pmem(&type, p, sizeof(u8));
+	if (rc)
+		return rc;
+
+	return type;
 }
 
 static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
@@ -230,8 +237,10 @@ struct nova_dentry {
 
 #define NOVA_DIR_PAD			8	/* Align to 8 bytes boundary */
 #define NOVA_DIR_ROUND			(NOVA_DIR_PAD - 1)
-#define NOVA_DIR_LOG_REC_LEN(name_len)	(((name_len) + 41 + NOVA_DIR_ROUND) & \
-				      ~NOVA_DIR_ROUND)
+#define NOVA_DENTRY_HEADER_LEN		40
+#define NOVA_DIR_LOG_REC_LEN(name_len) \
+	(((name_len + 1) + NOVA_DENTRY_HEADER_LEN \
+	 + NOVA_DIR_ROUND) & ~NOVA_DIR_ROUND)
 
 /* Struct of inode attributes change log (setattr) */
 struct nova_setattr_logentry {

@@ -20,29 +20,46 @@
 int nova_get_entry_csum(struct super_block *sb, void *entry,
 	u32 *entry_csum, size_t *size)
 {
+	struct nova_dentry fake_dentry;
+	struct nova_file_write_entry fake_wentry;
+	struct nova_setattr_logentry fake_sentry;
+	struct nova_link_change_entry fake_lcentry;
 	int ret = 0;
 	u8 type;
 
 	type = nova_get_entry_type(entry);
 	switch (type) {
 		case DIR_LOG:
-			*entry_csum = ((struct nova_dentry *)entry)->csum;
-			*size = ((struct nova_dentry *)entry)->de_len;
+			ret = memcpy_from_pmem(&fake_dentry, entry,
+						NOVA_DENTRY_HEADER_LEN);
+			if (ret < 0)
+				break;
+			*size = fake_dentry.de_len;
+			ret = memcpy_from_pmem(&fake_dentry, entry, *size);
+			if (ret < 0)
+				break;
+			*entry_csum = fake_dentry.csum;
 			break;
 		case FILE_WRITE:
-			*entry_csum = ((struct nova_file_write_entry *)
-					entry)->csum;
 			*size = sizeof(struct nova_file_write_entry);
+			ret = memcpy_from_pmem(&fake_wentry, entry, *size);
+			if (ret < 0)
+				break;
+			*entry_csum = fake_wentry.csum;
 			break;
 		case SET_ATTR:
-			*entry_csum = ((struct nova_setattr_logentry *)
-					entry)->csum;
 			*size = sizeof(struct nova_setattr_logentry);
+			ret = memcpy_from_pmem(&fake_sentry, entry, *size);
+			if (ret < 0)
+				break;
+			*entry_csum = fake_sentry.csum;
 			break;
 		case LINK_CHANGE:
-			*entry_csum = ((struct nova_link_change_entry *)
-					entry)->csum;
 			*size = sizeof(struct nova_link_change_entry);
+			ret = memcpy_from_pmem(&fake_lcentry, entry, *size);
+			if (ret < 0)
+				break;
+			*entry_csum = fake_lcentry.csum;
 			break;
 		default:
 			*entry_csum = 0;
@@ -50,7 +67,7 @@ int nova_get_entry_csum(struct super_block *sb, void *entry,
 			nova_dbg("%s: unknown or unsupported entry type (%d)"
 				" for checksum, 0x%llx\n", __func__, type,
 				(u64)entry);
-			ret = -EINVAL;
+			ret = -EIO;
 			break;
 	}
 
@@ -165,28 +182,40 @@ void nova_update_entry_csum(void *entry)
 
 }
 
+bool is_entry_matched(struct super_block *sb, void *entry, size_t *ret_size)
+{
+	u32 checksum;
+	u32 entry_csum;
+	size_t size;
+	bool match = false;
+	int ret;
+
+	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size);
+	if (ret)
+		return match;
+
+	/* No poison block */
+	checksum = nova_calc_entry_csum(entry);
+
+	match = checksum == le32_to_cpu(entry_csum);
+	*ret_size = size;
+
+	return match;
+}
+
 static bool nova_try_alter_entry(struct super_block *sb, void *entry)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *alter_entry;
 	u64 curr, alter_curr;
-	u32 checksum;
-	u32 entry_csum;
-	bool match;
 	size_t size;
-	int ret;
+	bool match;
 
 	curr = nova_get_addr_off(sbi, entry);
 	alter_curr = alter_log_entry(sb, curr);
 	alter_entry = (void *)nova_get_block(sb, alter_curr);
 
-	checksum = nova_calc_entry_csum(alter_entry);
-
-	ret = nova_get_entry_csum(sb, alter_entry, &entry_csum, &size);
-	if (ret)
-		return ret;
-
-	match = checksum == le32_to_cpu(entry_csum);
+	match = is_entry_matched(sb, alter_entry, &size);
 
 	if (!match) {
 		nova_dbg("%s failed\n", __func__);
@@ -224,27 +253,20 @@ int nova_update_alter_entry(struct super_block *sb, void *entry)
 /* Verify the log entry checksum. */
 bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 {
-	u32 checksum;
-	u32 entry_csum;
 	size_t size;
 	bool match;
-	int ret;
 
-	checksum = nova_calc_entry_csum(entry);
+	match = is_entry_matched(sb, entry, &size);
 
-	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size);
-	if (ret)
-		return ret;
+	/* FIXME: Also check alter entry? */
+	if (match)
+		return match;
 
-	match = checksum == le32_to_cpu(entry_csum);
-
-	if (!match) {
-		if (replica_log) {
-			nova_dbg("%s: nova entry mismatch detected, trying to "
+	if (replica_log) {
+		nova_dbg("%s: nova entry mismatch detected, trying to "
 				"recover from the alternative entry.\n",
 				__func__);
-			match = nova_try_alter_entry(sb, entry);
-		}
+		match = nova_try_alter_entry(sb, entry);
 	}
 
 	return match;
