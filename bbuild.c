@@ -30,6 +30,30 @@
 #include <linux/delay.h>
 #include "nova.h"
 
+void nova_init_header(struct super_block *sb,
+	struct nova_inode_info_header *sih, u16 i_mode)
+{
+	sih->log_pages = 0;
+	sih->mmap_pages = 0;
+	sih->low_dirty = ULONG_MAX;
+	sih->high_dirty = 0;
+	sih->i_size = 0;
+	sih->i_blocks = 0;
+	sih->pi_addr = 0;
+	sih->alter_pi_addr = 0;
+	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
+	INIT_RADIX_TREE(&sih->cache_tree, GFP_ATOMIC);
+	sih->i_mode = i_mode;
+	sih->valid_bytes = 0;
+	sih->last_setattr = 0;
+	sih->last_link_change = 0;
+	sih->last_dentry = 0;
+	sih->log_head = 0;
+	sih->log_tail = 0;
+	sih->alter_log_head = 0;
+	sih->alter_log_tail = 0;
+}
+
 static inline void set_scan_bm(unsigned long bit,
 	struct single_scan_bm *scan_bm)
 {
@@ -770,26 +794,6 @@ static struct task_struct **threads;
 wait_queue_head_t finish_wq;
 int *finished;
 
-void nova_init_header(struct super_block *sb,
-	struct nova_inode_info_header *sih, u16 i_mode)
-{
-	sih->log_pages = 0;
-	sih->mmap_pages = 0;
-	sih->low_dirty = ULONG_MAX;
-	sih->high_dirty = 0;
-	sih->i_size = 0;
-	sih->i_blocks = 0;
-	sih->pi_addr = 0;
-	sih->alter_pi_addr = 0;
-	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
-	INIT_RADIX_TREE(&sih->cache_tree, GFP_ATOMIC);
-	sih->i_mode = i_mode;
-	sih->valid_bytes = 0;
-	sih->last_setattr = 0;
-	sih->last_link_change = 0;
-	sih->last_dentry = 0;
-}
-
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 ino, u64 pi_addr, int rebuild_dir)
 {
@@ -1175,6 +1179,7 @@ again:
 	return 0;
 }
 
+/* Pi is DRAM fake version */
 static int nova_recover_inode_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct task_ring *ring,
 	struct nova_inode *pi, struct scan_bitmap *bm)

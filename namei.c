@@ -435,8 +435,8 @@ int nova_append_link_change_entry(struct super_block *sb,
 	if (nova_can_inplace_update_lcentry(sb, sih,
 				latest_snapshot_trans_id)) {
 		nova_inplace_update_lcentry(sb, inode, sih, trans_id);
-		update->tail = pi->log_tail;
-		update->alter_tail = pi->alter_log_tail;
+		update->tail = sih->log_tail;
+		update->alter_tail = sih->alter_log_tail;
 
 		*old_linkc = 0;
 		goto out;

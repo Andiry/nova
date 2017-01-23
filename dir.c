@@ -292,17 +292,12 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	unsigned int length;
 	struct nova_dentry *de_entry;
 
-	if (pi->log_head) {
-		nova_dbg("%s: log head exists @ 0x%llx!\n",
-				__func__, pi->log_head);
-		return - EINVAL;
-	}
-
 	allocated = nova_allocate_inode_log_pages(sb, pi, 1, &new_block);
 	if (allocated != 1) {
 		nova_err(sb, "ERROR: no inode log page available\n");
 		return - ENOMEM;
 	}
+
 	pi->log_tail = pi->log_head = new_block;
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
@@ -499,8 +494,8 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 		/* Leave create/delete_dentry to NULL */
 		/* Do not change tail/alter_tail if used as input */
 		if (update->tail == 0) {
-			update->tail = pidir->log_tail;
-			update->alter_tail = pidir->alter_log_tail;
+			update->tail = sih->log_tail;
+			update->alter_tail = sih->alter_log_tail;
 		}
 		goto out;
 	}
@@ -648,19 +643,23 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	NOVA_START_TIMING(rebuild_dir_t, rebuild_time);
 	nova_dbgv("Rebuild dir %llu tree\n", ino);
 
+	ret = nova_update_sih_head_tail(sb, pi, sih);
+	if (ret)
+		goto out;
+
 	sih->pi_addr = pi_addr;
 
-	curr_p = pi->log_head;
+	curr_p = sih->log_head;
 	if (curr_p == 0) {
 		nova_err(sb, "Dir %llu log is NULL!\n", ino);
 		BUG();
 	}
 
 	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, pi->log_tail);
+				curr_p, sih->log_tail);
 
 	sih->log_pages = 1;
-	while (curr_p != pi->log_tail) {
+	while (curr_p != sih->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
 			sih->log_pages++;
 			curr_p = next_log_page(sb, curr_p);
@@ -766,9 +765,10 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 	sih->i_blocks = sih->log_pages;
 
+out:
 //	nova_print_dir_tree(sb, sih, ino);
 	NOVA_END_TIMING(rebuild_dir_t, rebuild_time);
-	return 0;
+	return ret;
 }
 
 static int nova_readdir_slow(struct file *file, struct dir_context *ctx)
@@ -890,7 +890,7 @@ static int nova_readdir_fast(struct file *file, struct dir_context *ctx)
 			__func__, (u64)inode->i_ino,
 			pidir->i_size, ctx->pos);
 
-	if (pidir->log_head == 0) {
+	if (sih->log_head == 0) {
 		nova_err(sb, "Dir %lu log is NULL!\n", inode->i_ino);
 		BUG();
 		return -EINVAL;
@@ -899,7 +899,7 @@ static int nova_readdir_fast(struct file *file, struct dir_context *ctx)
 	pos = ctx->pos;
 
 	if (pos == 0) {
-		curr_p = pidir->log_head;
+		curr_p = sih->log_head;
 	} else if (pos == READDIR_END) {
 		goto out;
 	} else {
@@ -908,7 +908,7 @@ static int nova_readdir_fast(struct file *file, struct dir_context *ctx)
 			goto out;
 	}
 
-	while (curr_p != pidir->log_tail) {
+	while (curr_p != sih->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
 			curr_p = next_log_page(sb, curr_p);
 		}

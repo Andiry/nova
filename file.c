@@ -232,7 +232,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	sync_start = start;
 	sync_end = end;
-	end_temp = pi->log_tail;
+	end_temp = sih->log_tail;
 
 	do {
 		unsigned long nr_flush_bytes = 0;
@@ -252,7 +252,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	} while (start < end);
 
 	end_tail = end_temp;
-	if (begin_tail && end_tail && end_tail != pi->log_tail) {
+	if (begin_tail && end_tail && end_tail != sih->log_tail) {
 		nova_update_tail(pi, end_tail);
 
 		/* Free the overlap blocks after the write is committed */
@@ -375,8 +375,8 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	num_blocks = (blockoff + len + blocksize_mask) >> sb->s_blocksize_bits;
 
 	trans_id = nova_get_trans_id(sb);
-	update.tail = pi->log_tail;
-	update.alter_tail = pi->alter_log_tail;
+	update.tail = sih->log_tail;
+	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
 						start_blk, &entry, 1, &inplace);
@@ -450,6 +450,8 @@ next:
 	if (update_log) {
 		nova_update_tail(pi, update.tail);
 		nova_update_alter_tail(pi, update.alter_tail);
+		sih->log_tail = update.tail;
+		sih->alter_log_tail = update.alter_tail;
 
 		/* Update file tree */
 		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);

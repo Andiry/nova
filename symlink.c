@@ -63,6 +63,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	nova_update_entry_csum(entry);
 	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
 	pi->log_head = block1;
+	sih->log_head = block1;
 	update.tail = block1 + length;
 
 	update.alter_tail = 0;
@@ -77,6 +78,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 		memcpy_to_pmem_nocache(alter_entry, entry, length);
 		nova_update_alter_pages(sb, pi, block1, block2);
 		pi->alter_log_head = block2;
+		sih->alter_log_head = block2;
 		update.alter_tail = block2 + length;
 	}
 
@@ -114,11 +116,12 @@ static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 	struct nova_file_write_entry *entry;
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	char *blockp;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb,
-							pi->log_head);
+							sih->log_head);
 	blockp = (char *)nova_get_block(sb, BLOCK_OFF(entry->block));
 
 	return nova_readlink_copy(buffer, buflen, blockp);
@@ -129,11 +132,12 @@ static const char *nova_get_link(struct dentry *dentry, struct inode *inode,
 {
 	struct nova_file_write_entry *entry;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	char *blockp;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb,
-							pi->log_head);
+							sih->log_head);
 	blockp = (char *)nova_get_block(sb, BLOCK_OFF(entry->block));
 
 	return blockp;

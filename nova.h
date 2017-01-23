@@ -406,6 +406,10 @@ struct nova_inode_info_header {
 	u64 last_setattr;		/* Last setattr entry */
 	u64 last_link_change;		/* Last link change entry */
 	u64 last_dentry;		/* Last updated dentry */
+	u64 log_head;			/* Log head pointer */
+	u64 log_tail;			/* Log tail pointer */
+	u64 alter_log_head;		/* Alternate log head pointer */
+	u64 alter_log_tail;		/* Alternate log tail pointer */
 };
 
 struct nova_inode_info {
@@ -621,6 +625,24 @@ static inline int nova_get_head_tail(struct super_block *sb,
 	update->tail = fake_pi.log_tail;
 	update->alter_head = fake_pi.alter_log_head;
 	update->alter_tail = fake_pi.alter_log_tail;
+
+	return rc;
+}
+
+static inline int nova_update_sih_head_tail(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih)
+{
+	struct nova_inode fake_pi;
+	int rc;
+
+	rc = memcpy_from_pmem(&fake_pi, pi, sizeof(struct nova_inode));
+	if (rc)
+		return rc;
+
+	sih->log_head = fake_pi.log_head;
+	sih->log_tail = fake_pi.log_tail;
+	sih->alter_log_head = fake_pi.alter_log_head;
+	sih->alter_log_tail = fake_pi.alter_log_tail;
 
 	return rc;
 }
@@ -1009,8 +1031,14 @@ static inline void nova_update_inode(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi,
 	struct nova_inode_update *update, int update_alter)
 {
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+
 	nova_update_tail(pi, update->tail);
 	nova_update_alter_tail(pi, update->alter_tail);
+	sih->log_tail = update->tail;
+	sih->alter_log_tail = update->alter_tail;
+
 	nova_update_inode_checksum(pi);
 	if (inode && update_alter)
 		nova_update_alter_inode(sb, inode, pi);
@@ -1382,7 +1410,7 @@ extern unsigned long nova_find_region(struct inode *inode, loff_t *offset,
 void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry);
-void nova_free_inode_log(struct super_block *sb, struct nova_inode *pi);
+int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi);
 int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
 	u64 curr, u64 alter_curr);
 int nova_allocate_inode_log_pages(struct super_block *sb,

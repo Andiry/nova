@@ -274,7 +274,7 @@ int nova_reassign_file_tree(struct super_block *sb,
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
 
-	while (curr_p != pi->log_tail) {
+	while (curr_p != sih->log_tail) {
 		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
 
@@ -436,8 +436,8 @@ static ssize_t nova_cow_file_write(struct file *filp,
 			__func__, inode->i_ino,	pos, count);
 
 	trans_id = nova_get_trans_id(sb);
-	update.tail = pi->log_tail;
-	update.alter_tail = pi->alter_log_tail;
+	update.tail = sih->log_tail;
+	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(pi) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
@@ -705,8 +705,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			__func__, inode->i_ino,	pos, count);
 
 	trans_id = nova_get_trans_id(sb);
-	update.tail = pi->log_tail;
-	update.alter_tail = pi->alter_log_tail;
+	update.tail = sih->log_tail;
+	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
 		hole_fill = false;
 		offset = pos & (nova_inode_blk_size(pi) - 1);
@@ -935,8 +935,8 @@ again:
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 	trans_id = nova_get_trans_id(sb);
-	update.tail = pi->log_tail;
-	update.alter_tail = pi->alter_log_tail;
+	update.tail = sih->log_tail;
+	update.alter_tail = sih->alter_log_tail;
 
 	/* Return initialized blocks to the user */
 	allocated = nova_new_data_blocks(sb, pi, &blocknr, num_blocks,
