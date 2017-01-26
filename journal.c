@@ -309,7 +309,7 @@ int nova_lite_journal_soft_init(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct ptr_pair *pair;
 	int i;
-	int ret;
+	int ret = 0;
 
 	sbi->journal_locks = kzalloc(sbi->cpus * sizeof(spinlock_t),
 					GFP_KERNEL);
