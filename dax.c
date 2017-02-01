@@ -646,7 +646,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	struct nova_inode_update update;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, csummed, ret;
+	size_t count, offset, copied, ret;
 	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
@@ -780,17 +780,6 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			entry->size = entry_size;
 			nova_update_entry_csum(entry);
 			nova_update_alter_entry(sb, entry);
-		}
-
-		if ( (copied > 0) && (NOVA_SB(sb)->data_csum_base > 0) ) {
-			csummed = copied - nova_update_cow_csum(inode, blocknr,
-						(void *) buf, offset, copied);
-			if (unlikely(csummed != copied)) {
-				nova_dbg("%s: not all data bytes are "
-					"checksummed! copied %zu, "
-					"csummed %zu\n", __func__,
-					copied, csummed);
-			}
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
