@@ -3081,7 +3081,15 @@ unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 	return 0;
 }
 
+static int nova_writepages(struct address_space *mapping,
+	struct writeback_control *wbc)
+{
+	return dax_writeback_mapping_range(mapping,
+			mapping->host->i_sb->s_bdev, wbc);
+}
+
 const struct address_space_operations nova_aops_dax = {
+	.writepages		= nova_writepages,
 	.direct_IO		= nova_direct_IO,
 	/*.dax_mem_protect	= nova_dax_mem_protect,*/
 };
