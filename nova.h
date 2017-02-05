@@ -884,7 +884,8 @@ nova_get_write_entry(struct super_block *sb,
 }
 
 void nova_print_curr_log_page(struct super_block *sb, u64 curr);
-void nova_print_nova_log(struct super_block *sb, struct nova_inode *pi);
+void nova_print_nova_log(struct super_block *sb,
+	struct nova_inode_info_header *sih);
 int nova_get_nova_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode *pi);
 void nova_print_nova_log_pages(struct super_block *sb,
@@ -918,7 +919,7 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 			curr, pgoff, data->pgoff, data->num_pages);
 		pi = nova_get_block(sb, sih->pi_addr);
 		nova_print_nova_log_pages(sb, sih, pi);
-		nova_print_nova_log(sb, pi);
+		nova_print_nova_log(sb, sih);
 		NOVA_ASSERT(0);
 	}
 
@@ -1293,8 +1294,8 @@ inline void nova_free_inode_node(struct super_block *sb,
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
 extern int nova_free_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
-extern int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
-	unsigned long blocknr, int num);
+extern int nova_free_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
 extern int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
 	unsigned int num, unsigned long start_blk,

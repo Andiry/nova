@@ -395,32 +395,32 @@ int nova_free_data_blocks(struct super_block *sb,
 		nova_err(sb, "Inode %lu: free %d data block from %lu to %lu "
 				"failed!\n", sih->ino, num, blocknr,
 				blocknr + num - 1);
-//		nova_print_nova_log(sb, pi);
+		nova_print_nova_log(sb, sih);
 	}
 	NOVA_END_TIMING(free_data_t, free_time);
 
 	return ret;
 }
 
-int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
-	unsigned long blocknr, int num)
+int nova_free_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int num)
 {
 	int ret;
 	timing_t free_time;
 
-	nova_dbgv("Inode %llu: free %d log block from %lu to %lu\n",
-			pi->nova_ino, num, blocknr, blocknr + num - 1);
+	nova_dbgv("Inode %lu: free %d log block from %lu to %lu\n",
+			sih->ino, num, blocknr, blocknr + num - 1);
 	if (blocknr == 0) {
 		nova_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
 		return -EINVAL;
 	}
 	NOVA_START_TIMING(free_log_t, free_time);
-	ret = nova_free_blocks(sb, blocknr, num, pi->i_blk_type, 1);
+	ret = nova_free_blocks(sb, blocknr, num, sih->i_blk_type, 1);
 	if (ret) {
-		nova_err(sb, "Inode %llu: free %d log block from %lu to %lu "
-				"failed!\n", pi->nova_ino, num, blocknr,
+		nova_err(sb, "Inode %lu: free %d log block from %lu to %lu "
+				"failed!\n", sih->ino, num, blocknr,
 				blocknr + num - 1);
-		nova_print_nova_log(sb, pi);
+		nova_print_nova_log(sb, sih);
 	}
 	NOVA_END_TIMING(free_log_t, free_time);
 

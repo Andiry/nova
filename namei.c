@@ -293,7 +293,7 @@ out:
 	return err;
 
 out_fail2:
-	nova_free_log_blocks(sb, pi, log_block >> PAGE_SHIFT, 2);
+	nova_free_log_blocks(sb, sih, log_block >> PAGE_SHIFT, 2);
 out_fail1:
 	nova_err(sb, "%s return %d\n", __func__, err);
 	goto out;
