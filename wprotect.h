@@ -120,7 +120,7 @@ static inline void nova_memunlock_inode(struct super_block *sb,
 					 struct nova_inode *pi)
 {
 	if (nova_is_protected(sb))
-		__nova_memunlock_range(pi, NOVA_SB_SIZE);
+		__nova_memunlock_range(pi, NOVA_INODE_SIZE);
 }
 
 static inline void nova_memlock_inode(struct super_block *sb,
@@ -128,7 +128,7 @@ static inline void nova_memlock_inode(struct super_block *sb,
 {
 	/* nova_sync_inode(pi); */
 	if (nova_is_protected(sb))
-		__nova_memlock_range(pi, NOVA_SB_SIZE);
+		__nova_memlock_range(pi, NOVA_INODE_SIZE);
 }
 
 static inline void nova_memunlock_block(struct super_block *sb, void *bp)

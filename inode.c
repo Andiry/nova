@@ -299,8 +299,7 @@ static int nova_delete_cache_tree(struct super_block *sb,
 }
 
 static int nova_zero_cache_tree(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	unsigned long start_blocknr)
+	struct nova_inode_info_header *sih, unsigned long start_blocknr)
 {
 	unsigned long block;
 	unsigned long i;
@@ -445,7 +444,7 @@ int nova_delete_file_tree(struct super_block *sb,
 						last_blocknr);
 
 	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
-		nova_zero_cache_tree(sb, pi, sih, start_blocknr);
+		nova_zero_cache_tree(sb, sih, start_blocknr);
 
 	pgoff = start_blocknr;
 	/* Handle EOF blocks */
