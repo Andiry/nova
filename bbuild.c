@@ -52,6 +52,7 @@ void nova_init_header(struct super_block *sb,
 	sih->log_tail = 0;
 	sih->alter_log_head = 0;
 	sih->alter_log_tail = 0;
+	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 }
 
 static inline void set_scan_bm(unsigned long bit,
@@ -207,7 +208,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
-	struct nova_inode_update update;
+	struct nova_inode_info_header sih;
 	struct free_list *free_list;
 	struct nova_range_node_lowhigh *entry;
 	struct nova_range_node *blknode;
@@ -217,17 +218,17 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 	int ret = 0;
 
 	/* FIXME: Backup inode for BLOCKNODE */
-	ret = nova_get_head_tail(sb, pi, &update);
+	ret = nova_get_head_tail(sb, pi, &sih);
 	if (ret)
 		goto out;
 
-	curr_p = update.head;
+	curr_p = sih.log_head;
 	if (curr_p == 0) {
 		nova_dbg("%s: pi head is 0!\n", __func__);
 		return -EINVAL;
 	}
 
-	while (curr_p != update.tail) {
+	while (curr_p != sih.log_tail) {
 		if (is_last_entry(curr_p, size)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -267,7 +268,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 		curr_p += sizeof(struct nova_range_node_lowhigh);
 	}
 out:
-	nova_free_inode_log(sb, pi);
+	nova_free_inode_log(sb, pi, &sih);
 	return ret;
 }
 
@@ -290,7 +291,7 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODELIST1_INO);
-	struct nova_inode_update update;
+	struct nova_inode_info_header sih;
 	struct nova_range_node_lowhigh *entry;
 	struct nova_range_node *range_node;
 	struct inode_map *inode_map;
@@ -301,18 +302,18 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 	int ret;
 
 	/* FIXME: Backup inode for INODELIST */
-	ret = nova_get_head_tail(sb, pi, &update);
+	ret = nova_get_head_tail(sb, pi, &sih);
 	if (ret)
 		goto out;
 
 	sbi->s_inodes_used_count = 0;
-	curr_p = update.head;
+	curr_p = sih.log_head;
 	if (curr_p == 0) {
 		nova_dbg("%s: pi head is 0!\n", __func__);
 		return -EINVAL;
 	}
 
-	while (curr_p != update.tail) {
+	while (curr_p != sih.log_tail) {
 		if (is_last_entry(curr_p, size)) {
 			curr_p = next_log_page(sb, curr_p);
 		}
@@ -362,7 +363,7 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 
 	nova_dbg("%s: %lu inode nodes\n", __func__, num_inode_node);
 out:
-	nova_free_inode_log(sb, pi);
+	nova_free_inode_log(sb, pi, &sih);
 	return ret;
 }
 

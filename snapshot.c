@@ -174,13 +174,14 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 {
 	struct snapshot_file_write_entry *w_entry = NULL;
 	struct snapshot_inode_entry *i_entry = NULL;
-	struct nova_inode fake_pi;
+	struct nova_inode_info_header sih;
 	void *addr;
 	u64 curr_p;
 	u8 type;
 
-	fake_pi.nova_ino = NOVA_SNAPSHOT_INO;
-	fake_pi.i_blk_type = 0;
+	sih.ino = NOVA_SNAPSHOT_INO;
+	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+	sih.log_head = sih.log_tail = 0;
 
 	curr_p = list->head;
 	nova_dbg_verbose("Snapshot list head 0x%llx, tail 0x%lx\n",
@@ -214,7 +215,7 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 			case SS_FILE_WRITE:
 				w_entry = (struct snapshot_file_write_entry *)addr;
 				if (w_entry->deleted == 0)
-					nova_free_data_blocks(sb, &fake_pi,
+					nova_free_data_blocks(sb, &sih,
 							w_entry->nvmm,
 							w_entry->num_pages);
 				curr_p += sizeof(struct snapshot_file_write_entry);
@@ -245,10 +246,10 @@ static inline int nova_background_clean_inode_entry(struct super_block *sb,
 
 static inline int nova_background_clean_write_entry(struct super_block *sb,
 	struct snapshot_file_write_entry *w_entry,
-	struct nova_inode *fake_pi, u64 trans_id)
+	struct nova_inode_info_header *sih, u64 trans_id)
 {
 	if (w_entry->deleted == 0 && w_entry->delete_trans_id <= trans_id) {
-		nova_free_data_blocks(sb, fake_pi, w_entry->nvmm,
+		nova_free_data_blocks(sb, sih, w_entry->nvmm,
 					w_entry->num_pages);
 		w_entry->deleted = 1;
 	}
@@ -260,13 +261,14 @@ static int nova_background_clean_snapshot_list(struct super_block *sb,
 	struct snapshot_list *list, u64 trans_id)
 {
 	struct nova_inode_log_page *curr_page;
-	struct nova_inode fake_pi;
+	struct nova_inode_info_header sih;
 	void *addr;
 	u64 curr_p;
 	u8 type;
 
-	fake_pi.nova_ino = NOVA_SNAPSHOT_INO;
-	fake_pi.i_blk_type = 0;
+	sih.ino = NOVA_SNAPSHOT_INO;
+	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+	sih.log_head = sih.log_tail = 0;
 
 	curr_p = list->head;
 	nova_dbg_verbose("Snapshot list head 0x%llx, tail 0x%lx\n",
@@ -302,7 +304,7 @@ static int nova_background_clean_snapshot_list(struct super_block *sb,
 				continue;
 			case SS_FILE_WRITE:
 				nova_background_clean_write_entry(sb, addr,
-							&fake_pi, trans_id);
+							&sih, trans_id);
 				curr_p += sizeof(struct snapshot_file_write_entry);
 				continue;
 			default:
@@ -889,6 +891,7 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_list *nvmm_list;
 	struct nova_inode fake_pi;
+	struct nova_inode_info_header sih;
 	unsigned long nvmm_blocknr;
 	int i;
 
@@ -903,10 +906,10 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 
 	for (i = 0; i < sbi->cpus; i++) {
 		nvmm_list = &nvmm_page->lists[i];
-		fake_pi.log_head = nvmm_list->head;
-		fake_pi.log_tail = nvmm_list->tail;
-		fake_pi.alter_log_head = fake_pi.alter_log_tail = 0;
-		nova_free_inode_log(sb, &fake_pi);
+		sih.log_head = nvmm_list->head;
+		sih.log_tail = nvmm_list->tail;
+		sih.alter_log_head = sih.alter_log_tail = 0;
+		nova_free_inode_log(sb, &fake_pi, &sih);
 	}
 
 	nvmm_blocknr = nova_get_blocknr(sb, nvmm_info->nvmm_page_addr, 0);

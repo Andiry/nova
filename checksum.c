@@ -308,16 +308,16 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 		void *wrbuf, size_t offset, size_t bytes)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode  *pi = nova_get_inode(sb, inode);
-
+	struct nova_inode_info        *si  = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	void *blockptr, *bufptr, *csum_addr;
-	size_t blocksize = nova_inode_blk_size(pi);
+	size_t blocksize = nova_inode_blk_size(sih);
 	u32 csum;
 	size_t csummed = 0;
 
 	bufptr   = wrbuf;
 	blockptr = nova_get_block(sb,
-			nova_get_block_off(sb, blocknr,	pi->i_blk_type));
+			nova_get_block_off(sb, blocknr,	sih->i_blk_type));
 
 	/* in case file write entry is given instead of blocknr:
 	 * blocknr  = get_nvmm(sb, sih, entry, entry->pgoff);
@@ -394,19 +394,17 @@ bool nova_verify_data_csum(struct inode *inode,
 		unsigned long blocks)
 {
 	struct super_block            *sb  = inode->i_sb;
-	struct nova_inode             *pi  = nova_get_inode(sb, inode);
 	struct nova_inode_info        *si  = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-
 	void *blockptr;
-	size_t blocksize = nova_inode_blk_size(pi);
+	size_t blocksize = nova_inode_blk_size(sih);
 	unsigned long block, blocknr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
 
 	blocknr  = get_nvmm(sb, sih, entry, index);
 	blockptr = nova_get_block(sb,
-			nova_get_block_off(sb, blocknr,	pi->i_blk_type));
+			nova_get_block_off(sb, blocknr,	sih->i_blk_type));
 
 	match = true;
 	for (block = 0; block < blocks; block++) {

@@ -256,7 +256,7 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		nova_update_tail(pi, end_tail);
 
 		/* Free the overlap blocks after the write is committed */
-		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
+		ret = nova_reassign_file_tree(sb, sih, begin_tail);
 
 		inode->i_blocks = sih->i_blocks;
 	}
@@ -392,7 +392,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 		}
 
 		/* Allocate zeroed blocks to fill hole */
-		allocated = nova_new_data_blocks(sb, pi, &blocknr, ent_blks,
+		allocated = nova_new_data_blocks(sb, sih, &blocknr, ent_blks,
 						start_blk, 1, 0);
 		nova_dbgv("%s: alloc %d blocks @ %lu\n", __func__,
 						allocated, blocknr);
@@ -405,7 +405,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 		}
 
 		/* Handle hole fill write */
-		nova_init_file_write_entry(sb, pi, &entry_data, trans_id,
+		nova_init_file_write_entry(sb, sih, &entry_data, trans_id,
 					start_blk, allocated, blocknr,
 					time, new_size);
 
@@ -440,10 +440,8 @@ next:
 		start_blk += allocated;
 	}
 
-	nova_memunlock_inode(sb, pi);
-	data_bits = blk_type_to_shift[pi->i_blk_type];
+	data_bits = blk_type_to_shift[sih->i_blk_type];
 	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
-	nova_memlock_inode(sb, pi);
 
 	inode->i_blocks = sih->i_blocks;
 
@@ -454,7 +452,7 @@ next:
 		sih->alter_log_tail = update.alter_tail;
 
 		/* Update file tree */
-		ret = nova_reassign_file_tree(sb, pi, sih, begin_tail);
+		ret = nova_reassign_file_tree(sb, sih, begin_tail);
 		if (ret) {
 			goto out;
 		}
@@ -476,7 +474,7 @@ next:
 
 out:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, pi, sih, blocknr, allocated,
+		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,
 						begin_tail, update.tail);
 
 	inode_unlock(inode);

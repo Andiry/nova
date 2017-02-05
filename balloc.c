@@ -377,25 +377,25 @@ out:
 	return ret;
 }
 
-int nova_free_data_blocks(struct super_block *sb, struct nova_inode *pi,
-	unsigned long blocknr, int num)
+int nova_free_data_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int num)
 {
 	int ret;
 	timing_t free_time;
 
-	nova_dbgv("Inode %llu: free %d data block from %lu to %lu\n",
-			pi->nova_ino, num, blocknr, blocknr + num - 1);
+	nova_dbgv("Inode %lu: free %d data block from %lu to %lu\n",
+			sih->ino, num, blocknr, blocknr + num - 1);
 	if (blocknr == 0) {
 		nova_dbg("%s: ERROR: %lu, %d\n", __func__, blocknr, num);
 		return -EINVAL;
 	}
 	NOVA_START_TIMING(free_data_t, free_time);
-	ret = nova_free_blocks(sb, blocknr, num, pi->i_blk_type, 0);
+	ret = nova_free_blocks(sb, blocknr, num, sih->i_blk_type, 0);
 	if (ret) {
-		nova_err(sb, "Inode %llu: free %d data block from %lu to %lu "
-				"failed!\n", pi->nova_ino, num, blocknr,
+		nova_err(sb, "Inode %lu: free %d data block from %lu to %lu "
+				"failed!\n", sih->ino, num, blocknr,
 				blocknr + num - 1);
-		nova_print_nova_log(sb, pi);
+//		nova_print_nova_log(sb, pi);
 	}
 	NOVA_END_TIMING(free_data_t, free_time);
 
@@ -582,19 +582,20 @@ retry:
 	return ret_blocks / nova_get_numblocks(btype);
 }
 
-inline int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
-	unsigned long *blocknr,	unsigned int num, unsigned long start_blk,
+inline int nova_new_data_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long *blocknr,
+	unsigned int num, unsigned long start_blk,
 	int zero, int cow)
 {
 	int allocated;
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_data_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num,
-					pi->i_blk_type, zero, DATA);
+					sih->i_blk_type, zero, DATA);
 	NOVA_END_TIMING(new_data_blocks_t, alloc_time);
-	nova_dbgv("Inode %llu, start blk %lu, cow %d, "
+	nova_dbgv("Inode %lu, start blk %lu, cow %d, "
 			"alloc %d data blocks from %lu to %lu\n",
-			pi->nova_ino, start_blk, cow, allocated, *blocknr,
+			sih->ino, start_blk, cow, allocated, *blocknr,
 			*blocknr + allocated - 1);
 	return allocated;
 }

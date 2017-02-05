@@ -265,8 +265,8 @@ static int nova_free_contiguous_log_blocks(struct super_block *sb,
 }
 
 static int nova_delete_cache_tree(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	unsigned long start_blocknr, unsigned long last_blocknr)
+	struct nova_inode_info_header *sih, unsigned long start_blocknr,
+	unsigned long last_blocknr)
 {
 	unsigned long addr;
 	unsigned long i;
@@ -281,7 +281,7 @@ static int nova_delete_cache_tree(struct super_block *sb,
 		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
 		if (addr) {
 			ret = radix_tree_delete(&sih->cache_tree, i);
-			nova_free_data_blocks(sb, pi, addr >> PAGE_SHIFT, 1);
+			nova_free_data_blocks(sb, sih, addr >> PAGE_SHIFT, 1);
 			sih->mmap_pages--;
 			deleted++;
 		}
@@ -386,7 +386,6 @@ static int nova_reassign_write_entry(struct super_block *sb,
 }
 
 static unsigned int nova_free_old_entry(struct super_block *sb,
-	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	unsigned long pgoff, unsigned int num_free,
@@ -412,7 +411,7 @@ static unsigned int nova_free_old_entry(struct super_block *sb,
 
 	nova_dbgv("%s: pgoff %lu, free %u blocks\n",
 				__func__, pgoff, num_free);
-	nova_free_data_blocks(sb, pi, old_nvmm, num_free);
+	nova_free_data_blocks(sb, sih, old_nvmm, num_free);
 
 out:
 	sih->i_blocks -= num_free;
@@ -427,7 +426,6 @@ int nova_delete_file_tree(struct super_block *sb,
 {
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry *old_entry = NULL;
-	struct nova_inode *pi;
 	unsigned long pgoff = start_blocknr;
 	unsigned long old_pgoff = 0;
 	timing_t delete_time;
@@ -435,12 +433,10 @@ int nova_delete_file_tree(struct super_block *sb,
 	int freed = 0;
 	void *ret;
 
-	pi = (struct nova_inode *)nova_get_block(sb, sih->pi_addr);
-
 	NOVA_START_TIMING(delete_file_tree_t, delete_time);
 
 	if (delete_mmap && sih->mmap_pages)
-		nova_delete_cache_tree(sb, pi, sih, start_blocknr,
+		nova_delete_cache_tree(sb, sih, start_blocknr,
 						last_blocknr);
 
 	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
@@ -455,7 +451,7 @@ int nova_delete_file_tree(struct super_block *sb,
 			BUG_ON(!ret || ret != entry);
 			if (entry != old_entry) {
 				if (old_entry && delete_nvmm) {
-					nova_free_old_entry(sb, pi, sih,
+					nova_free_old_entry(sb, sih,
 							old_entry, old_pgoff,
 							num_free, delete_dead,
 							trans_id);
@@ -479,15 +475,15 @@ int nova_delete_file_tree(struct super_block *sb,
 	} while (1);
 
 	if (old_entry && delete_nvmm) {
-		nova_free_old_entry(sb, pi, sih, old_entry, old_pgoff,
+		nova_free_old_entry(sb, sih, old_entry, old_pgoff,
 					num_free, delete_dead, trans_id);
 		freed += num_free;
 	}
 
 	NOVA_END_TIMING(delete_file_tree_t, delete_time);
-	nova_dbgv("Inode %llu: delete file tree from pgoff %lu to %lu, "
+	nova_dbgv("Inode %lu: delete file tree from pgoff %lu to %lu, "
 			"%d blocks freed\n",
-			pi->nova_ino, start_blocknr, last_blocknr, freed);
+			sih->ino, start_blocknr, last_blocknr, freed);
 
 	return freed;
 }
@@ -523,7 +519,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	int freed = 0;
 
@@ -616,7 +612,6 @@ done:
 }
 
 int nova_assign_write_entry(struct super_block *sb,
-	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	bool free)
@@ -643,7 +638,7 @@ int nova_assign_write_entry(struct super_block *sb,
 
 			if (old_entry != start_old_entry) {
 				if (start_old_entry && free)
-					nova_free_old_entry(sb, pi, sih,
+					nova_free_old_entry(sb, sih,
 							start_old_entry,
 							start_old_pgoff,
 							num_free, false,
@@ -667,7 +662,7 @@ int nova_assign_write_entry(struct super_block *sb,
 	}
 
 	if (start_old_entry && free)
-		nova_free_old_entry(sb, pi, sih, start_old_entry,
+		nova_free_old_entry(sb, sih, start_old_entry,
 					start_old_pgoff, num_free, false,
 					entry->trans_id);
 
@@ -928,7 +923,7 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 		pi->valid = 0;
 	}
 
-	nova_free_inode_log(sb, pi);
+	nova_free_inode_log(sb, pi, sih);
 
 	sih->log_pages = 0;
 	sih->i_mode = 0;
@@ -1087,7 +1082,7 @@ unsigned long nova_get_last_blocknr(struct super_block *sb,
 				__func__, sih->pi_addr);
 		btype = 0;
 	} else {
-		btype = pi->i_blk_type;
+		btype = sih->i_blk_type;
 	}
 
 	data_bits = blk_type_to_shift[btype];
@@ -1378,12 +1373,13 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->i_create_time = CURRENT_TIME_SEC.tv_sec;
 	pi->create_trans_id = trans_id;
 	pi->delete_trans_id = 0;
-	nova_memlock_inode(sb, pi);
 
 	if (replica_inode) {
 		alter_pi = (struct nova_inode *)nova_get_block(sb, alter_pi_addr);
 		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
 	}
+
+	nova_memlock_inode(sb, pi);
 
 	si = NOVA_I(inode);
 	sih = &si->header;
@@ -1391,6 +1387,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	sih->pi_addr = pi_addr;
 	sih->alter_pi_addr = alter_pi_addr;
 	sih->ino = ino;
+	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 
 	nova_init_inode(inode, pi);
 
@@ -1564,7 +1561,7 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry)
 {
-	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	loff_t start, end;
 	int freed = 0;
@@ -2506,7 +2503,7 @@ static int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode_log_page *alter_curr_page = NULL;
 	int first_need_free = 0;
 	int num_logs;
-	unsigned short btype = pi->i_blk_type;
+	unsigned short btype = sih->i_blk_type;
 	unsigned long blocks;
 	unsigned long checked_pages = 0;
 	int freed_pages = 0;
@@ -2879,34 +2876,28 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	return 0;
 }
 
-int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi)
+int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih)
 {
-	struct nova_inode_update update;
-	u64 head, alter_head;
 	int freed = 0;
 	timing_t free_time;
-	int ret;
 
-	ret = nova_get_head_tail(sb, pi, &update);
-	if (ret)
-		return ret;
-
-	if (update.head == 0 || update.tail == 0)
+	if (sih->log_head == 0 || sih->log_tail == 0)
 		return 0;
 
 	NOVA_START_TIMING(free_inode_log_t, free_time);
 
-	head = update.head;
-	alter_head = update.alter_head;
-
 	/* The inode is invalid now, no need to call PCOMMIT */
+	nova_memunlock_inode(sb, pi);
 	pi->log_head = pi->log_tail = 0;
 	pi->alter_log_head = pi->alter_log_tail = 0;
 	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
+	nova_memlock_inode(sb, pi);
 
-	freed = nova_free_contiguous_log_blocks(sb, pi, head);
+	freed = nova_free_contiguous_log_blocks(sb, pi, sih->log_head);
 	if (replica_log)
-		freed += nova_free_contiguous_log_blocks(sb, pi, alter_head);
+		freed += nova_free_contiguous_log_blocks(sb, pi,
+					sih->alter_log_head);
 
 	NOVA_END_TIMING(free_inode_log_t, free_time);
 	return 0;
@@ -2933,7 +2924,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_link_change_entry *link_change_entry = NULL;
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode *alter_pi;
-	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
 	u64 curr_trans_id = 0;
 	timing_t rebuild_time;
@@ -3030,7 +3021,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			 * The overlaped blocks are already freed.
 			 * Don't double free them, just re-assign the pointers.
 			 */
-			nova_assign_write_entry(sb, pi, sih, entry, false);
+			nova_assign_write_entry(sb, sih, entry, false);
 		}
 
 		if (entry->trans_id >= curr_trans_id) {
@@ -3047,6 +3038,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 	sih->i_size = le64_to_cpu(pi->i_size);
 	sih->i_mode = le16_to_cpu(pi->i_mode);
+	sih->i_blk_type = pi->i_blk_type;
 
 	nova_update_inode_checksum(pi);
 	if (replica_inode) {
@@ -3076,11 +3068,9 @@ out:
  */
 unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 {
-	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi = nova_get_inode(sb, inode);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	unsigned int data_bits = blk_type_to_shift[pi->i_blk_type];
+	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long blocks = 0, offset_in_block;
 	int data_found = 0, hole_found = 0;

@@ -745,6 +745,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 
 	sih->i_size = le64_to_cpu(pi->i_size);
 	sih->i_mode = le64_to_cpu(pi->i_mode);
+	sih->i_blk_type = pi->i_blk_type;
 
 	nova_update_inode_checksum(pi);
 	if (replica_inode) {

@@ -410,6 +410,7 @@ struct nova_inode_info_header {
 	u64 log_tail;			/* Log tail pointer */
 	u64 alter_log_head;		/* Alternate log head pointer */
 	u64 alter_log_tail;		/* Alternate log tail pointer */
+	u8  i_blk_type;
 };
 
 struct nova_inode_info {
@@ -612,7 +613,7 @@ static inline int nova_get_reference(struct super_block *sb, u64 block,
 }
 
 static inline int nova_get_head_tail(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode_update *update)
+	struct nova_inode *pi, struct nova_inode_info_header *sih)
 {
 	struct nova_inode fake_pi;
 	int rc;
@@ -621,10 +622,11 @@ static inline int nova_get_head_tail(struct super_block *sb,
 	if (rc)
 		return rc;
 
-	update->head = fake_pi.log_head;
-	update->tail = fake_pi.log_tail;
-	update->alter_head = fake_pi.alter_log_head;
-	update->alter_tail = fake_pi.alter_log_tail;
+	sih->i_blk_type = fake_pi.i_blk_type;
+	sih->log_head = fake_pi.log_head;
+	sih->log_tail = fake_pi.log_tail;
+	sih->alter_log_head = fake_pi.alter_log_head;
+	sih->alter_log_tail = fake_pi.alter_log_tail;
 
 	return rc;
 }
@@ -952,14 +954,15 @@ static inline unsigned long nova_get_cache_addr(struct super_block *sb,
 	return addr;
 }
 
-static inline unsigned int nova_inode_blk_shift (struct nova_inode *pi)
+static inline unsigned int
+nova_inode_blk_shift(struct nova_inode_info_header *sih)
 {
-	return blk_type_to_shift[pi->i_blk_type];
+	return blk_type_to_shift[sih->i_blk_type];
 }
 
-static inline uint32_t nova_inode_blk_size (struct nova_inode *pi)
+static inline uint32_t nova_inode_blk_size(struct nova_inode_info_header *sih)
 {
-	return blk_type_to_size[pi->i_blk_type];
+	return blk_type_to_size[sih->i_blk_type];
 }
 
 /*
@@ -1288,12 +1291,13 @@ inline void nova_free_blocknode(struct super_block *sb,
 inline void nova_free_inode_node(struct super_block *sb,
 	struct nova_range_node *bnode);
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
-extern int nova_free_data_blocks(struct super_block *sb, struct nova_inode *pi,
-	unsigned long blocknr, int num);
+extern int nova_free_data_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
 extern int nova_free_log_blocks(struct super_block *sb, struct nova_inode *pi,
 	unsigned long blocknr, int num);
-extern int nova_new_data_blocks(struct super_block *sb, struct nova_inode *pi,
-	unsigned long *blocknr, unsigned int num, unsigned long start_blk,
+extern int nova_new_data_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long *blocknr,
+	unsigned int num, unsigned long start_blk,
 	int zero, int cow);
 extern int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
 	unsigned long *blocknr, unsigned int num, int zero);
@@ -1341,14 +1345,13 @@ int nova_data_csum_init(struct super_block *sb);
 
 /* dax.c */
 int nova_cleanup_incomplete_write(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	unsigned long blocknr, int allocated, u64 begin_tail, u64 end_tail);
+	struct nova_inode_info_header *sih, unsigned long blocknr,
+	int allocated, u64 begin_tail, u64 end_tail);
 void nova_init_file_write_entry(struct super_block *sb,
-	struct nova_inode *pi, struct nova_file_write_entry *entry,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size);
 int nova_reassign_file_tree(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode_info_header *sih,
-	u64 begin_tail);
+	struct nova_inode_info_header *sih, u64 begin_tail);
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
 	struct nova_file_write_entry **ret_entry, int check_next, int *inplace);
@@ -1422,7 +1425,8 @@ extern unsigned long nova_find_region(struct inode *inode, loff_t *offset,
 void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry);
-int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi);
+int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih);
 int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
 	u64 curr, u64 alter_curr);
 int nova_allocate_inode_log_pages(struct super_block *sb,
@@ -1446,7 +1450,6 @@ extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr, u64 trans_id);
 int nova_assign_write_entry(struct super_block *sb,
-	struct nova_inode *pi,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	bool free);

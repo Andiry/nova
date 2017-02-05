@@ -213,6 +213,8 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	int err = -ENAMETOOLONG;
 	unsigned len = strlen(symname);
 	struct inode *inode;
+	struct nova_inode_info *si; 
+	struct nova_inode_info_header *sih;
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
 	u64 log_block = 0;
@@ -261,6 +263,9 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (replica_log)
 		num_logs = 2;
 
+	si = NOVA_I(inode);
+	sih = &si->header;
+
 	allocated = nova_allocate_inode_log_pages(sb, pi,
 					num_logs, &log_block);
 	if (allocated != num_logs || log_block == 0) {
@@ -268,7 +273,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 		goto out_fail1;
 	}
 
-	allocated = nova_new_data_blocks(sb, pi, &name_blocknr,
+	allocated = nova_new_data_blocks(sb, sih, &name_blocknr,
 					1, 0, 1, 0);
 	if (allocated != 1 || name_blocknr == 0) {
 		err = allocated;
