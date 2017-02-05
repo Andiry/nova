@@ -266,7 +266,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	si = NOVA_I(inode);
 	sih = &si->header;
 
-	allocated = nova_allocate_inode_log_pages(sb, pi,
+	allocated = nova_allocate_inode_log_pages(sb, sih,
 					num_logs, &log_block);
 	if (allocated != num_logs || log_block == 0) {
 		err = allocated;
@@ -425,9 +425,9 @@ int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_link_change_entry *entry, *alter_entry;
 	u64 curr_p, alter_curr_p;
-	int extended = 0;
 	size_t size = sizeof(struct nova_link_change_entry);
 	u64 latest_snapshot_trans_id = 0;
+	int extended = 0;
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
@@ -448,7 +448,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	}
 
 	curr_p = nova_get_append_head(sb, pi, sih, update->tail, size,
-						MAIN_LOG, &extended);
+						MAIN_LOG, 0, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 
@@ -463,7 +463,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	if (replica_log) {
 		alter_curr_p = nova_get_append_head(sb, pi, sih,
 						update->alter_tail, size,
-						ALTER_LOG, &extended);
+						ALTER_LOG, 0, &extended);
 		if (alter_curr_p == 0)
 			return -ENOSPC;
 

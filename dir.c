@@ -205,7 +205,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	NOVA_START_TIMING(append_dir_entry_t, append_time);
 
 	curr_p = nova_get_append_head(sb, pidir, sih, update->tail, size,
-						MAIN_LOG, &extended);
+						MAIN_LOG, 0, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 
@@ -220,7 +220,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 		goto out;
 
 	curr_p = nova_get_append_head(sb, pidir, sih, update->alter_tail,
-						size, ALTER_LOG, &extended);
+						size, ALTER_LOG, 0, &extended);
 	if (curr_p == 0)
 		return -ENOSPC;
 
@@ -284,6 +284,7 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id)
 {
+	struct nova_inode_info_header sih;
 	struct nova_inode *alter_pi;
 	u64 alter_pi_addr = 0;
 	int allocated;
@@ -292,7 +293,10 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	unsigned int length;
 	struct nova_dentry *de_entry;
 
-	allocated = nova_allocate_inode_log_pages(sb, pi, 1, &new_block);
+	sih.ino = self_ino;
+	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+
+	allocated = nova_allocate_inode_log_pages(sb, &sih, 1, &new_block);
 	if (allocated != 1) {
 		nova_err(sb, "ERROR: no inode log page available\n");
 		return - ENOMEM;
@@ -309,7 +313,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	if (replica_log == 0)
 		goto update_alter_inode;
 
-	allocated = nova_allocate_inode_log_pages(sb, pi, 1, &new_block);
+	allocated = nova_allocate_inode_log_pages(sb, &sih, 1, &new_block);
 	if (allocated != 1) {
 		nova_err(sb, "ERROR: no inode log page available\n");
 		return - ENOMEM;

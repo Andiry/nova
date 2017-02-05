@@ -435,6 +435,7 @@ static u64 nova_save_free_list_blocknodes(struct super_block *sb, int cpu,
 void nova_save_inode_list_to_log(struct super_block *sb)
 {
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODELIST1_INO);
+	struct nova_inode_info_header sih;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long num_blocks;
 	unsigned long num_nodes = 0;
@@ -443,6 +444,9 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 	u64 temp_tail;
 	u64 new_block;
 	int allocated;
+
+	sih.ino = NOVA_INODELIST1_INO;
+	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
@@ -453,7 +457,7 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 	if (num_nodes % RANGENODE_PER_PAGE)
 		num_blocks++;
 
-	allocated = nova_allocate_inode_log_pages(sb, pi, num_blocks,
+	allocated = nova_allocate_inode_log_pages(sb, &sih, num_blocks,
 						&new_block);
 	if (allocated != num_blocks) {
 		nova_dbg("Error saving inode list: %d\n", allocated);
@@ -480,6 +484,7 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 {
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	struct nova_inode_info_header sih;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_super_block *super;
 	struct free_list *free_list;
@@ -489,6 +494,9 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	u64 new_block = 0;
 	u64 temp_tail;
 	int i;
+
+	sih.ino = NOVA_BLOCKNODE_INO;
+	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 
 	/* Allocate log pages before save blocknode mappings */
 	for (i = 0; i < sbi->cpus; i++) {
@@ -507,7 +515,7 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	if (num_blocknode % RANGENODE_PER_PAGE)
 		num_pages++;
 
-	allocated = nova_allocate_inode_log_pages(sb, pi, num_pages,
+	allocated = nova_allocate_inode_log_pages(sb, &sih, num_pages,
 						&new_block);
 	if (allocated != num_pages) {
 		nova_dbg("Error saving blocknode mappings: %d\n", allocated);

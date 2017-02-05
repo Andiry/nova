@@ -600,17 +600,18 @@ inline int nova_new_data_blocks(struct super_block *sb,
 	return allocated;
 }
 
-inline int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
+inline int nova_new_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih,
 	unsigned long *blocknr, unsigned int num, int zero)
 {
 	int allocated;
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_log_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num,
-					pi->i_blk_type, zero, LOG);
+					sih->i_blk_type, zero, LOG);
 	NOVA_END_TIMING(new_log_blocks_t, alloc_time);
-	nova_dbgv("Inode %llu, alloc %d log blocks from %lu to %lu\n",
-			pi->nova_ino, allocated, *blocknr,
+	nova_dbgv("Inode %lu, alloc %d log blocks from %lu to %lu\n",
+			sih->ino, allocated, *blocknr,
 			*blocknr + allocated - 1);
 	return allocated;
 }

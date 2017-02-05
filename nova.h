@@ -1300,7 +1300,8 @@ extern int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
 	unsigned int num, unsigned long start_blk,
 	int zero, int cow);
-extern int nova_new_log_blocks(struct super_block *sb, struct nova_inode *pi,
+extern int nova_new_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih,
 	unsigned long *blocknr, unsigned int num, int zero);
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_search_inodetree(struct nova_sb_info *sbi,
@@ -1431,7 +1432,7 @@ int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
 	u64 curr, u64 alter_curr);
 int nova_allocate_inode_log_pages(struct super_block *sb,
-	struct nova_inode *pi, unsigned long num_pages,
+	struct nova_inode_info_header *sih, unsigned long num_pages,
 	u64 *new_block);
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
@@ -1439,7 +1440,7 @@ int nova_delete_file_tree(struct super_block *sb,
 	bool delete_dead, u64 trasn_id);
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
-	int *extended);
+	int thorough_gc, int *extended);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);
