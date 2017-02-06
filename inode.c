@@ -1561,8 +1561,8 @@ static void nova_update_setattr_entry(struct inode *inode,
 	nova_flush_buffer(entry, sizeof(struct nova_setattr_logentry), 0);
 }
 
-void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih,
+void nova_apply_setattr_entry(struct super_block *sb,
+	struct nova_inode_rebuild *reb,	struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry)
 {
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
@@ -1573,14 +1573,14 @@ void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
 	if (entry->entry_type != SET_ATTR)
 		BUG();
 
-	pi->i_mode	= entry->mode;
-	pi->i_uid	= entry->uid;
-	pi->i_gid	= entry->gid;
-	pi->i_atime	= entry->atime;
+	reb->i_mode	= entry->mode;
+	reb->i_uid	= entry->uid;
+	reb->i_gid	= entry->gid;
+	reb->i_atime	= entry->atime;
 
-	if (S_ISREG(pi->i_mode)) {
+	if (S_ISREG(reb->i_mode)) {
 		start = entry->size;
-		end = pi->i_size;
+		end = reb->i_size;
 
 		first_blocknr = (start + (1UL << data_bits) - 1) >> data_bits;
 
@@ -2910,15 +2910,54 @@ int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 	return 0;
 }
 
-static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
-	struct nova_inode *pi, u32 mtime, u32 ctime, u64 size)
+void nova_update_inode_with_rebuild(struct super_block *sb,
+	struct nova_inode_rebuild *reb, struct nova_inode *pi)
 {
-	if (!pi)
-		return;
+	nova_memunlock_inode(sb, pi);
+	pi->i_size = cpu_to_le64(reb->i_size);
+	pi->i_flags = cpu_to_le32(reb->i_flags);
+	pi->i_uid = cpu_to_le32(reb->i_uid);
+	pi->i_gid = cpu_to_le32(reb->i_gid);
+	pi->i_atime = cpu_to_le32(reb->i_atime);
+	pi->i_ctime = cpu_to_le32(reb->i_ctime);
+	pi->i_mtime = cpu_to_le32(reb->i_mtime);
+	pi->i_generation = cpu_to_le32(reb->i_generation);
+	pi->i_links_count = cpu_to_le16(reb->i_links_count);
+	pi->i_mode = cpu_to_le16(reb->i_mode);
 
-	pi->i_mtime = cpu_to_le32(mtime);
-	pi->i_ctime = cpu_to_le32(ctime);
-	pi->i_size = cpu_to_le64(size);
+	nova_memlock_inode(sb, pi);
+}
+
+int nova_init_inode_rebuild(struct super_block *sb,
+	struct nova_inode_rebuild *reb, struct nova_inode *pi)
+{
+	struct nova_inode fake_pi;
+	int rc;
+
+	rc = memcpy_from_pmem(&fake_pi, pi, sizeof(struct nova_inode));
+	if (rc)
+		return rc;
+
+	reb->i_size = le64_to_cpu(fake_pi.i_size);
+	reb->i_flags = le32_to_cpu(fake_pi.i_flags);
+	reb->i_uid = le32_to_cpu(fake_pi.i_uid);
+	reb->i_gid = le32_to_cpu(fake_pi.i_gid);
+	reb->i_atime = le32_to_cpu(fake_pi.i_atime);
+	reb->i_ctime = le32_to_cpu(fake_pi.i_ctime);
+	reb->i_mtime = le32_to_cpu(fake_pi.i_mtime);
+	reb->i_generation = le32_to_cpu(fake_pi.i_generation);
+	reb->i_links_count = le16_to_cpu(fake_pi.i_links_count);
+	reb->i_mode = le16_to_cpu(fake_pi.i_mode);
+
+	return rc;
+}
+
+static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
+	struct nova_inode_rebuild *reb, u32 mtime, u32 ctime, u64 size)
+{
+	reb->i_mtime = cpu_to_le32(mtime);
+	reb->i_ctime = cpu_to_le32(ctime);
+	reb->i_size = cpu_to_le64(size);
 }
 
 int nova_rebuild_file_inode_tree(struct super_block *sb,
@@ -2930,6 +2969,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
 	struct nova_inode_log_page *curr_page;
+	struct nova_inode_rebuild rebuild, *reb;
 	struct nova_inode *alter_pi;
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
@@ -2945,6 +2985,11 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	nova_dbg_verbose("Rebuild file inode %llu tree\n", ino);
 
 	ret = nova_get_head_tail(sb, pi, sih);
+	if (ret)
+		goto out;
+
+	reb = &rebuild;
+	ret = nova_init_inode_rebuild(sb, reb, pi);
 	if (ret)
 		goto out;
 
@@ -2988,11 +3033,11 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			case SET_ATTR:
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
-				nova_apply_setattr_entry(sb, pi, sih,
+				nova_apply_setattr_entry(sb, reb, sih,
 								attr_entry);
 				sih->last_setattr = curr_p;
 				if (attr_entry->trans_id >= curr_trans_id) {
-					nova_rebuild_file_time_and_size(sb, pi,
+					nova_rebuild_file_time_and_size(sb, reb,
 							attr_entry->mtime,
 							attr_entry->ctime,
 							attr_entry->size);
@@ -3000,13 +3045,13 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				}
 
 				/* Update sih->i_size for setattr operation */
-				sih->i_size = le64_to_cpu(pi->i_size);
+				sih->i_size = le64_to_cpu(reb->i_size);
 				curr_p += sizeof(struct nova_setattr_logentry);
 				continue;
 			case LINK_CHANGE:
 				link_change_entry =
 					(struct nova_link_change_entry *)addr;
-				nova_apply_link_change_entry(sb, pi,
+				nova_apply_link_change_entry(sb, reb,
 							link_change_entry);
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
@@ -3032,21 +3077,21 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		if (entry->trans_id >= curr_trans_id) {
-			nova_rebuild_file_time_and_size(sb, pi,
+			nova_rebuild_file_time_and_size(sb, reb,
 						entry->mtime, entry->mtime,
 						entry->size);
 			curr_trans_id = entry->trans_id;
 		}
 
 		/* Update sih->i_size for setattr apply operations */
-		sih->i_size = le64_to_cpu(pi->i_size);
+		sih->i_size = le64_to_cpu(reb->i_size);
 		curr_p += sizeof(struct nova_file_write_entry);
 	}
 
-	sih->i_size = le64_to_cpu(pi->i_size);
-	sih->i_mode = le16_to_cpu(pi->i_mode);
-	sih->i_blk_type = pi->i_blk_type;
+	sih->i_size = le64_to_cpu(reb->i_size);
+	sih->i_mode = le16_to_cpu(reb->i_mode);
 
+	nova_update_inode_with_rebuild(sb, reb, pi);
 	nova_update_inode_checksum(pi);
 	if (replica_inode) {
 		alter_pi = (struct nova_inode *)nova_get_block(sb,

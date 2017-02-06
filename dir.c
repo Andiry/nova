@@ -598,15 +598,15 @@ inline int nova_replay_remove_dentry(struct super_block *sb,
 }
 
 static inline void nova_rebuild_dir_time_and_size(struct super_block *sb,
-	struct nova_inode *pi, struct nova_dentry *entry)
+	struct nova_inode_rebuild *reb, struct nova_dentry *entry)
 {
-	if (!entry || !pi)
+	if (!entry || !reb)
 		return;
 
-	pi->i_ctime = entry->mtime;
-	pi->i_mtime = entry->mtime;
-	pi->i_size = entry->size;
-	pi->i_links_count = entry->links_count;
+	reb->i_ctime = entry->mtime;
+	reb->i_mtime = entry->mtime;
+	reb->i_links_count = entry->links_count;
+	reb->i_size = entry->size;
 }
 
 static void nova_reassign_last_dentry(struct super_block *sb,
@@ -632,6 +632,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_dentry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *lc_entry = NULL;
+	struct nova_inode_rebuild rebuild, *reb;
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode *alter_pi;
 	u64 ino = pi->nova_ino;
@@ -648,6 +649,11 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	nova_dbgv("Rebuild dir %llu tree\n", ino);
 
 	ret = nova_get_head_tail(sb, pi, sih);
+	if (ret)
+		goto out;
+
+	reb = &rebuild;
+	ret = nova_init_inode_rebuild(sb, reb, pi);
 	if (ret)
 		goto out;
 
@@ -693,7 +699,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			case SET_ATTR:
 				attr_entry =
 					(struct nova_setattr_logentry *)addr;
-				nova_apply_setattr_entry(sb, pi, sih,
+				nova_apply_setattr_entry(sb, reb, sih,
 								attr_entry);
 				sih->last_setattr = curr_p;
 				curr_p += sizeof(struct nova_setattr_logentry);
@@ -702,7 +708,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				lc_entry =
 					(struct nova_link_change_entry *)addr;
 				if (lc_entry->trans_id >= curr_trans_id) {
-					nova_apply_link_change_entry(sb, pi,
+					nova_apply_link_change_entry(sb, reb,
 								lc_entry);
 					curr_trans_id = lc_entry->trans_id;
 				}
@@ -739,7 +745,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		}
 
 		if (entry->trans_id >= curr_trans_id) {
-			nova_rebuild_dir_time_and_size(sb, pi, entry);
+			nova_rebuild_dir_time_and_size(sb, reb, entry);
 			curr_trans_id = entry->trans_id;
 		}
 
@@ -747,10 +753,10 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		curr_p += de_len;
 	}
 
-	sih->i_size = le64_to_cpu(pi->i_size);
-	sih->i_mode = le64_to_cpu(pi->i_mode);
-	sih->i_blk_type = pi->i_blk_type;
+	sih->i_size = le64_to_cpu(reb->i_size);
+	sih->i_mode = le64_to_cpu(reb->i_mode);
 
+	nova_update_inode_with_rebuild(sb, reb, pi);
 	nova_update_inode_checksum(pi);
 	if (replica_inode) {
 		alter_pi = (struct nova_inode *)nova_get_block(sb,

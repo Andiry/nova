@@ -413,8 +413,9 @@ struct nova_inode_info_header {
 	u8  i_blk_type;
 };
 
-/* For rebuild purpose */
-struct nova_inode_rebuild_struct {
+/* For rebuild purpose, temporarily store pi infomation */
+struct nova_inode_rebuild {
+	u64	i_size;
 	u32	i_flags;	/* Inode flags */
 	u32	i_ctime;	/* Inode modification time */
 	u32	i_mtime;	/* Inode b-tree Modification time */
@@ -423,6 +424,7 @@ struct nova_inode_rebuild_struct {
 	u32	i_gid;		/* Group Id */
 	u32	i_generation;	/* File version (for NFS) */
 	u16	i_links_count;	/* Links count */
+	u16	i_mode;		/* File mode */
 };
 
 struct nova_inode_info {
@@ -1416,8 +1418,8 @@ extern void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	unsigned int flags);
 extern unsigned long nova_find_region(struct inode *inode, loff_t *offset,
 		int hole);
-void nova_apply_setattr_entry(struct super_block *sb, struct nova_inode *pi,
-	struct nova_inode_info_header *sih,
+void nova_apply_setattr_entry(struct super_block *sb,
+	struct nova_inode_rebuild *reb, struct nova_inode_info_header *sih,
 	struct nova_setattr_logentry *entry);
 int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih);
@@ -1436,6 +1438,10 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);
+void nova_update_inode_with_rebuild(struct super_block *sb,
+	struct nova_inode_rebuild *reb, struct nova_inode *pi);
+int nova_init_inode_rebuild(struct super_block *sb,
+	struct nova_inode_rebuild *reb, struct nova_inode *pi);
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih);
@@ -1464,8 +1470,8 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
 	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
-void nova_apply_link_change_entry(struct super_block *sb, struct nova_inode *pi,
-	struct nova_link_change_entry *entry);
+void nova_apply_link_change_entry(struct super_block *sb,
+	struct nova_inode_rebuild *reb, struct nova_link_change_entry *entry);
 
 /* snapshot.c */
 int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
