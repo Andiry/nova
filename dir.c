@@ -647,7 +647,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	NOVA_START_TIMING(rebuild_dir_t, rebuild_time);
 	nova_dbgv("Rebuild dir %llu tree\n", ino);
 
-	ret = nova_update_sih_head_tail(sb, pi, sih);
+	ret = nova_get_head_tail(sb, pi, sih);
 	if (ret)
 		goto out;
 

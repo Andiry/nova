@@ -631,24 +631,6 @@ static inline int nova_get_head_tail(struct super_block *sb,
 	return rc;
 }
 
-static inline int nova_update_sih_head_tail(struct super_block *sb,
-	struct nova_inode *pi, struct nova_inode_info_header *sih)
-{
-	struct nova_inode fake_pi;
-	int rc;
-
-	rc = memcpy_from_pmem(&fake_pi, pi, sizeof(struct nova_inode));
-	if (rc)
-		return rc;
-
-	sih->log_head = fake_pi.log_head;
-	sih->log_tail = fake_pi.log_tail;
-	sih->alter_log_head = fake_pi.alter_log_head;
-	sih->alter_log_tail = fake_pi.alter_log_tail;
-
-	return rc;
-}
-
 static inline u64
 nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
 {

@@ -2944,7 +2944,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	NOVA_START_TIMING(rebuild_file_t, rebuild_time);
 	nova_dbg_verbose("Rebuild file inode %llu tree\n", ino);
 
-	ret = nova_update_sih_head_tail(sb, pi, sih);
+	ret = nova_get_head_tail(sb, pi, sih);
 	if (ret)
 		goto out;
 
