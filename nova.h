@@ -413,6 +413,18 @@ struct nova_inode_info_header {
 	u8  i_blk_type;
 };
 
+/* For rebuild purpose */
+struct nova_inode_rebuild_struct {
+	u32	i_flags;	/* Inode flags */
+	u32	i_ctime;	/* Inode modification time */
+	u32	i_mtime;	/* Inode b-tree Modification time */
+	u32	i_atime;	/* Access time */
+	u32	i_uid;		/* Owner Uid */
+	u32	i_gid;		/* Group Id */
+	u32	i_generation;	/* File version (for NFS) */
+	u16	i_links_count;	/* Links count */
+};
+
 struct nova_inode_info {
 	struct nova_inode_info_header header;
 	struct inode vfs_inode;
