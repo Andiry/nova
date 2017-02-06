@@ -114,6 +114,37 @@ static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
 	reb->i_size = cpu_to_le64(size);
 }
 
+static int nova_rebuild_inode_finish(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	struct nova_inode_rebuild *reb, u64 curr_p)
+{
+	struct nova_inode *alter_pi;
+	u64 next;
+
+	sih->i_size = le64_to_cpu(reb->i_size);
+	sih->i_mode = le64_to_cpu(reb->i_mode);
+
+	nova_update_inode_with_rebuild(sb, reb, pi);
+	nova_update_inode_checksum(pi);
+	if (replica_inode) {
+		alter_pi = (struct nova_inode *)nova_get_block(sb,
+							sih->alter_pi_addr);
+		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	}
+
+	/* Keep traversing until log ends */
+	curr_p &= PAGE_MASK;
+	while ((next = next_log_page(sb, curr_p)) > 0) {
+		sih->log_pages++;
+		curr_p = next;
+	}
+
+	if (replica_log)
+		sih->log_pages *= 2;
+
+	return 0;
+}
+
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih)
@@ -122,16 +153,13 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
-	struct nova_inode_log_page *curr_page;
 	struct nova_inode_rebuild rebuild, *reb;
-	struct nova_inode *alter_pi;
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
 	u64 curr_trans_id = 0;
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
-	u64 next;
 	u8 type;
 	int ret;
 
@@ -242,25 +270,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 		curr_p += sizeof(struct nova_file_write_entry);
 	}
 
-	sih->i_size = le64_to_cpu(reb->i_size);
-	sih->i_mode = le16_to_cpu(reb->i_mode);
-
-	nova_update_inode_with_rebuild(sb, reb, pi);
-	nova_update_inode_checksum(pi);
-	if (replica_inode) {
-		alter_pi = (struct nova_inode *)nova_get_block(sb,
-							sih->alter_pi_addr);
-		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
-	}
-
-	/* Keep traversing until log ends */
-	curr_p &= PAGE_MASK;
-	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
-	while ((next = next_log_page(sb, curr_p)) > 0) {
-		sih->log_pages++;
-		curr_p = next;
-	}
-
+	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
 	sih->i_blocks = sih->log_pages + (sih->i_size >> data_bits);
 
 out:
@@ -328,15 +338,12 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *lc_entry = NULL;
 	struct nova_inode_rebuild rebuild, *reb;
-	struct nova_inode_log_page *curr_page;
-	struct nova_inode *alter_pi;
 	u64 ino = pi->nova_ino;
 	unsigned short de_len;
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
 	u64 curr_trans_id = 0;
-	u64 next;
 	u8 type;
 	int ret;
 
@@ -448,27 +455,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		curr_p += de_len;
 	}
 
-	sih->i_size = le64_to_cpu(reb->i_size);
-	sih->i_mode = le64_to_cpu(reb->i_mode);
-
-	nova_update_inode_with_rebuild(sb, reb, pi);
-	nova_update_inode_checksum(pi);
-	if (replica_inode) {
-		alter_pi = (struct nova_inode *)nova_get_block(sb,
-							sih->alter_pi_addr);
-		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
-	}
-
-	/* Keep traversing until log ends */
-	curr_p &= PAGE_MASK;
-	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr_p);
-	while ((next = curr_page->page_tail.next_page) != 0) {
-		sih->log_pages++;
-		curr_p = next;
-		curr_page = (struct nova_inode_log_page *)
-			nova_get_block(sb, curr_p);
-	}
-
+	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
 	sih->i_blocks = sih->log_pages;
 
 out:
