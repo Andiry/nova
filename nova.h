@@ -1366,6 +1366,12 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma);
 
 /* dir.c */
 extern const struct file_operations nova_dir_operations;
+int nova_insert_dir_radix_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, const char *name,
+	int namelen, struct nova_dentry *direntry);
+int nova_remove_dir_radix_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, const char *name, int namelen,
+	int replay, struct nova_dentry **create_dentry);
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id);
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
@@ -1381,9 +1387,6 @@ void nova_delete_dir_tree(struct super_block *sb,
 struct nova_dentry *nova_find_dentry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
-int nova_rebuild_dir_inode_tree(struct super_block *sb,
-	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih);
 
 /* file.c */
 extern const struct inode_operations nova_file_inode_operations;
@@ -1418,9 +1421,6 @@ extern void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	unsigned int flags);
 extern unsigned long nova_find_region(struct inode *inode, loff_t *offset,
 		int hole);
-void nova_apply_setattr_entry(struct super_block *sb,
-	struct nova_inode_rebuild *reb, struct nova_inode_info_header *sih,
-	struct nova_setattr_logentry *entry);
 int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih);
 int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
@@ -1438,13 +1438,6 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);
-void nova_update_inode_with_rebuild(struct super_block *sb,
-	struct nova_inode_rebuild *reb, struct nova_inode *pi);
-int nova_init_inode_rebuild(struct super_block *sb,
-	struct nova_inode_rebuild *reb, struct nova_inode *pi);
-int nova_rebuild_file_inode_tree(struct super_block *sb,
-	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih);
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
@@ -1470,8 +1463,14 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
 	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
-void nova_apply_link_change_entry(struct super_block *sb,
-	struct nova_inode_rebuild *reb, struct nova_link_change_entry *entry);
+
+/* rebuild.c */
+int nova_rebuild_file_inode_tree(struct super_block *sb,
+	struct nova_inode *pi, u64 pi_addr,
+	struct nova_inode_info_header *sih);
+int nova_rebuild_dir_inode_tree(struct super_block *sb,
+	struct nova_inode *pi, u64 pi_addr,
+	struct nova_inode_info_header *sih);
 
 /* snapshot.c */
 int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,

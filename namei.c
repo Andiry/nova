@@ -481,20 +481,6 @@ out:
 	return 0;
 }
 
-void nova_apply_link_change_entry(struct super_block *sb,
-	struct nova_inode_rebuild *reb,	struct nova_link_change_entry *entry)
-{
-	if (entry->entry_type != LINK_CHANGE)
-		BUG();
-
-	reb->i_links_count	= entry->links;
-	reb->i_ctime		= entry->ctime;
-	reb->i_flags		= entry->flags;
-	reb->i_generation	= entry->generation;
-
-	/* Do not flush now */
-}
-
 static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 		      struct dentry *dentry)
 {

@@ -4,7 +4,7 @@
 
 obj-m += nova.o
 
-nova-y := balloc.o bbuild.o checksum.o dax.o dir.o file.o inode.o ioctl.o journal.o namei.o snapshot.o stats.o super.o symlink.o sysfs.o wprotect.o
+nova-y := balloc.o bbuild.o checksum.o dax.o dir.o file.o inode.o ioctl.o journal.o namei.o rebuild.o snapshot.o stats.o super.o symlink.o sysfs.o wprotect.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd`
