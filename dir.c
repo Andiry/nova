@@ -439,6 +439,7 @@ static void nova_inplace_update_dentry(struct super_block *sb,
 {
 	unsigned short links_count;
 
+	nova_memunlock_range(sb, dentry, dentry->de_len);
 	dentry->trans_id = trans_id;
 	/* Only used for remove_dentry */
 	dentry->ino = cpu_to_le64(0);
@@ -455,6 +456,7 @@ static void nova_inplace_update_dentry(struct super_block *sb,
 	/* Update checksum */
 	nova_update_entry_csum(dentry);
 	nova_update_alter_entry(sb, dentry);
+	nova_memlock_range(sb, dentry, dentry->de_len);
 
 	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
 			"name len %u, reassigned %u, csum 0x%x\n",
@@ -553,9 +555,11 @@ int nova_invalidate_dentries(struct super_block *sb,
 	if (!create_dentry)
 		return 0;
 
+	nova_memunlock_range(sb, create_dentry, create_dentry->de_len);
 	create_dentry->reassigned = 1;
 	nova_update_entry_csum(create_dentry);
 	nova_update_alter_entry(sb, create_dentry);
+	nova_memlock_range(sb, create_dentry, create_dentry->de_len);
 
 	if (!old_entry_freeable(sb, create_dentry->trans_id))
 		return 0;
@@ -570,8 +574,10 @@ int nova_invalidate_dentries(struct super_block *sb,
 		return ret;
 	}
 
+	nova_memunlock_range(sb, create_dentry, create_dentry->de_len);
 	create_dentry->invalid = 1;
 	nova_update_entry_csum(create_dentry);
+	nova_memlock_range(sb, create_dentry, create_dentry->de_len);
 
 	ret = nova_check_alter_entry(sb, delete_curr);
 	if (ret) {
@@ -580,11 +586,13 @@ int nova_invalidate_dentries(struct super_block *sb,
 		return ret;
 	}
 
+	nova_memunlock_range(sb, delete_dentry, create_dentry->de_len);
 	delete_dentry->invalid = 1;
 	nova_update_entry_csum(delete_dentry);
 
 	nova_update_alter_entry(sb, create_dentry);
 	nova_update_alter_entry(sb, delete_dentry);
+	nova_memlock_range(sb, delete_dentry, create_dentry->de_len);
 
 	return 0;
 }

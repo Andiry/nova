@@ -934,6 +934,7 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(free_inode_t, free_time);
 
+	nova_memunlock_inode(sb, pi);
 	pi->deleted = 1;
 
 	if (pi->valid) {
@@ -941,6 +942,7 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 				__func__, sih->ino);
 		pi->valid = 0;
 	}
+	nova_memlock_inode(sb, pi);
 
 	nova_free_inode_log(sb, pi, sih);
 

@@ -342,6 +342,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
 	struct nova_link_change_entry *old_entry;
+	size_t size = sizeof(struct nova_link_change_entry);
 	void *addr;
 	int ret;
 
@@ -359,14 +360,17 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 		return ret;
 	}
 
+	nova_memunlock_range(sb, old_entry, size);
 	old_entry->invalid = 1;
 	nova_update_entry_csum(old_entry);
+	nova_update_alter_entry(sb, old_entry);
+	nova_memlock_range(sb, old_entry, size);
+
 	nova_dbg_verbose("invalidate link_change entry @ "
 					"0x%llx: links %u csum 0x%x",
 					old_link_change, old_entry->links,
 					old_entry->csum);
 
-	nova_update_alter_entry(sb, old_entry);
 
 	return 0;
 }
@@ -406,16 +410,19 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 	struct inode *inode, struct nova_inode_info_header *sih,
 	u64 trans_id)
 {
-	u64 last_log = 0;
 	struct nova_link_change_entry *entry = NULL;
+	u64 last_log = 0;
+	size_t size = sizeof(struct nova_link_change_entry);
 
 	last_log = sih->last_link_change;
 	entry = (struct nova_link_change_entry *)nova_get_block(sb,
 							last_log);
+	nova_memunlock_range(sb, entry, size);
 	nova_update_link_change_entry(inode, entry, trans_id);
 
 	// Also update the alter inode log entry.
 	nova_update_alter_entry(sb, entry);
+	nova_memlock_range(sb, entry, size);
 
 	return 0;
 }
@@ -460,8 +467,10 @@ int nova_append_link_change_entry(struct super_block *sb,
 				__func__, inode->i_ino, curr_p);
 
 	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
+	nova_memunlock_range(sb, entry, size);
 	memset(entry, 0, size);
 	nova_update_link_change_entry(inode, entry, trans_id);
+	nova_memlock_range(sb, entry, size);
 	update->tail = curr_p + size;
 
 	if (replica_log) {
@@ -473,8 +482,10 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 		alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
 						alter_curr_p);
+		nova_memunlock_range(sb, alter_entry, size);
 		memset(alter_entry, 0, size);
 		nova_update_link_change_entry(inode, alter_entry, trans_id);
+		nova_memlock_range(sb, alter_entry, size);
 		update->alter_tail = alter_curr_p + size;
 	}
 
@@ -972,12 +983,14 @@ static int nova_rename(struct inode *old_dir,
 	nova_memlock_journal(sb);
 	spin_unlock(&sbi->journal_locks[cpu]);
 
+	nova_memunlock_inode(sb, old_pi);
 	nova_update_alter_inode(sb, old_inode, old_pi);
 	nova_update_alter_inode(sb, old_dir, old_pidir);
 	if (old_dir != new_dir)
 		nova_update_alter_inode(sb, new_dir, new_pidir);
 	if (new_inode)
 		nova_update_alter_inode(sb, new_inode, new_pi);
+	nova_memlock_inode(sb, old_pi);
 
 	nova_invalidate_link_change_entry(sb, old_linkc1);
 	nova_invalidate_link_change_entry(sb, old_linkc2);
