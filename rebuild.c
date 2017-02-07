@@ -114,6 +114,29 @@ static inline void nova_rebuild_file_time_and_size(struct super_block *sb,
 	reb->i_size = cpu_to_le64(size);
 }
 
+static int nova_rebuild_inode_start(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	struct nova_inode_rebuild *reb, u64 pi_addr)
+{
+	int ret;
+
+	ret = nova_get_head_tail(sb, pi, sih);
+	if (ret)
+		return ret;
+
+	ret = nova_init_inode_rebuild(sb, reb, pi);
+	if (ret)
+		return ret;
+
+	sih->pi_addr = pi_addr;
+
+	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
+				sih->log_head, sih->log_tail);
+	sih->log_pages = 1;
+
+	return ret;
+}
+
 static int nova_rebuild_inode_finish(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	struct nova_inode_rebuild *reb, u64 curr_p)
@@ -189,24 +212,14 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	NOVA_START_TIMING(rebuild_file_t, rebuild_time);
 	nova_dbg_verbose("Rebuild file inode %llu tree\n", ino);
 
-	ret = nova_get_head_tail(sb, pi, sih);
-	if (ret)
-		goto out;
-
 	reb = &rebuild;
-	ret = nova_init_inode_rebuild(sb, reb, pi);
+	ret = nova_rebuild_inode_start(sb, pi, sih, reb, pi_addr);
 	if (ret)
 		goto out;
-
-	sih->pi_addr = pi_addr;
 
 	curr_p = sih->log_head;
-	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, sih->log_tail);
 	if (curr_p == 0 && sih->log_tail == 0)
-		return 0;
-
-	sih->log_pages = 1;
+		goto out;
 
 	while (curr_p != sih->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
@@ -391,27 +404,18 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	NOVA_START_TIMING(rebuild_dir_t, rebuild_time);
 	nova_dbgv("Rebuild dir %llu tree\n", ino);
 
-	ret = nova_get_head_tail(sb, pi, sih);
-	if (ret)
-		goto out;
-
 	reb = &rebuild;
-	ret = nova_init_inode_rebuild(sb, reb, pi);
+	ret = nova_rebuild_inode_start(sb, pi, sih, reb, pi_addr);
 	if (ret)
 		goto out;
-
-	sih->pi_addr = pi_addr;
 
 	curr_p = sih->log_head;
 	if (curr_p == 0) {
 		nova_err(sb, "Dir %llu log is NULL!\n", ino);
 		BUG();
+		goto out;
 	}
 
-	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, sih->log_tail);
-
-	sih->log_pages = 1;
 	while (curr_p != sih->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
 			sih->log_pages++;
