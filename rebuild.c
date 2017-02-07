@@ -67,7 +67,6 @@ static void nova_apply_link_change_entry(struct super_block *sb,
 static void nova_update_inode_with_rebuild(struct super_block *sb,
 	struct nova_inode_rebuild *reb, struct nova_inode *pi)
 {
-	nova_memunlock_inode(sb, pi);
 	pi->i_size = cpu_to_le64(reb->i_size);
 	pi->i_flags = cpu_to_le32(reb->i_flags);
 	pi->i_uid = cpu_to_le32(reb->i_uid);
@@ -78,8 +77,6 @@ static void nova_update_inode_with_rebuild(struct super_block *sb,
 	pi->i_generation = cpu_to_le32(reb->i_generation);
 	pi->i_links_count = cpu_to_le16(reb->i_links_count);
 	pi->i_mode = cpu_to_le16(reb->i_mode);
-
-	nova_memlock_inode(sb, pi);
 }
 
 static int nova_init_inode_rebuild(struct super_block *sb,
@@ -147,6 +144,7 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 	sih->i_size = le64_to_cpu(reb->i_size);
 	sih->i_mode = le64_to_cpu(reb->i_mode);
 
+	nova_memunlock_inode(sb, pi);
 	nova_update_inode_with_rebuild(sb, reb, pi);
 	nova_update_inode_checksum(pi);
 	if (replica_inode) {
@@ -154,6 +152,7 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 							sih->alter_pi_addr);
 		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
 	}
+	nova_memlock_inode(sb, pi);
 
 	/* Keep traversing until log ends */
 	curr_p &= PAGE_MASK;

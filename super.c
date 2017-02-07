@@ -298,7 +298,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
-	nova_dbg_verbose("nova: Default block size set to 4K\n");
+	nova_dbgv("nova: Default block size set to 4K\n");
 	blocksize = sbi->blocksize = NOVA_DEF_BLOCK_SIZE_4K;
 
 	nova_set_blocksize(sb, blocksize);
@@ -322,10 +322,11 @@ static struct nova_inode *nova_init(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
-	nova_dbg_verbose("max file name len %d\n", (unsigned int)NOVA_NAME_LEN);
+	nova_dbgv("max file name len %d\n", (unsigned int)NOVA_NAME_LEN);
 
 	super = nova_get_super(sb);
 
+	nova_memunlock_reserved(sb, super);
 	/* clear out super-block and inode table */
 	memset_nt(super, 0, sbi->reserved_blocks * sbi->blocksize);
 	super->s_size = cpu_to_le64(size);
@@ -354,15 +355,16 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
 	pi->nova_ino = NOVA_INODELIST_INO;
 	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+	nova_memlock_reserved(sb, super);
 
 	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
 	nova_sync_super(super);
-	nova_memlock_range(sb, super, NOVA_SB_SIZE*2);
 
 	nova_flush_buffer(super, NOVA_SB_SIZE, false);
 	nova_flush_buffer((char *)super + NOVA_SB_SIZE, sizeof(*super), false);
+	nova_memlock_range(sb, super, NOVA_SB_SIZE*2);
 
-	nova_dbg_verbose("Allocate root inode\n");
+	nova_dbgv("Allocate root inode\n");
 	root_i = nova_get_inode_by_ino(sb, NOVA_ROOT_INO);
 
 	nova_memunlock_inode(sb, root_i);
@@ -387,6 +389,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	NOVA_END_TIMING(new_init_t, init_time);
+	nova_info("NOVA initialization finish\n");
 	return root_i;
 }
 
