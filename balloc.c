@@ -574,7 +574,9 @@ retry:
 	if (zero) {
 		bp = nova_get_block(sb, nova_get_block_off(sb,
 						new_blocknr, btype));
+		nova_memunlock_block(sb, bp);
 		memset_nt(bp, 0, PAGE_SIZE * ret_blocks);
+		nova_memlock_block(sb, bp);
 	}
 	*blocknr = new_blocknr;
 

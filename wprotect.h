@@ -134,6 +134,20 @@ static inline void nova_memlock_reserved(struct super_block *sb,
 			sbi->reserved_blocks * NOVA_DEF_BLOCK_SIZE_4K);
 }
 
+static inline void nova_memunlock_journal(struct super_block *sb)
+{
+	void *addr = nova_get_block(sb, NOVA_DEF_BLOCK_SIZE_4K * JOURNAL_START);
+	if (nova_is_protected(sb))
+		__nova_memunlock_range(addr, NOVA_DEF_BLOCK_SIZE_4K);
+}
+
+static inline void nova_memlock_journal(struct super_block *sb)
+{
+	void *addr = nova_get_block(sb, NOVA_DEF_BLOCK_SIZE_4K * JOURNAL_START);
+	if (nova_is_protected(sb))
+		__nova_memlock_range(addr, NOVA_DEF_BLOCK_SIZE_4K);
+}
+
 static inline void nova_memunlock_inode(struct super_block *sb,
 					 struct nova_inode *pi)
 {

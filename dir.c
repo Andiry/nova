@@ -147,8 +147,10 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 	struct nova_dentry *entry, u64 ino, unsigned short de_len,
 	int link_change, u64 trans_id)
 {
+	struct super_block *sb = dir->i_sb;
 	unsigned short links_count;
 
+	nova_memunlock_range(sb, dentry, de_len);
 	memset(entry, 0, de_len);
 	entry->entry_type = DIR_LOG;
 	entry->trans_id = trans_id;
@@ -180,6 +182,7 @@ static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
 			entry->ino, entry->de_len,
 			entry->name_len, entry->reassigned, entry->csum);
 
+	nova_memlock_range(sb, dentry, de_len);
 	nova_flush_buffer(entry, de_len, 0);
 }
 
@@ -302,6 +305,8 @@ int nova_append_dir_init_entries(struct super_block *sb,
 		return - ENOMEM;
 	}
 
+	nova_memunlock_inode(sb, pi);
+
 	pi->log_tail = pi->log_head = new_block;
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
@@ -309,6 +314,8 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, trans_id);
 
 	nova_update_tail(pi, new_block + length);
+
+	nova_memlock_inode(sb, pi);
 
 	if (replica_log == 0)
 		goto update_alter_inode;
@@ -318,6 +325,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 		nova_err(sb, "ERROR: no inode log page available\n");
 		return - ENOMEM;
 	}
+	nova_memunlock_inode(sb, pi);
 	pi->alter_log_tail = pi->alter_log_head = new_block;
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
@@ -327,11 +335,14 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	nova_update_alter_tail(pi, new_block + length);
 	nova_update_alter_pages(sb, pi, pi->log_head,
 						pi->alter_log_head);
+	nova_memlock_inode(sb, pi);
 
 update_alter_inode:
 
+	nova_memunlock_inode(sb, pi);
 	nova_update_inode_checksum(pi);
 	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
+	nova_memlock_inode(sb, pi);
 
 	if (replica_inode == 0)
 		return 0;
@@ -345,7 +356,9 @@ update_alter_inode:
 	if (!alter_pi)
 		return -EINVAL;
 
+	nova_memunlock_inode(sb, alter_pi);
 	memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
+	nova_memlock_inode(sb, alter_pi);
 
 	return 0;
 }

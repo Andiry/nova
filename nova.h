@@ -51,6 +51,7 @@
 #include "stats.h"
 #include "snapshot.h"
 
+
 #define PAGE_SHIFT_2M 21
 #define PAGE_SHIFT_1G 30
 
@@ -671,13 +672,17 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 		return &sbi->shared_free_list;
 }
 
+#include "wprotect.h"
+
 static inline u64 nova_get_trans_id(struct super_block *sb)
 {
 	struct nova_super_block *super = nova_get_super(sb);
 	u64 ret;
 
+	nova_memunlock_super(sb, super);
 	ret = atomic64_inc_return(&super->s_trans_id);
 	nova_flush_buffer(&super->s_trans_id, CACHELINE_SIZE, 1);
+	nova_memlock_super(sb, super);
 
 	return ret;
 }
@@ -1179,9 +1184,11 @@ static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
 static inline void nova_set_next_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page, int fence)
 {
+	nova_memunlock_block(sb, curr_page);
 	curr_page->page_tail.next_page = next_page;
 	nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
+	nova_memlock_block(sb, curr_page);
 	if (fence)
 		PERSISTENT_BARRIER();
 }
@@ -1198,6 +1205,7 @@ static inline void nova_set_alter_page_address(struct super_block *sb,
 	curr_page = nova_get_block(sb, BLOCK_OFF(curr));
 	alter_page = nova_get_block(sb, BLOCK_OFF(alter_curr));
 
+	nova_memunlock_block(sb, curr_page);
 	curr_page->page_tail.alter_page = alter_curr;
 	nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
@@ -1205,6 +1213,7 @@ static inline void nova_set_alter_page_address(struct super_block *sb,
 	alter_page->page_tail.alter_page = curr;
 	nova_flush_buffer(&alter_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
+	nova_memlock_block(sb, curr_page);
 }
 
 #define	CACHE_ALIGN(p)	((p) & ~(CACHELINE_SIZE - 1))
@@ -1267,8 +1276,6 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 blocknr)
 
 	return data_csum_addr;
 }
-
-#include "wprotect.h"
 
 /* Function Prototypes */
 extern void nova_error_mng(struct super_block *sb, const char *fmt, ...);

@@ -363,8 +363,10 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 			return -ENOSPC;
 
 		block = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
+		nova_memunlock_range(sb, pair, CACHELINE_SIZE);
 		pair->journal_head = pair->journal_tail = block;
 		nova_flush_buffer(pair, CACHELINE_SIZE, 0);
+		nova_memlock_range(sb, pair, CACHELINE_SIZE);
 	}
 
 	PERSISTENT_BARRIER();

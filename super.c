@@ -333,7 +333,15 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
 	atomic64_set(&super->s_trans_id, 0);
-	trans_id = nova_get_trans_id(sb);
+
+	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	pi->nova_ino = NOVA_BLOCKNODE_INO;
+	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+
+	pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
+	pi->nova_ino = NOVA_INODELIST_INO;
+	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+	nova_memlock_reserved(sb, super);
 
 	nova_init_blockmap(sb, 0);
 
@@ -348,14 +356,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
-	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
-	pi->nova_ino = NOVA_BLOCKNODE_INO;
-	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
-
-	pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
-	pi->nova_ino = NOVA_INODELIST_INO;
-	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
-	nova_memlock_reserved(sb, super);
+	trans_id = nova_get_trans_id(sb);
 
 	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
 	nova_sync_super(super);
@@ -381,10 +382,10 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	root_i->valid = 1;
 	/* nova_sync_inode(root_i); */
 	nova_flush_buffer(root_i, sizeof(*root_i), false);
+	nova_memlock_inode(sb, root_i);
 
 	nova_append_dir_init_entries(sb, root_i, NOVA_ROOT_INO,
 					NOVA_ROOT_INO, trans_id);
-	nova_memlock_inode(sb, root_i);
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
