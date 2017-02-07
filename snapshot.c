@@ -1216,6 +1216,7 @@ static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 	u64 prev_nvmm_block;
 	u64 curr_dram_addr;
 	unsigned long i;
+	size_t size = sizeof(struct snapshot_nvmm_list);
 
 	curr_dram_addr = list->head;
 	prev_nvmm_block = new_block;
@@ -1224,8 +1225,10 @@ static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 
 	for (i = 0; i < list->num_pages; i++) {
 		/* Leave next_page field alone */
+		nova_memunlock_block(sb, curr_nvmm_addr);
 		memcpy_to_pmem_nocache(curr_nvmm_addr, (void *)curr_dram_addr,
 						LAST_ENTRY);
+		nova_memlock_block(sb, curr_nvmm_addr);
 
 		dram_page = (struct nova_inode_log_page *)curr_dram_addr;
 		prev_nvmm_block = curr_nvmm_block;
@@ -1236,9 +1239,11 @@ static int nova_copy_snapshot_list_to_nvmm(struct super_block *sb,
 		curr_dram_addr = dram_page->page_tail.next_page;
 	}
 
+	nova_memunlock_range(sb, nvmm_list, size);
 	nvmm_list->num_pages = list->num_pages;
 	nvmm_list->tail = prev_nvmm_block + ENTRY_LOC(list->tail);
 	nvmm_list->head = new_block;
+	nova_memlock_range(sb, nvmm_list, size);
 
 	nova_flush_buffer(nvmm_list, sizeof(struct snapshot_nvmm_list), 1);
 
@@ -1254,6 +1259,7 @@ static int nova_save_snapshot_info(struct super_block *sb,
 	struct snapshot_nvmm_page *nvmm_page;
 	struct snapshot_nvmm_list *nvmm_list;
 	unsigned long num_pages;
+	size_t size = sizeof(struct snapshot_nvmm_info);
 	int i;
 	u64 nvmm_page_addr;
 	u64 new_block;
@@ -1286,8 +1292,10 @@ static int nova_save_snapshot_info(struct super_block *sb,
 		nova_copy_snapshot_list_to_nvmm(sb, list, nvmm_list, new_block);
 	}
 
+	nova_memunlock_range(sb, nvmm_info, size);
 	nvmm_info->nvmm_page_addr = nvmm_page_addr;
 	nvmm_info->trans_id = info->trans_id;
+	nova_memlock_range(sb, nvmm_info, size);
 	nova_flush_buffer(nvmm_info, sizeof(struct snapshot_nvmm_info), 1);
 
 	return 0;
@@ -1356,7 +1364,9 @@ int nova_save_snapshots(struct super_block *sb)
 
 	tree = &sbi->snapshot_info_tree;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
+	nova_memunlock_block(sb, nvmm_info_table);
 	memset(nvmm_info_table, '0', PAGE_SIZE);
+	nova_memlock_block(sb, nvmm_info_table);
 
 	/* Save in increasing order */
 	temp = rb_first(tree);

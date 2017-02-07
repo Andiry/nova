@@ -386,10 +386,12 @@ static u64 nova_append_range_node_entry(struct super_block *sb,
 		curr_p = next_log_page(sb, curr_p);
 
 	entry = (struct nova_range_node_lowhigh *)nova_get_block(sb, curr_p);
+	nova_memunlock_range(sb, entry, size);
 	entry->range_low = cpu_to_le64(curr->range_low);
 	if (cpuid)
 		entry->range_low |= cpu_to_le64(cpuid << 56);
 	entry->range_high = cpu_to_le64(curr->range_high);
+	nova_memlock_range(sb, entry, size);
 	nova_dbgv("append entry block low 0x%lx, high 0x%lx\n",
 			curr->range_low, curr->range_high);
 
@@ -464,10 +466,6 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 		return;
 	}
 
-	pi->alter_log_head = pi->alter_log_tail = 0;
-	pi->log_head = new_block;
-	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
-
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
@@ -475,7 +473,12 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 				&inode_map->inode_inuse_tree, temp_tail, i);
 	}
 
+	nova_memunlock_inode(sb, pi);
+	pi->alter_log_head = pi->alter_log_tail = 0;
+	pi->log_head = new_block;
 	nova_update_tail(pi, temp_tail);
+	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
+	nova_memlock_inode(sb, pi);
 
 	nova_dbg("%s: %lu inode nodes, pi head 0x%llx, tail 0x%llx\n",
 		__func__, num_nodes, pi->log_head, pi->log_tail);
@@ -537,10 +540,6 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	nova_memlock_range(sb, &super->s_wtime, NOVA_FAST_MOUNT_FIELD_SIZE);
 	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
-	/* Finally update log head and tail */
-	pi->alter_log_head = pi->alter_log_tail = 0;
-	pi->log_head = new_block;
-	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
 
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
@@ -548,7 +547,14 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	}
 
 	temp_tail = nova_save_free_list_blocknodes(sb, SHARED_CPU, temp_tail);
+
+	/* Finally update log head and tail */
+	nova_memunlock_inode(sb, pi);
+	pi->alter_log_head = pi->alter_log_tail = 0;
+	pi->log_head = new_block;
 	nova_update_tail(pi, temp_tail);
+	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
+	nova_memlock_inode(sb, pi);
 
 	nova_dbg("%s: %lu blocknodes, %lu log pages, pi head 0x%llx, "
 		"tail 0x%llx\n", __func__, num_blocknode, num_pages,
