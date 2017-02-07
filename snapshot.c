@@ -942,7 +942,9 @@ static int nova_clear_nvmm_info_table(struct super_block *sb,
 	}
 
 out:
+	nova_memunlock_block(sb, nvmm_info_table);
 	memset(nvmm_info_table, '0', PAGE_SIZE);
+	nova_memlock_block(sb, nvmm_info_table);
 	nova_flush_buffer(nvmm_info_table, PAGE_SIZE, 1);
 	return 0;
 }
