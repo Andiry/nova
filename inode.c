@@ -362,6 +362,7 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	size_t size = sizeof(struct nova_file_write_entry);
 	u64 curr;
 	int ret;
 
@@ -373,10 +374,12 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 		return ret;
 	}
 
+	nova_memunlock_range(sb, entry, size);
 	entry->invalid_pages += num_free;
 	nova_update_entry_csum(entry);
 
 	nova_update_alter_entry(sb, entry);
+	nova_memlock_range(sb, entry, size);
 
 	return 0;
 }
@@ -384,12 +387,16 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 static int nova_reassign_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry)
 {
+	size_t size = sizeof(struct nova_file_write_entry);
+
 	if (!entry || entry->reassigned == 1)
 		return 0;
 
+	nova_memunlock_range(sb, entry, size);
 	entry->reassigned = 1;
 	nova_update_entry_csum(entry);
 	nova_update_alter_entry(sb, entry);
+	nova_memlock_range(sb, entry, size);
 
 	return 0;
 }
@@ -2851,9 +2858,11 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 		return -ENOSPC;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, curr_p);
+	nova_memunlock_range(sb, entry, size);
 	nova_update_entry_csum(data);
 	memcpy_to_pmem_nocache(entry, data,
 			sizeof(struct nova_file_write_entry));
+	nova_memlock_range(sb, entry, size);
 	nova_dbg_verbose("file %lu entry @ 0x%llx: pgoff %llu, num %u, "
 			"block %llu, size %llu, csum 0x%x\n", inode->i_ino,
 			curr_p, entry->pgoff, entry->num_pages,
@@ -2870,8 +2879,10 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 		alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
 						alter_curr_p);
+		nova_memunlock_range(sb, alter_entry, size);
 		memcpy_to_pmem_nocache(alter_entry, data,
 				sizeof(struct nova_file_write_entry));
+		nova_memlock_range(sb, alter_entry, size);
 		update->alter_entry = alter_curr_p;
 
 		update->alter_tail = alter_curr_p + size;

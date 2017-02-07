@@ -231,6 +231,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 				offset, start_blk, kmem);
 	if (offset != 0) {
 		entry = nova_get_write_entry(sb, si, start_blk);
+		nova_memunlock_block(sb, kmem);
 		if (entry == NULL) {
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
@@ -239,6 +240,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 			nova_copy_partial_block(sb, sih, entry, start_blk,
 					offset, kmem, false);
 		}
+		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem, offset, 0);
 	}
 
@@ -249,6 +251,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
 		entry = nova_get_write_entry(sb, si, end_blk);
+		nova_memunlock_block(sb, kmem);
 		if (entry == NULL) {
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
@@ -258,6 +261,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 			nova_copy_partial_block(sb, sih, entry, end_blk,
 					eblk_offset, kmem, true);
 		}
+		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem + eblk_offset,
 					sb->s_blocksize - eblk_offset, 0);
 	}
@@ -468,8 +472,10 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		/* Now copy from user buf */
 //		nova_dbg("Write: %p\n", kmem);
 		NOVA_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+		nova_memunlock_range(sb, kmem + offset, bytes);
 		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 						buf, bytes);
+		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		if (pos + copied > inode->i_size)
@@ -522,12 +528,12 @@ static ssize_t nova_cow_file_write(struct file *filp,
 			begin_tail = update.curr_entry;
 	}
 
-	nova_memunlock_inode(sb, pi);
 	data_bits = blk_type_to_shift[sih->i_blk_type];
 	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
-	nova_memlock_inode(sb, pi);
 
+	nova_memunlock_inode(sb, pi);
 	nova_update_inode(sb, inode, pi, &update, 1);
+	nova_memlock_inode(sb, pi);
 
 	/* Free the overlap blocks after the write is committed */
 	ret = nova_reassign_file_tree(sb, sih, begin_tail);
@@ -749,8 +755,10 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		/* Now copy from user buf */
 //		nova_dbg("Write: %p\n", kmem);
 		NOVA_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+		nova_memunlock_range(sb, kmem + offset, bytes);
 		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 						buf, bytes);
+		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		if (pos + copied > inode->i_size)
@@ -773,11 +781,13 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			}
 		} else {
 			/* Update existing entry */
+			nova_memunlock_range(sb, entry, sizeof(*entry));
 			entry->trans_id = trans_id;
 			entry->mtime = cpu_to_le32(time);
 			entry->size = entry_size;
 			nova_update_entry_csum(entry);
 			nova_update_alter_entry(sb, entry);
+			nova_memlock_range(sb, entry, sizeof(*entry));
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
@@ -811,7 +821,9 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	inode->i_blocks = sih->i_blocks;
 
 	if (update_log) {
+		nova_memunlock_inode(sb, pi);
 		nova_update_inode(sb, inode, pi, &update, 1);
+		nova_memlock_inode(sb, pi);
 
 		/* Update file tree */
 		ret = nova_reassign_file_tree(sb, sih, begin_tail);
