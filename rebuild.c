@@ -145,6 +145,29 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 	return 0;
 }
 
+static void nova_rebuild_handle_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
+	struct nova_file_write_entry *entry, u64 *curr_trans_id)
+{
+	if (entry->num_pages != entry->invalid_pages) {
+		/*
+		 * The overlaped blocks are already freed.
+		 * Don't double free them, just re-assign the pointers.
+		 */
+		nova_assign_write_entry(sb, sih, entry, false);
+	}
+
+	if (entry->trans_id >= *curr_trans_id) {
+		nova_rebuild_file_time_and_size(sb, reb,
+					entry->mtime, entry->mtime,
+					entry->size);
+		*curr_trans_id = entry->trans_id;
+	}
+
+	/* Update sih->i_size for setattr apply operations */
+	sih->i_size = le64_to_cpu(reb->i_size);
+}
+
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih)
@@ -229,7 +252,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				/* Update sih->i_size for setattr operation */
 				sih->i_size = le64_to_cpu(reb->i_size);
 				curr_p += sizeof(struct nova_setattr_logentry);
-				continue;
+				break;
 			case LINK_CHANGE:
 				link_change_entry =
 					(struct nova_link_change_entry *)addr;
@@ -237,37 +260,21 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 							link_change_entry);
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
-				continue;
+				break;
 			case FILE_WRITE:
+				entry = (struct nova_file_write_entry *)addr;
+				nova_rebuild_handle_write_entry(sb, sih, reb,
+						entry, &curr_trans_id);
+				curr_p += sizeof(struct nova_file_write_entry);
 				break;
 			default:
 				nova_err(sb, "unknown type %d, 0x%llx\n",
 							type, curr_p);
 				NOVA_ASSERT(0);
 				curr_p += sizeof(struct nova_file_write_entry);
-				continue;
+				break;
 		}
 
-		entry = (struct nova_file_write_entry *)addr;
-
-		if (entry->num_pages != entry->invalid_pages) {
-			/*
-			 * The overlaped blocks are already freed.
-			 * Don't double free them, just re-assign the pointers.
-			 */
-			nova_assign_write_entry(sb, sih, entry, false);
-		}
-
-		if (entry->trans_id >= curr_trans_id) {
-			nova_rebuild_file_time_and_size(sb, reb,
-						entry->mtime, entry->mtime,
-						entry->size);
-			curr_trans_id = entry->trans_id;
-		}
-
-		/* Update sih->i_size for setattr apply operations */
-		sih->i_size = le64_to_cpu(reb->i_size);
-		curr_p += sizeof(struct nova_file_write_entry);
 	}
 
 	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
@@ -327,6 +334,40 @@ static inline int nova_replay_remove_dentry(struct super_block *sb,
 	nova_remove_dir_radix_tree(sb, sih, entry->name,
 					entry->name_len, 1, NULL);
 	return 0;
+}
+
+static int nova_rebuild_handle_dentry(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
+	struct nova_dentry *entry, u64 curr_p, u64 *curr_trans_id)
+{
+	int ret = 0;
+
+	nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
+			"name %s, namelen %u, csum 0x%x, rec len %u\n", curr_p,
+			entry->entry_type, le64_to_cpu(entry->ino),
+			entry->name, entry->name_len, entry->csum,
+			le16_to_cpu(entry->de_len));
+
+	nova_reassign_last_dentry(sb, sih, curr_p);
+
+	if (entry->invalid == 0) {
+		if (entry->ino > 0)
+			ret = nova_replay_add_dentry(sb, sih, entry);
+		else
+			ret = nova_replay_remove_dentry(sb, sih, entry);
+	}
+
+	if (ret) {
+		nova_err(sb, "%s ERROR %d\n", __func__, ret);
+		return ret;
+	}
+
+	if (entry->trans_id >= *curr_trans_id) {
+		nova_rebuild_dir_time_and_size(sb, reb, entry);
+		*curr_trans_id = entry->trans_id;
+	}
+
+	return ret;
 }
 
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
@@ -405,7 +446,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 								attr_entry);
 				sih->last_setattr = curr_p;
 				curr_p += sizeof(struct nova_setattr_logentry);
-				continue;
+				break;
 			case LINK_CHANGE:
 				lc_entry =
 					(struct nova_link_change_entry *)addr;
@@ -416,43 +457,22 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 				}
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
-				continue;
+				break;
 			case DIR_LOG:
+				entry = (struct nova_dentry *)addr;
+				ret = nova_rebuild_handle_dentry(sb, sih, reb,
+						entry, curr_p, &curr_trans_id);
+				if (ret)
+					goto out;
+				de_len = le16_to_cpu(entry->de_len);
+				curr_p += de_len;
 				break;
 			default:
 				nova_dbg("%s: unknown type %d, 0x%llx\n",
 							__func__, type, curr_p);
 				NOVA_ASSERT(0);
+				break;
 		}
-
-		entry = (struct nova_dentry *)addr;
-		nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
-			"name %s, namelen %u, csum 0x%x, rec len %u\n", curr_p,
-			entry->entry_type, le64_to_cpu(entry->ino),
-			entry->name, entry->name_len, entry->csum,
-			le16_to_cpu(entry->de_len));
-
-		nova_reassign_last_dentry(sb, sih, curr_p);
-
-		if (entry->invalid == 0) {
-			if (entry->ino > 0)
-				ret = nova_replay_add_dentry(sb, sih, entry);
-			else
-				ret = nova_replay_remove_dentry(sb, sih, entry);
-		}
-
-		if (ret) {
-			nova_err(sb, "%s ERROR %d\n", __func__, ret);
-			break;
-		}
-
-		if (entry->trans_id >= curr_trans_id) {
-			nova_rebuild_dir_time_and_size(sb, reb, entry);
-			curr_trans_id = entry->trans_id;
-		}
-
-		de_len = le16_to_cpu(entry->de_len);
-		curr_p += de_len;
 	}
 
 	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
