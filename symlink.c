@@ -50,6 +50,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	block1 = log_block;
 	entry = (struct nova_file_write_entry *)nova_get_block(sb, block1);
 
+	nova_memunlock_block(sb, entry);
 	entry->entry_type = FILE_WRITE;
 	entry->trans_id = trans_id;
 	entry->pgoff = 0;
@@ -61,8 +62,10 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	entry->mtime = cpu_to_le32(time);
 	entry->size = cpu_to_le64(len + 1);
 	nova_update_entry_csum(entry);
+
+	nova_memlock_block(sb, entry);
+
 	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
-	pi->log_head = block1;
 	sih->log_head = block1;
 	update.tail = block1 + length;
 
@@ -71,6 +74,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 		block2 = next_log_page(sb, block1);
 		log1_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							block1);
+		nova_memunlock_block(sb, log1_page);
 		nova_set_next_page_address(sb, log1_page, 0, 1);
 
 		alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
@@ -78,6 +82,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 		memcpy_to_pmem_nocache(alter_entry, entry, length);
 		nova_update_alter_pages(sb, pi, block1, block2);
 		pi->alter_log_head = block2;
+		nova_memlock_block(sb, log1_page);
 		sih->alter_log_head = block2;
 		update.alter_tail = block2 + length;
 	}
@@ -90,7 +95,10 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 		sih->i_blocks++;
 	}
 
+	nova_memunlock_inode(sb, pi);
+	pi->log_head = block1;
 	nova_update_inode(sb, inode, pi, &update, 1);
+	nova_memlock_inode(sb, pi);
 
 	return 0;
 }
