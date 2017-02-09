@@ -78,16 +78,16 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		inode->i_ctime = CURRENT_TIME_SEC;
 		nova_set_inode_flags(inode, pi, flags);
 
-		nova_memunlock_inode(sb, pi);
 		update.tail = 0;
 		update.alter_tail = 0;
 		ret = nova_append_link_change_entry(sb, pi, inode,
 					&update, &old_linkc, trans_id);
 		if (!ret) {
+			nova_memunlock_inode(sb, pi);
 			nova_update_inode(sb, inode, pi, &update, 1);
+			nova_memlock_inode(sb, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
-		nova_memlock_inode(sb, pi);
 		inode_unlock(inode);
 flags_out:
 		mnt_drop_write_file(filp);
@@ -115,16 +115,16 @@ flags_out:
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inode->i_generation = generation;
 
-		nova_memunlock_inode(sb, pi);
 		update.tail = 0;
 		update.alter_tail = 0;
 		ret = nova_append_link_change_entry(sb, pi, inode,
 					&update, &old_linkc, trans_id);
 		if (!ret) {
+			nova_memunlock_inode(sb, pi);
 			nova_update_inode(sb, inode, pi, &update, 1);
+			nova_memlock_inode(sb, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
-		nova_memlock_inode(sb, pi);
 		inode_unlock(inode);
 setversion_out:
 		mnt_drop_write_file(filp);
