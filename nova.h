@@ -143,6 +143,7 @@ extern int measure_timing;
 extern int replica_inode;
 extern int replica_log;
 extern int inplace_data_updates;
+extern int wprotect;
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];

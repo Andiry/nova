@@ -41,6 +41,7 @@
 int measure_timing = 0;
 int replica_inode = 0;
 int replica_log = 0;
+int wprotect = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
 
@@ -50,6 +51,8 @@ module_param(replica_inode, int, S_IRUGO);
 MODULE_PARM_DESC(replica_inode, "Inode replication");
 module_param(replica_log, int, S_IRUGO);
 MODULE_PARM_DESC(replica_log, "Log replication");
+module_param(wprotect, int, S_IRUGO);
+MODULE_PARM_DESC(replica_log, "Wprotect (CR0.WP)");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;

@@ -60,6 +60,9 @@ static inline int nova_is_protected(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = (struct nova_sb_info *)sb->s_fs_info;
 
+	if (wprotect)
+		return wprotect;
+
 	return sbi->s_mount_opt & NOVA_MOUNT_PROTECT;
 }
 
