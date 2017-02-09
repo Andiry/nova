@@ -92,8 +92,12 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	nova_memlock_journal(sb);
 	spin_unlock(&sbi->journal_locks[cpu]);
 
-	nova_update_alter_inode(sb, inode, pi);
-	nova_update_alter_inode(sb, dir, pidir);
+	if (replica_inode) {
+		nova_memunlock_inode(sb, pi);
+		nova_update_alter_inode(sb, inode, pi);
+		nova_update_alter_inode(sb, dir, pidir);
+		nova_memlock_inode(sb, pi);
+	}
 	NOVA_END_TIMING(create_trans_t, trans_time);
 }
 
@@ -332,8 +336,13 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	nova_memlock_journal(sb);
 	spin_unlock(&sbi->journal_locks[cpu]);
 
-	nova_update_alter_inode(sb, inode, pi);
-	nova_update_alter_inode(sb, dir, pidir);
+	if (replica_inode) {
+		nova_memunlock_inode(sb, pi);
+		nova_update_alter_inode(sb, inode, pi);
+		nova_update_alter_inode(sb, dir, pidir);
+		nova_memlock_inode(sb, pi);
+	}
+
 	NOVA_END_TIMING(link_trans_t, trans_time);
 }
 

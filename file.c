@@ -446,8 +446,10 @@ next:
 	inode->i_blocks = sih->i_blocks;
 
 	if (update_log) {
+		nova_memunlock_inode(sb, pi);
 		nova_update_tail(pi, update.tail);
 		nova_update_alter_tail(pi, update.alter_tail);
+		nova_memlock_inode(sb, pi);
 		sih->log_tail = update.tail;
 		sih->alter_log_tail = update.alter_tail;
 
@@ -461,7 +463,9 @@ next:
 	nova_dbgv("blocks: %lu, %lu\n", inode->i_blocks, sih->i_blocks);
 
 	if (ret || (mode & FALLOC_FL_KEEP_SIZE)) {
+		nova_memunlock_inode(sb, pi);
 		pi->i_flags |= cpu_to_le32(NOVA_EOFBLOCKS_FL);
+		nova_memlock_inode(sb, pi);
 	}
 
 	if (!(mode & FALLOC_FL_KEEP_SIZE) && new_size > inode->i_size) {
@@ -469,8 +473,10 @@ next:
 		sih->i_size = new_size;
 	}
 
+	nova_memunlock_inode(sb, pi);
 	nova_update_inode_checksum(pi);
 	nova_update_alter_inode(sb, inode, pi);
+	nova_memlock_inode(sb, pi);
 
 out:
 	if (ret < 0)

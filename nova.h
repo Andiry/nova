@@ -1099,9 +1099,11 @@ static inline void check_eof_blocks(struct super_block *sb,
 	if ((pi->i_flags & cpu_to_le32(NOVA_EOFBLOCKS_FL)) &&
 		(inode->i_size + sb->s_blocksize) > (sih->i_blocks
 			<< sb->s_blocksize_bits)) {
+		nova_memunlock_inode(sb, pi);
 		pi->i_flags &= cpu_to_le32(~NOVA_EOFBLOCKS_FL);
 		nova_update_inode_checksum(pi);
 		nova_update_alter_inode(sb, inode, pi);
+		nova_memlock_inode(sb, pi);
 	}
 }
 
