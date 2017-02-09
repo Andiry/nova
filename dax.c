@@ -963,7 +963,9 @@ again:
 	data_bits = blk_type_to_shift[sih->i_blk_type];
 	sih->i_blocks += (num_blocks << (data_bits - sb->s_blocksize_bits));
 
+	nova_memunlock_inode(sb, pi);
 	nova_update_inode(sb, inode, pi, &update, 1);
+	nova_memlock_inode(sb, pi);
 
 	ret = nova_reassign_file_tree(sb, sih, update.curr_entry);
 	if (ret)
