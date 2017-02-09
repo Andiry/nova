@@ -2329,8 +2329,10 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 			if (extended)
 				blocks++;
 			/* Copy entry to the new log */
+			nova_memunlock_block(sb, nova_get_block(sb, new_curr));
 			memcpy_to_pmem_nocache(nova_get_block(sb, new_curr),
 				nova_get_block(sb, curr_p), length);
+			nova_memlock_block(sb, nova_get_block(sb, new_curr));
 			nova_gc_assign_new_entry(sb, pi, sih, curr_p, new_curr);
 			new_curr += length;
 		}
@@ -2345,12 +2347,18 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 	next = next_log_page(sb, new_curr);
 	if (next > 0)
 		nova_free_contiguous_log_blocks(sb, sih, next);
+
+	nova_memunlock_block(sb, curr_page);
 	nova_set_next_page_flag(sb, new_curr);
 	nova_set_next_page_address(sb, curr_page, tail_block, 0);
+	nova_memlock_block(sb, curr_page);
 	nova_flush_buffer(curr_page, PAGE_SIZE, 0);
 
 	/* Step 2: Atomically switch to the new log */
+	nova_memunlock_inode(sb, pi);
+	/* FIXME */
 	pi->log_head = new_head;
+	nova_memlock_inode(sb, pi);
 	nova_flush_buffer(pi, sizeof(struct nova_inode), 1);
 	sih->log_head = new_head;
 
@@ -2364,7 +2372,9 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 			next, curr_p, tail_block);
 		BUG();
 	}
+	nova_memunlock_block(sb, curr_page);
 	nova_set_next_page_address(sb, curr_page, 0, 1);
+	nova_memlock_block(sb, curr_page);
 
 	/* Step 4: Free the old log */
 	nova_free_contiguous_log_blocks(sb, sih, old_head);
@@ -2449,7 +2459,9 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 	alter_next = next_log_page(sb, new_curr);
 	if (alter_next > 0)
 		nova_free_contiguous_log_blocks(sb, sih, alter_next);
+	nova_memunlock_block(sb, alter_curr_page);
 	nova_set_next_page_address(sb, alter_curr_page, alter_tail_block, 0);
+	nova_memlock_block(sb, alter_curr_page);
 	nova_flush_buffer(alter_curr_page, PAGE_SIZE, 0);
 
 	/* Step 2: Find the old log block before the tail block */
@@ -2469,7 +2481,10 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 	}
 
 	/* Step 3: Atomically switch to the new log */
+	nova_memunlock_inode(sb, pi);
+	/* FIXME */
 	pi->alter_log_head = new_head;
+	nova_memlock_inode(sb, pi);
 	nova_flush_buffer(pi, sizeof(struct nova_inode), 1);
 	sih->alter_log_head = new_head;
 
@@ -2483,7 +2498,9 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 			alter_next, alter_curr_p, alter_tail_block);
 		BUG();
 	}
+	nova_memunlock_block(sb, alter_curr_page);
 	nova_set_next_page_address(sb, alter_curr_page, 0, 1);
+	nova_memlock_block(sb, alter_curr_page);
 
 	/* Step 5: Free the old log */
 	nova_free_contiguous_log_blocks(sb, sih, alter_old_head);
