@@ -681,7 +681,7 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 		return &sbi->shared_free_list;
 }
 
-#include "wprotect.h"
+#include "mprotect.h"
 
 static inline u64 nova_get_trans_id(struct super_block *sb)
 {

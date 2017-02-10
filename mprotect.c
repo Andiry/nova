@@ -1,7 +1,7 @@
 /*
  * BRIEF DESCRIPTION
  *
- * Write protection for the filesystem pages.
+ * Memory protection for the filesystem pages.
  *
  * Copyright 2015-2016 Regents of the University of California,
  * UCSD Non-Volatile Systems Lab, Andiry Xu <jix024@cs.ucsd.edu>
