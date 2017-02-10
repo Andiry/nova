@@ -51,7 +51,6 @@
 #include "stats.h"
 #include "snapshot.h"
 
-
 #define PAGE_SHIFT_2M 21
 #define PAGE_SHIFT_1G 30
 
@@ -434,6 +433,11 @@ struct nova_inode_info {
 	struct inode vfs_inode;
 };
 
+struct vma_item {
+	struct rb_node node;
+	struct vm_area_struct *vma;
+};
+
 enum bm_type {
 	BM_4K = 0,
 	BM_2M,
@@ -557,6 +561,10 @@ struct nova_sb_info {
 	struct task_struct *snapshot_cleaner_thread;
 	wait_queue_head_t snapshot_cleaner_wait;
 	void *curr_clean_snapshot_info;
+
+	/* DAX-mmap snapshot */
+	spinlock_t	vma_lock;
+	struct rb_root	vma_tree;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;

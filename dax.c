@@ -276,7 +276,7 @@ int nova_reassign_file_tree(struct super_block *sb,
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
 
-	while (curr_p != sih->log_tail) {
+	while (curr_p && curr_p != sih->log_tail) {
 		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
 
@@ -1506,11 +1506,167 @@ static int nova_dax_pfn_mkwrite(struct vm_area_struct *vma,
 	return ret;
 }
 
+#ifdef MPROTECT_READ
+static inline int nova_rbtree_compare_vma(struct vma_item *curr,
+	struct vm_area_struct *vma)
+{
+	if (vma < curr->vma)
+		return -1;
+	if (vma > curr->vma)
+		return 1;
+
+	return 0;
+}
+
+static int nova_insert_write_vma(struct vm_area_struct *vma)
+{
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	unsigned long flags = VM_SHARED | VM_WRITE;
+	struct vma_item *item, *curr;
+	struct rb_node **temp, *parent;
+	int compVal;
+
+	if ((vma->vm_flags & flags) != flags)
+		return 0;
+
+	item = kmalloc(sizeof(struct vma_item), GFP_ATOMIC);
+	if (!item)
+		return -ENOMEM;
+
+	item->vma = vma;
+
+	spin_lock(&sbi->vma_lock);
+
+	temp = &(sbi->vma_tree.rb_node);
+	parent = NULL;
+
+	while (*temp) {
+		curr = container_of(*temp, struct vma_item, node);
+		compVal = nova_rbtree_compare_vma(curr, vma);
+		parent = *temp;
+
+		if (compVal == -1) {
+			temp = &((*temp)->rb_left);
+		} else if (compVal == 1) {
+			temp = &((*temp)->rb_right);
+		} else {
+			nova_dbg("%s: vma %p already exists\n",
+				__func__, vma);
+			kfree(item);
+			goto out;
+		}
+	}
+
+	rb_link_node(&item->node, parent, temp);
+	rb_insert_color(&item->node, &sbi->vma_tree);
+out:
+	spin_unlock(&sbi->vma_lock);
+
+	return 0;
+}
+
+static int nova_remove_write_vma(struct vm_area_struct *vma)
+{
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct vma_item *curr = NULL;
+	struct rb_node *temp;
+	int compVal;
+	int found = 0;
+
+	spin_lock(&sbi->vma_lock);
+
+	temp = sbi->vma_tree.rb_node;
+
+	while (temp) {
+		curr = container_of(temp, struct vma_item, node);
+		compVal = nova_rbtree_compare_vma(curr, vma);
+
+		if (compVal == -1) {
+			temp = temp->rb_left;
+		} else if (compVal == 1) {
+			temp = temp->rb_right;
+		} else {
+			rb_erase(&curr->node, &sbi->vma_tree);
+			found = 1;
+			break;
+		}
+	}
+
+	spin_unlock(&sbi->vma_lock);
+
+	if (found) {
+		kfree(curr);
+	}
+
+	return 0;
+}
+
+static int nova_restore_vma_write(struct vm_area_struct *vma)
+{
+	struct mm_struct *mm = vma->vm_mm;
+	unsigned long oldflags = vma->vm_flags;
+	unsigned long newflags;
+
+	down_write(&mm->mmap_sem);
+
+	newflags = oldflags | VM_WRITE;
+	if (oldflags == newflags)
+		goto out;
+
+	nova_mmap_to_new_blocks(vma);
+
+	vma->vm_flags = newflags;
+	vma_set_page_prot(vma);
+	vma->original_write = 0;
+
+out:
+	nova_insert_write_vma(vma);
+	up_write(&mm->mmap_sem);
+
+	return 0;
+}
+
+static void nova_vma_open(struct vm_area_struct *vma)
+{
+	nova_dbgv("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
+			" vm_end(0x%lx), vm_flags(0x%lx), "
+			"vm_page_prot(0x%lx)\n", __func__,
+			__LINE__, vma->vm_start, vma->vm_end,
+			vma->vm_flags, pgprot_val(vma->vm_page_prot));
+
+	nova_insert_write_vma(vma);
+}
+
+static void nova_vma_close(struct vm_area_struct *vma)
+{
+	nova_dbgv("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
+			" vm_end(0x%lx), vm_flags(0x%lx), "
+			"vm_page_prot(0x%lx)\n", __func__,
+			__LINE__, vma->vm_start, vma->vm_end,
+			vma->vm_flags, pgprot_val(vma->vm_page_prot));
+
+	vma->original_write = 0;
+	nova_remove_write_vma(vma);
+}
+
+#endif
+
 static const struct vm_operations_struct nova_dax_vm_ops = {
 	.fault	= nova_dax_fault,
 	.pmd_fault = nova_dax_pmd_fault,
 	.page_mkwrite = nova_dax_fault,
 	.pfn_mkwrite = nova_dax_pfn_mkwrite,
+#ifdef MPROTECT_READ
+	.open = nova_vma_open,
+	.close = nova_vma_close,
+	.dax_cow = nova_restore_vma_write,
+#endif
 };
 
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
@@ -1520,6 +1676,12 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	vma->vm_flags |= VM_MIXEDMAP | VM_HUGEPAGE;
 
 	vma->vm_ops = &nova_dax_vm_ops;
+
+#ifdef MPROTEC_READ
+	/* Check SHARED WRITE vma */
+	nova_insert_write_vma(vma);
+#endif
+
 	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
 			"vm_page_prot(0x%lx)\n", __func__,

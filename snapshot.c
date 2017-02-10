@@ -1081,6 +1081,8 @@ int nova_create_snapshot(struct super_block *sb)
 	info->index = index;
 	ret = nova_insert_snapshot_info(sb, info);
 
+	nova_destroy_vma_tree(sb, 1);
+
 out:
 	// Reset the create_snapshot_trans_id
 	sbi->create_snapshot_trans_id = 0;
