@@ -1068,8 +1068,10 @@ int nova_create_snapshot(struct super_block *sb)
 		goto out;
 	}
 
+	nova_memunlock_block(sb, snapshot_table);
 	snapshot_table->entries[index].trans_id = trans_id;
 	snapshot_table->entries[index].timestamp = timestamp;
+	nova_memlock_block(sb, snapshot_table);
 	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
 	sbi->num_snapshots++;
@@ -1193,8 +1195,10 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 
 update_snapshot_table:
 
+	nova_memunlock_block(sb, snapshot_table);
 	snapshot_table->entries[index].trans_id = 0;
 	snapshot_table->entries[index].timestamp = 0;
+	nova_memlock_block(sb, snapshot_table);
 	sbi->num_snapshots--;
 	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
