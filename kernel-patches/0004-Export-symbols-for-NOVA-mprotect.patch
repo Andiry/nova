@@ -1,0 +1,52 @@
+From c1db0e8f190777016aadc8120dcfb242ecba8a21 Mon Sep 17 00:00:00 2001
+From: Andiry Xu <jix024@cs.ucsd.edu>
+Date: Fri, 10 Feb 2017 12:41:47 -0800
+Subject: [PATCH 4/6] Export symbols for NOVA mprotect
+
+Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
+---
+ mm/memory.c   | 2 +-
+ mm/mmap.c     | 1 +
+ mm/mprotect.c | 1 +
+ 3 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/mm/memory.c b/mm/memory.c
+index 7d23b50..2422426 100644
+--- a/mm/memory.c
++++ b/mm/memory.c
+@@ -1693,7 +1693,7 @@ static int remap_pte_range(struct mm_struct *mm, pmd_t *pmd,
+ 		return -ENOMEM;
+ 	arch_enter_lazy_mmu_mode();
+ 	do {
+-		BUG_ON(!pte_none(*pte));
++//		BUG_ON(!pte_none(*pte));
+ 		set_pte_at(mm, addr, pte, pte_mkspecial(pfn_pte(pfn, prot)));
+ 		pfn++;
+ 	} while (pte++, addr += PAGE_SIZE, addr != end);
+diff --git a/mm/mmap.c b/mm/mmap.c
+index dc4291d..b5f7575 100644
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -126,6 +126,7 @@ void vma_set_page_prot(struct vm_area_struct *vma)
+ 	/* remove_protection_ptes reads vma->vm_page_prot without mmap_sem */
+ 	WRITE_ONCE(vma->vm_page_prot, vm_page_prot);
+ }
++EXPORT_SYMBOL(vma_set_page_prot);
+ 
+ /*
+  * Requires inode->i_mapping->i_mmap_rwsem
+diff --git a/mm/mprotect.c b/mm/mprotect.c
+index f9c07f5..9f0b5b2 100644
+--- a/mm/mprotect.c
++++ b/mm/mprotect.c
+@@ -271,6 +271,7 @@ unsigned long change_protection(struct vm_area_struct *vma, unsigned long start,
+ 
+ 	return pages;
+ }
++EXPORT_SYMBOL(change_protection);
+ 
+ int
+ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
+-- 
+2.7.4
+

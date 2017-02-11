@@ -1,0 +1,56 @@
+From c854f6048e556fcfa6a2d9011273f2e9bd5ae434 Mon Sep 17 00:00:00 2001
+From: Andiry Xu <jix024@cs.ucsd.edu>
+Date: Fri, 10 Feb 2017 12:40:37 -0800
+Subject: [PATCH 3/6] DAX iomap wprotect
+
+Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
+---
+ fs/dax.c | 24 ++++++++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/fs/dax.c b/fs/dax.c
+index 5c74f60..e8cf75c 100644
+--- a/fs/dax.c
++++ b/fs/dax.c
+@@ -975,6 +975,24 @@ static sector_t dax_iomap_sector(struct iomap *iomap, loff_t pos)
+ 	return iomap->blkno + (((pos & PAGE_MASK) - iomap->offset) >> 9);
+ }
+ 
++static inline void wprotect_disable(void)
++{
++	unsigned long cr0_val;
++
++	cr0_val = read_cr0();
++	cr0_val &= (~X86_CR0_WP);
++	write_cr0(cr0_val);
++}
++
++static inline void wprotect_enable(void)
++{
++	unsigned long cr0_val;
++
++	cr0_val = read_cr0();
++	cr0_val |= X86_CR0_WP;
++	write_cr0(cr0_val);
++}
++
+ static loff_t
+ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
+ 		struct iomap *iomap)
+@@ -1024,9 +1042,11 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
+ 		if (map_len > end - pos)
+ 			map_len = end - pos;
+ 
+-		if (iov_iter_rw(iter) == WRITE)
++		if (iov_iter_rw(iter) == WRITE) {
++//			wprotect_disable();
+ 			map_len = copy_from_iter_pmem(dax.addr, map_len, iter);
+-		else
++//			wprotect_enable();
++		} else
+ 			map_len = copy_to_iter(dax.addr, map_len, iter);
+ 		dax_unmap_atomic(iomap->bdev, &dax);
+ 		if (map_len <= 0) {
+-- 
+2.7.4
+
