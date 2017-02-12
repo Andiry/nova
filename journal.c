@@ -178,40 +178,51 @@ static int nova_recover_lite_journal(struct super_block *sb,
 
 /**************************** Create/commit ******************************/
 
-static int nova_append_inode_journal(struct super_block *sb,
-	struct nova_lite_journal_entry *entry, struct inode *inode)
+static u64 nova_append_inode_journal(struct super_block *sb,
+	u64 curr_p, struct inode *inode)
 {
+	struct nova_lite_journal_entry *entry;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 
+	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+							curr_p);
 	entry->type = cpu_to_le64(JOURNAL_INODE);
 	entry->padding = 0;
 	entry->data1 = cpu_to_le64(sih->pi_addr);
 	/* FIXME */
 	if (replica_inode)
 		entry->data2 = cpu_to_le64(sih->alter_pi_addr);
-	return nova_update_entry_checksum(sb, entry);
+	nova_update_entry_checksum(sb, entry);
+
+	curr_p = next_lite_journal(curr_p);
+	return curr_p;
 }
 
-static int nova_append_entry_journal(struct super_block *sb,
-	struct nova_lite_journal_entry *entry, u64 *field)
+static u64 nova_append_entry_journal(struct super_block *sb,
+	u64 curr_p, u64 *field)
 {
+	struct nova_lite_journal_entry *entry;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	u64 addr = (u64)nova_get_addr_off(sbi, field);
 
+	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+							curr_p);
 	entry->type = cpu_to_le64(JOURNAL_ENTRY);
 	entry->padding = 0;
 	entry->data1 = cpu_to_le64(addr);
 	entry->data2 = cpu_to_le64(*field);
-	return nova_update_entry_checksum(sb, entry);
+	nova_update_entry_checksum(sb, entry);
+
+	curr_p = next_lite_journal(curr_p);
+	return curr_p;
 }
 
 u64 nova_create_inode_transaction(struct super_block *sb,
 	struct inode *inode1, struct inode *inode2, int cpu)
 {
 	struct ptr_pair *pair;
-	struct nova_lite_journal_entry *entry;
-	u64 new_tail, temp;;
+	u64 temp;
 
 	pair = nova_get_journal_pointers(sb, cpu);
 	if (!pair || pair->journal_head == 0 ||
@@ -219,21 +230,17 @@ u64 nova_create_inode_transaction(struct super_block *sb,
 		BUG();
 
 	temp = pair->journal_head;
-	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
 
-	nova_append_inode_journal(sb, entry, inode1);
+	temp = nova_append_inode_journal(sb, temp, inode1);
 
-	temp = next_lite_journal(temp);
-	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
-	nova_append_inode_journal(sb, entry, inode2);
+	temp = nova_append_inode_journal(sb, temp, inode2);
 
-	new_tail = next_lite_journal(temp);
-	pair->journal_tail = new_tail;
+	pair->journal_tail = temp;
 	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
 
-	return new_tail;
+	nova_dbgv("%s: head 0x%llx, tail 0x%llx\n",
+			__func__, pair->journal_head, pair->journal_tail);
+	return temp;
 }
 
 u64 nova_create_rename_transaction(struct super_block *sb,
@@ -241,8 +248,7 @@ u64 nova_create_rename_transaction(struct super_block *sb,
 	struct inode *new_dir, u64 *father_ino, int cpu)
 {
 	struct ptr_pair *pair;
-	struct nova_lite_journal_entry *entry;
-	u64 new_tail, temp;;
+	u64 temp;
 
 	pair = nova_get_journal_pointers(sb, cpu);
 	if (!pair || pair->journal_head == 0 ||
@@ -250,46 +256,26 @@ u64 nova_create_rename_transaction(struct super_block *sb,
 		BUG();
 
 	temp = pair->journal_head;
-	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
 
-	nova_append_inode_journal(sb, entry, old_inode);
+	temp = nova_append_inode_journal(sb, temp, old_inode);
 
-	temp = next_lite_journal(temp);
+	temp = nova_append_inode_journal(sb, temp, old_dir);
 
-	entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
-	nova_append_inode_journal(sb, entry, old_dir);
+	if (new_inode)
+		temp = nova_append_inode_journal(sb, temp, new_inode);
 
-	if (new_inode) {
-		temp = next_lite_journal(temp);
+	if (new_dir)
+		temp = nova_append_inode_journal(sb, temp, new_dir);
 
-		entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
-		nova_append_inode_journal(sb, entry, new_inode);
-	}
+	if (father_ino)
+		temp = nova_append_entry_journal(sb, temp, father_ino);
 
-	if (new_dir) {
-		temp = next_lite_journal(temp);
-
-		entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
-		nova_append_inode_journal(sb, entry, new_dir);
-	}
-
-	if (father_ino) {
-		temp = next_lite_journal(temp);
-
-		entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
-							temp);
-		nova_append_entry_journal(sb, entry, father_ino);
-	}
-
-	new_tail = next_lite_journal(temp);
-	pair->journal_tail = new_tail;
+	pair->journal_tail = temp;
 	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
 
-	return new_tail;
+	nova_dbgv("%s: head 0x%llx, tail 0x%llx\n",
+			__func__, pair->journal_head, pair->journal_tail);
+	return temp;
 }
 
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu)
