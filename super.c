@@ -42,6 +42,8 @@ int measure_timing = 0;
 int replica_inode = 0;
 int replica_log = 0;
 int wprotect = 0;
+int data_csum = 0;
+int data_parity = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
 
@@ -53,6 +55,10 @@ module_param(replica_log, int, S_IRUGO);
 MODULE_PARM_DESC(replica_log, "Log replication");
 module_param(wprotect, int, S_IRUGO);
 MODULE_PARM_DESC(replica_log, "Wprotect (CR0.WP)");
+module_param(data_csum, int, S_IRUGO);
+MODULE_PARM_DESC(data_csum, "Data checksum");
+module_param(data_parity, int, S_IRUGO);
+MODULE_PARM_DESC(data_parity, "Data parity");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;
@@ -509,8 +515,9 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 
 	nova_dbg("measure timing %d, replica inode %d, replica log %d, "
-		"inplace update %d\n", measure_timing, replica_inode,
-		replica_log, inplace_data_updates);
+		"inplace update %d, data checksum %d, data parity %d\n",
+		measure_timing, replica_inode, replica_log,
+		inplace_data_updates, data_csum, data_parity);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);

@@ -434,16 +434,30 @@ int nova_data_csum_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	/* allocating blocks to store data block checksums */
-//	sbi->data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
-//				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
-	/* putting data checksums immediately after reserved blocks */
-	/* setting this sbi->data_csum_base to zero disables data checksum */
-//	sbi->data_csum_base = (sbi->reserved_blocks) << PAGE_SHIFT;
+	/* Allocate blocks to store data block checksums.
+	 * Always reserve in case user turns it off at init mount but later
+	 * turns it on. */
+	sbi->data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
+				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
 
-	/* Disable data checksum now as it conflicts with DAX-mmap */
-	sbi->data_csum_blocks = 0;
-	sbi->data_csum_base = 0;
+	if (data_csum) {
+		/* Put data checksums immediately after reserved blocks. */
+		sbi->data_csum_base = (sbi->reserved_blocks) << PAGE_SHIFT;
+		/* New data blocks will be checksummed.
+		 * Old data blocks will be checksummed on access. */
+		nova_dbg("Data checksum is enabled.\n");
+		if (data_parity) {
+			nova_dbg("Data parity is enabled.\n");
+		}
+	} else {
+		/* New data blocks will not be checksummed.
+		 * Preserve but ignore existing checksums. */
+		nova_dbg("Data checksum is disabled.\n");
+		if (data_parity) {
+			nova_dbg("Cannot enable data parity w/o data_csum.\n");
+			data_parity = 0;
+		}
+	}
 
 	return 0;
 }

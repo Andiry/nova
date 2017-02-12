@@ -143,6 +143,8 @@ extern int replica_inode;
 extern int replica_log;
 extern int inplace_data_updates;
 extern int wprotect;
+extern int data_csum;
+extern int data_parity;
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
@@ -1291,6 +1293,11 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 blocknr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *data_csum_addr;
+
+	if (!data_csum) {
+		nova_dbg("%s: Data checksum is disabled!\n", __func__);
+		return NULL;
+	}
 
 	if (sbi->data_csum_base) {
 		data_csum_addr = (u8 *) nova_get_block(sb, sbi->data_csum_base)
