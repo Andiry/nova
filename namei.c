@@ -80,7 +80,7 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
 	nova_memunlock_journal(sb);
-	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
+	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu, 1, 0);
 
 	nova_update_inode(sb, dir, pidir, update, 0);
 
@@ -320,7 +320,8 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
 	nova_memunlock_journal(sb);
-	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu);
+	journal_tail = nova_create_inode_transaction(sb, inode, dir, cpu,
+						0, invalidate);
 
 	if (invalidate) {
 		pi->valid = 0;
@@ -963,6 +964,7 @@ static int nova_rename(struct inode *old_dir,
 				new_inode,
 				old_dir != new_dir ? new_dir : NULL,
 				father_entry ? &father_entry->ino : NULL,
+				new_inode->i_nlink ? 0 : 1,
 				cpu);
 
 	nova_update_inode(sb, old_inode, old_pi, &update_old, 0);

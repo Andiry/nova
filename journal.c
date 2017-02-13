@@ -178,7 +178,7 @@ static int nova_recover_lite_journal(struct super_block *sb,
 
 /**************************** Create/commit ******************************/
 
-static u64 nova_append_inode_journal(struct super_block *sb,
+static u64 nova_append_replica_inode_journal(struct super_block *sb,
 	u64 curr_p, struct inode *inode)
 {
 	struct nova_lite_journal_entry *entry;
@@ -190,9 +190,7 @@ static u64 nova_append_inode_journal(struct super_block *sb,
 	entry->type = cpu_to_le64(JOURNAL_INODE);
 	entry->padding = 0;
 	entry->data1 = cpu_to_le64(sih->pi_addr);
-	/* FIXME */
-	if (replica_inode)
-		entry->data2 = cpu_to_le64(sih->alter_pi_addr);
+	entry->data2 = cpu_to_le64(sih->alter_pi_addr);
 	nova_update_entry_checksum(sb, entry);
 
 	curr_p = next_lite_journal(curr_p);
@@ -218,8 +216,53 @@ static u64 nova_append_entry_journal(struct super_block *sb,
 	return curr_p;
 }
 
+static u64 nova_journal_inode_tail(struct super_block *sb,
+	u64 curr_p, struct nova_inode *pi)
+{
+	curr_p = nova_append_entry_journal(sb, curr_p, &pi->log_tail);
+	if (replica_log)
+		curr_p = nova_append_entry_journal(sb, curr_p,
+						&pi->alter_log_tail);
+	return curr_p;
+}
+
+static u64 nova_append_inode_journal(struct super_block *sb,
+	u64 curr_p, struct inode *inode, int new_inode,
+	int invalidate, int is_dir)
+{
+	struct nova_inode *pi = nova_get_inode(sb, inode);
+
+	if (replica_inode)
+		return nova_append_replica_inode_journal(sb, curr_p, inode);
+
+	if (!pi) {
+		nova_err(sb, "%s: get inode failed\n", __func__);
+		return curr_p;
+	}
+
+	if (is_dir)
+      		return nova_journal_inode_tail(sb, curr_p, pi);
+
+	if (new_inode) {
+		/* Just journal valid field, align to pi start addr */
+		curr_p = nova_append_entry_journal(sb, curr_p,
+						(u64 *)pi);
+	} else {
+		curr_p = nova_journal_inode_tail(sb, curr_p, pi);
+		if (invalidate) {
+			curr_p = nova_append_entry_journal(sb, curr_p,
+						(u64 *)pi);
+			curr_p = nova_append_entry_journal(sb, curr_p,
+						&pi->delete_trans_id);
+		}
+	}
+
+	return curr_p;
+}
+
 u64 nova_create_inode_transaction(struct super_block *sb,
-	struct inode *inode, struct inode *dir, int cpu)
+	struct inode *inode, struct inode *dir, int cpu,
+	int new_inode, int invalidate)
 {
 	struct ptr_pair *pair;
 	u64 temp;
@@ -231,9 +274,11 @@ u64 nova_create_inode_transaction(struct super_block *sb,
 
 	temp = pair->journal_head;
 
-	temp = nova_append_inode_journal(sb, temp, inode);
+	temp = nova_append_inode_journal(sb, temp, inode,
+					new_inode, invalidate, 0);
 
-	temp = nova_append_inode_journal(sb, temp, dir);
+	temp = nova_append_inode_journal(sb, temp, dir,
+					new_inode, invalidate, 1);
 
 	pair->journal_tail = temp;
 	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
@@ -245,7 +290,8 @@ u64 nova_create_inode_transaction(struct super_block *sb,
 
 u64 nova_create_rename_transaction(struct super_block *sb,
 	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
-	struct inode *new_dir, u64 *father_ino, int cpu)
+	struct inode *new_dir, u64 *father_ino, int invalidate_new_inode, 
+	int cpu)
 {
 	struct ptr_pair *pair;
 	u64 temp;
@@ -257,15 +303,20 @@ u64 nova_create_rename_transaction(struct super_block *sb,
 
 	temp = pair->journal_head;
 
-	temp = nova_append_inode_journal(sb, temp, old_inode);
+	/* Journal tails for old inode */
+	temp = nova_append_inode_journal(sb, temp, old_inode, 0, 0, 0);
 
-	temp = nova_append_inode_journal(sb, temp, old_dir);
+	/* Journal tails for old dir */
+	temp = nova_append_inode_journal(sb, temp, old_dir, 0, 0, 1);
 
-	if (new_inode)
-		temp = nova_append_inode_journal(sb, temp, new_inode);
+	if (new_inode) {
+		/* New inode may be unlinked */
+		temp = nova_append_inode_journal(sb, temp, new_inode, 0,
+					invalidate_new_inode, 0);
+	}
 
 	if (new_dir)
-		temp = nova_append_inode_journal(sb, temp, new_dir);
+		temp = nova_append_inode_journal(sb, temp, new_dir, 0, 0, 1);
 
 	if (father_ino)
 		temp = nova_append_entry_journal(sb, temp, father_ino);

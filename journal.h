@@ -36,10 +36,12 @@ struct nova_lite_journal_entry {
 } __attribute((__packed__));
 
 u64 nova_create_inode_transaction(struct super_block *sb,
-	struct inode *inode, struct inode *dir, int cpu);
+	struct inode *inode, struct inode *dir, int cpu,
+	int new_inode, int invalidate);
 u64 nova_create_rename_transaction(struct super_block *sb,
 	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
-	struct inode *new_dir, u64 *father_ino, int cpu);
+	struct inode *new_dir, u64 *father_ino, int invalidate_new_inode,
+	int cpu);
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
 int nova_lite_journal_soft_init(struct super_block *sb);
 int nova_lite_journal_hard_init(struct super_block *sb);
