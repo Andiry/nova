@@ -440,6 +440,7 @@ static void nova_inplace_update_dentry(struct super_block *sb,
 	unsigned short links_count;
 
 	nova_memunlock_range(sb, dentry, dentry->de_len);
+
 	dentry->trans_id = trans_id;
 	/* Only used for remove_dentry */
 	dentry->ino = cpu_to_le64(0);

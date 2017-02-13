@@ -963,7 +963,7 @@ static int nova_rename(struct inode *old_dir,
 	journal_tail = nova_create_rename_transaction(sb, old_inode, old_dir,
 				new_inode,
 				old_dir != new_dir ? new_dir : NULL,
-				father_entry ? &father_entry->ino : NULL,
+				father_entry,
 				new_inode->i_nlink ? 0 : 1,
 				cpu);
 
