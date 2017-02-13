@@ -505,8 +505,8 @@ struct free_list {
  * The fifth block contains snapshot timestamps.
  * The sixth block contains snapshot infos upon umount.
  *
- * If data block checksum is enabled, a bunch of more blocks are reserverd for
- * checksums and the number is derived according to the whole storage size.
+ * If data protection is enabled, more blocks are reserverd for checksums and
+ * parities and the number is derived according to the whole storage size.
  */
 #define	RESERVED_BLOCKS		6
 
@@ -608,8 +608,6 @@ struct nova_sb_info {
 
 	/* Byte offset of the data block checksum storage start */
 	unsigned long data_csum_base;
-	/* Number of blocks reserved to store data block checksums */
-	unsigned long data_csum_blocks;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)

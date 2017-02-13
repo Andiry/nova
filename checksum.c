@@ -433,12 +433,14 @@ bool nova_verify_data_csum(struct inode *inode,
 int nova_data_csum_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	unsigned long data_csum_blocks;
 
 	/* Allocate blocks to store data block checksums.
 	 * Always reserve in case user turns it off at init mount but later
 	 * turns it on. */
-	sbi->data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
+	data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
 				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
+	nova_dbg("Reserve %lu blocks for data checksums.\n", data_csum_blocks);
 
 	if (data_csum) {
 		/* Put data checksums immediately after reserved blocks. */
@@ -458,6 +460,8 @@ int nova_data_csum_init(struct super_block *sb)
 			data_parity = 0;
 		}
 	}
+
+	sbi->reserved_blocks += data_csum_blocks;
 
 	return 0;
 }
