@@ -219,7 +219,7 @@ static u64 nova_append_entry_journal(struct super_block *sb,
 }
 
 u64 nova_create_inode_transaction(struct super_block *sb,
-	struct inode *inode1, struct inode *inode2, int cpu)
+	struct inode *inode, struct inode *dir, int cpu)
 {
 	struct ptr_pair *pair;
 	u64 temp;
@@ -231,9 +231,9 @@ u64 nova_create_inode_transaction(struct super_block *sb,
 
 	temp = pair->journal_head;
 
-	temp = nova_append_inode_journal(sb, temp, inode1);
+	temp = nova_append_inode_journal(sb, temp, inode);
 
-	temp = nova_append_inode_journal(sb, temp, inode2);
+	temp = nova_append_inode_journal(sb, temp, dir);
 
 	pair->journal_tail = temp;
 	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);

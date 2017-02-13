@@ -36,7 +36,7 @@ struct nova_lite_journal_entry {
 } __attribute((__packed__));
 
 u64 nova_create_inode_transaction(struct super_block *sb,
-	struct inode *inode1, struct inode *inode2, int cpu);
+	struct inode *inode, struct inode *dir, int cpu);
 u64 nova_create_rename_transaction(struct super_block *sb,
 	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
 	struct inode *new_dir, u64 *father_ino, int cpu);
