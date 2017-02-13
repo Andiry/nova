@@ -23,6 +23,7 @@
 #include <linux/time.h>
 #include <linux/rtc.h>
 #include <linux/mm.h>
+#include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/sched.h>
 #include <linux/crc16.h>
@@ -47,7 +48,6 @@
 #include <linux/pfn_t.h>
 
 #include "nova_def.h"
-#include "journal.h"
 #include "stats.h"
 #include "snapshot.h"
 
@@ -182,6 +182,18 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 {
 	*(u8 *)p = type;
 }
+
+#define	JOURNAL_INODE	1
+#define	JOURNAL_ENTRY	2
+
+/* Lite journal */
+struct nova_lite_journal_entry {
+	__le64 type;
+	__le64 data1;
+	__le64 data2;
+	__le32 padding;
+	__le32 csum;
+} __attribute((__packed__));
 
 struct nova_file_write_entry {
 	u8	entry_type;
@@ -1474,6 +1486,18 @@ extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 extern long nova_compat_ioctl(struct file *file, unsigned int cmd,
 	unsigned long arg);
 #endif
+
+/* journal.c */
+u64 nova_create_inode_transaction(struct super_block *sb,
+	struct inode *inode, struct inode *dir, int cpu,
+	int new_inode, int invalidate);
+u64 nova_create_rename_transaction(struct super_block *sb,
+	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
+	struct inode *new_dir, struct nova_dentry *father_entry,
+	int invalidate_new_inode, int cpu);
+void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
+int nova_lite_journal_soft_init(struct super_block *sb);
+int nova_lite_journal_hard_init(struct super_block *sb);
 
 /* namei.c */
 extern const struct inode_operations nova_dir_inode_operations;
