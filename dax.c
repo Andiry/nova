@@ -478,6 +478,17 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+		if ( (copied > 0) && (NOVA_SB(sb)->data_csum_base > 0) ) {
+			csummed = copied - nova_update_cow_csum(inode, blocknr,
+						(void *) buf, offset, copied);
+			if (unlikely(csummed != copied)) {
+				nova_dbg("%s: not all data bytes are "
+					"checksummed! copied %zu, "
+					"csummed %zu\n", __func__,
+					copied, csummed);
+			}
+		}
+
 		if (pos + copied > inode->i_size)
 			entry_size = cpu_to_le64(pos + copied);
 		else
@@ -493,17 +504,6 @@ static ssize_t nova_cow_file_write(struct file *filp,
 			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
 			goto out;
-		}
-
-		if ( (copied > 0) && (NOVA_SB(sb)->data_csum_base > 0) ) {
-			csummed = copied - nova_update_cow_csum(inode, blocknr,
-						(void *) buf, offset, copied);
-			if (unlikely(csummed != copied)) {
-				nova_dbg("%s: not all data bytes are "
-					"checksummed! copied %zu, "
-					"csummed %zu\n", __func__,
-					copied, csummed);
-			}
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
