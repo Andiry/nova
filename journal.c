@@ -51,6 +51,7 @@ static inline int nova_update_journal_entry_csum(struct super_block *sb,
 			(sizeof(struct nova_lite_journal_entry) - sizeof(__le32)));
 
 	entry->csum = cpu_to_le32(crc);
+	nova_flush_buffer(entry, sizeof(struct nova_lite_journal_entry), 0);
 	return 0;
 }
 
@@ -331,6 +332,53 @@ u64 nova_create_rename_transaction(struct super_block *sb,
 
 	if (father_entry)
 		temp = nova_append_dentry_journal(sb, temp, father_entry);
+
+	pair->journal_tail = temp;
+	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
+
+	nova_dbgv("%s: head 0x%llx, tail 0x%llx\n",
+			__func__, pair->journal_head, pair->journal_tail);
+	return temp;
+}
+
+/* For log entry inplace update */
+u64 nova_create_logentry_transaction(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int cpu)
+{
+	struct ptr_pair *pair;
+	size_t size = 0;
+	int i, count;
+	u64 temp;
+
+	pair = nova_get_journal_pointers(sb, cpu);
+	if (!pair || pair->journal_head == 0 ||
+			pair->journal_head != pair->journal_tail)
+		BUG();
+
+	switch (type) {
+		case FILE_WRITE:
+			size = sizeof(struct nova_file_write_entry);
+			break;
+		case DIR_LOG:
+			size = NOVA_DENTRY_HEADER_LEN;
+			break;
+		case SET_ATTR:
+			size = sizeof(struct nova_setattr_logentry);
+			break;
+		case LINK_CHANGE:
+			size = sizeof(struct nova_link_change_entry);
+			break;
+		default:
+			break;
+	}
+
+	temp = pair->journal_head;
+
+	count = size / 8;
+	for (i = 0; i < count; i++) {
+		temp = nova_append_entry_journal(sb, temp,
+						(char *)entry + i * 8);
+	}
 
 	pair->journal_tail = temp;
 	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
