@@ -42,7 +42,7 @@ static inline void nova_print_lite_transaction(struct nova_lite_journal_entry *e
 			entry->data1, entry->data2, entry->csum);
 }
 
-static inline int nova_update_entry_checksum(struct super_block *sb,
+static inline int nova_update_journal_entry_csum(struct super_block *sb,
 	struct nova_lite_journal_entry *entry)
 {
 	u32 crc = 0;
@@ -191,7 +191,7 @@ static u64 nova_append_replica_inode_journal(struct super_block *sb,
 	entry->padding = 0;
 	entry->data1 = cpu_to_le64(sih->pi_addr);
 	entry->data2 = cpu_to_le64(sih->alter_pi_addr);
-	nova_update_entry_checksum(sb, entry);
+	nova_update_journal_entry_csum(sb, entry);
 
 	curr_p = next_lite_journal(curr_p);
 	return curr_p;
@@ -210,7 +210,7 @@ static u64 nova_append_entry_journal(struct super_block *sb,
 	entry->padding = 0;
 	entry->data1 = cpu_to_le64(addr);
 	entry->data2 = cpu_to_le64(*field);
-	nova_update_entry_checksum(sb, entry);
+	nova_update_journal_entry_csum(sb, entry);
 
 	curr_p = next_lite_journal(curr_p);
 	return curr_p;
