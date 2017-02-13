@@ -636,6 +636,19 @@ out:
 	return ent_blks;
 }
 
+static void nova_inplace_update_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
+	u64 entry_size)
+{
+	nova_memunlock_range(sb, entry, sizeof(*entry));
+	entry->trans_id = cpu_to_le64(trans_id);
+	entry->mtime = cpu_to_le32(time);
+	entry->size = cpu_to_le64(entry_size);
+	nova_update_entry_csum(entry);
+	nova_update_alter_entry(sb, entry);
+	nova_memlock_range(sb, entry, sizeof(*entry));
+}
+
 ssize_t nova_inplace_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -781,13 +794,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			}
 		} else {
 			/* Update existing entry */
-			nova_memunlock_range(sb, entry, sizeof(*entry));
-			entry->trans_id = trans_id;
-			entry->mtime = cpu_to_le32(time);
-			entry->size = entry_size;
-			nova_update_entry_csum(entry);
-			nova_update_alter_entry(sb, entry);
-			nova_memlock_range(sb, entry, sizeof(*entry));
+			nova_inplace_update_write_entry(sb, entry, trans_id,
+					       time, entry_size);
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
