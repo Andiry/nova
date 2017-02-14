@@ -388,8 +388,8 @@ u64 nova_create_logentry_transaction(struct super_block *sb,
 	return temp;
 }
 
-u64 nova_create_invalidate_transaction(struct super_block *sb,
-	void *entry, enum nova_entry_type type, int cpu)
+u64 nova_create_invalidate_reassign_transaction(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int reassign, int cpu)
 {
 	struct ptr_pair *pair;
 	u64 temp;
@@ -403,14 +403,22 @@ u64 nova_create_invalidate_transaction(struct super_block *sb,
 
 	switch (type) {
 		case FILE_WRITE:
-			temp = nova_append_entry_journal(sb, temp,
-				&((struct nova_file_write_entry *)entry)->invalid_pages);
+			if (reassign)
+				temp = nova_append_entry_journal(sb, temp,
+					&((struct nova_file_write_entry *)entry)->reassigned);
+			else
+				temp = nova_append_entry_journal(sb, temp,
+					&((struct nova_file_write_entry *)entry)->invalid_pages);
 			temp = nova_append_entry_journal(sb, temp,
 				&((struct nova_file_write_entry *)entry)->csum);
 			break;
 		case DIR_LOG:
-			temp = nova_append_entry_journal(sb, temp,
-				&((struct nova_dentry *)entry)->invalid);
+			if (reassign)
+				temp = nova_append_entry_journal(sb, temp,
+					&((struct nova_dentry *)entry)->reassigned);
+			else
+				temp = nova_append_entry_journal(sb, temp,
+					&((struct nova_dentry *)entry)->invalid);
 			temp = nova_append_entry_journal(sb, temp,
 				&((struct nova_dentry *)entry)->csum);
 			break;

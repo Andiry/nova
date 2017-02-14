@@ -358,16 +358,23 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr)
 	return ret;
 }
 
-static int nova_execute_invalidate_logentry(struct super_block *sb, void *entry,
-	enum nova_entry_type type, unsigned int num_free)
+static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int reassign,
+	unsigned int num_free)
 {
 	switch (type) {
 		case FILE_WRITE:
-			((struct nova_file_write_entry *)entry)->invalid_pages
+			if (reassign)
+				((struct nova_file_write_entry *)entry)->reassigned = 1;
+			else
+				((struct nova_file_write_entry *)entry)->invalid_pages
 							+= num_free;
 			break;
 		case DIR_LOG:
-			((struct nova_dentry *)entry)->invalid = 1;
+			if (reassign)
+				((struct nova_dentry *)entry)->reassigned = 1;
+			else
+				((struct nova_dentry *)entry)->invalid = 1;
 			break;
 		case SET_ATTR:
 			((struct nova_setattr_logentry *)entry)->invalid = 1;
@@ -383,8 +390,9 @@ static int nova_execute_invalidate_logentry(struct super_block *sb, void *entry,
 	return 0;
 }
 
-int nova_invalidate_logentry(struct super_block *sb, void *entry,
-	enum nova_entry_type type, unsigned int num_free)
+static int nova_invalidate_reassign_logentry(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int reassign,
+	unsigned int num_free)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	int cpu;
@@ -393,7 +401,8 @@ int nova_invalidate_logentry(struct super_block *sb, void *entry,
 	if (replica_log) {
 		nova_memunlock_range(sb, entry, CACHELINE_SIZE);
 
-		nova_execute_invalidate_logentry(sb, entry, type, num_free);
+		nova_execute_invalidate_reassign_logentry(sb, entry, type,
+						reassign, num_free);
 		nova_update_alter_entry(sb, entry);
 		nova_memlock_range(sb, entry, CACHELINE_SIZE);
 		return 0;
@@ -402,9 +411,10 @@ int nova_invalidate_logentry(struct super_block *sb, void *entry,
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
 	nova_memunlock_journal(sb);
-	journal_tail = nova_create_invalidate_transaction(sb, entry,
-						type, cpu);
-	nova_execute_invalidate_logentry(sb, entry, type, num_free);
+	journal_tail = nova_create_invalidate_reassign_transaction(sb, entry,
+						type, reassign, cpu);
+	nova_execute_invalidate_reassign_logentry(sb, entry, type, reassign,
+						num_free);
 
 	PERSISTENT_BARRIER();
 
@@ -413,6 +423,18 @@ int nova_invalidate_logentry(struct super_block *sb, void *entry,
 	spin_unlock(&sbi->journal_locks[cpu]);
 
 	return 0;
+}
+
+int nova_invalidate_logentry(struct super_block *sb, void *entry,
+	enum nova_entry_type type, unsigned int num_free)
+{
+	return nova_invalidate_reassign_logentry(sb, entry, type, 0, num_free);
+}
+
+int nova_reassign_logentry(struct super_block *sb, void *entry,
+	enum nova_entry_type type)
+{
+	return nova_invalidate_reassign_logentry(sb, entry, type, 1, 0);
 }
 
 static int nova_invalidate_file_write_entry(struct super_block *sb,
