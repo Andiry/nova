@@ -423,17 +423,35 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 	struct nova_link_change_entry *entry = NULL;
 	u64 last_log = 0;
 	size_t size = sizeof(struct nova_link_change_entry);
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int cpu;
+	u64 journal_tail;
 
 	last_log = sih->last_link_change;
 	entry = (struct nova_link_change_entry *)nova_get_block(sb,
 							last_log);
-	nova_memunlock_range(sb, entry, size);
+
+	if (replica_log) {
+		nova_memunlock_range(sb, entry, size);
+		nova_update_link_change_entry(inode, entry, trans_id);
+		// Also update the alter inode log entry.
+		nova_update_alter_entry(sb, entry);
+		nova_memlock_range(sb, entry, size);
+		return 0;
+	}
+
+	cpu = smp_processor_id();
+	spin_lock(&sbi->journal_locks[cpu]);
+	nova_memunlock_journal(sb);
+	journal_tail = nova_create_logentry_transaction(sb, entry,
+						LINK_CHANGE, cpu);
 	nova_update_link_change_entry(inode, entry, trans_id);
 
-	// Also update the alter inode log entry.
-	nova_update_alter_entry(sb, entry);
-	nova_memlock_range(sb, entry, size);
+	PERSISTENT_BARRIER();
 
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
+	nova_memlock_journal(sb);
+	spin_unlock(&sbi->journal_locks[cpu]);
 	return 0;
 }
 

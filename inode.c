@@ -1723,21 +1723,39 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 	struct iattr *attr, u64 trans_id)
 {
 	struct nova_setattr_logentry *entry = NULL;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	size_t size = sizeof(struct nova_setattr_logentry);
 	u64 last_log = 0;
+	int cpu;
+	u64 journal_tail;
 
 	nova_dbgv("%s : Modifying last log entry for inode %lu\n",
 				__func__, inode->i_ino);
 	last_log = sih->last_setattr;
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb,
 							last_log);
-	nova_memunlock_range(sb, entry, size);
+
+	if (replica_log) {
+		nova_memunlock_range(sb, entry, size);
+		nova_update_setattr_entry(inode, entry, attr, trans_id);
+		// Also update the alter inode log entry.
+		nova_update_alter_entry(sb, entry);
+		nova_memlock_range(sb, entry, size);
+		return 0;
+	}
+
+	cpu = smp_processor_id();
+	spin_lock(&sbi->journal_locks[cpu]);
+	nova_memunlock_journal(sb);
+	journal_tail = nova_create_logentry_transaction(sb, entry,
+						SET_ATTR, cpu);
 	nova_update_setattr_entry(inode, entry, attr, trans_id);
 
-	// Also update the alter inode log entry.
-	nova_update_alter_entry(sb, entry);
-	nova_memlock_range(sb, entry, size);
+	PERSISTENT_BARRIER();
 
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
+	nova_memlock_journal(sb);
+	spin_unlock(&sbi->journal_locks[cpu]);
 	return 0;
 }
 
