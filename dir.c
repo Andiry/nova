@@ -462,11 +462,31 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
 	u64 trans_id)
 {
-	nova_memunlock_range(sb, dentry, dentry->de_len);
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int cpu;
+	u64 journal_tail;
 
+	if (replica_log) {
+		nova_memunlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
+
+		nova_update_dentry(sb, dir, dentry, link_change, trans_id);
+		nova_update_alter_entry(sb, dentry);
+		nova_memlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
+		return 0;
+	}
+
+	cpu = smp_processor_id();
+	spin_lock(&sbi->journal_locks[cpu]);
+	nova_memunlock_journal(sb);
+	journal_tail = nova_create_logentry_transaction(sb, dentry,
+						DIR_LOG, cpu);
 	nova_update_dentry(sb, dir, dentry, link_change, trans_id);
-	nova_update_alter_entry(sb, dentry);
-	nova_memlock_range(sb, dentry, dentry->de_len);
+
+	PERSISTENT_BARRIER();
+
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
+	nova_memlock_journal(sb);
+	spin_unlock(&sbi->journal_locks[cpu]);
 
 	return 0;
 }
