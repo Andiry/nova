@@ -1385,6 +1385,9 @@ int nova_reassign_file_tree(struct super_block *sb,
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
 	struct nova_file_write_entry **ret_entry, int check_next, int *inplace);
+int nova_inplace_update_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
+	u64 entry_size);
 ssize_t nova_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
 ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,

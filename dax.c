@@ -647,7 +647,7 @@ static int nova_update_write_entry(struct super_block *sb,
 	return 0;
 }
 
-static int nova_inplace_update_write_entry(struct super_block *sb,
+int nova_inplace_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
 	u64 entry_size)
 {

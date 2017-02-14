@@ -383,9 +383,11 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 
 		if (entry && inplace) {
 			if (entry->size < new_size) {
-				entry->size = new_size;
-				nova_update_entry_csum(entry);
-				nova_update_alter_entry(sb, entry);
+				/* Update existing entry */
+				nova_inplace_update_write_entry(sb, entry,
+						entry->trans_id,
+						entry->mtime,
+						new_size);
 			}
 			allocated = ent_blks;
 			goto next;
