@@ -1367,15 +1367,19 @@ int nova_recovery(struct super_block *sb);
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
-		void *wrbuf, size_t offset, size_t bytes);
+	void *wrbuf, size_t offset, size_t bytes);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
 int nova_check_alter_entry(struct super_block *sb, u64 curr);
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 	u64 pi_addr, u64 alter_pi_addr);
 bool nova_verify_data_csum(struct inode *inode,
-		struct nova_file_write_entry *entry, pgoff_t index,
-		size_t offset, size_t bytes);
+	struct nova_file_write_entry *entry, pgoff_t index,
+	size_t offset, size_t bytes);
 int nova_data_csum_init(struct super_block *sb);
+int nova_copy_partial_block_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long index, size_t offset, unsigned long dst_blknr,
+	bool is_end_blk);
 
 /*
  * Inodes and files operations

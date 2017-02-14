@@ -179,44 +179,20 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 static inline int nova_copy_partial_block(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry, unsigned long index,
-	size_t offset, void* kmem, unsigned long blocknr, bool is_end_blk)
+	size_t offset, void* kmem, bool is_end_blk)
 {
 	void *ptr;
 	unsigned long nvmm;
-	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	unsigned int num_strps;
-	size_t src_blk_off, dst_blk_off;
-	void *src_csum_addr, *dst_csum_addr;
 
 	nvmm = get_nvmm(sb, sih, entry, index);
 	ptr = nova_get_block(sb, (nvmm << PAGE_SHIFT));
-	src_blk_off = nova_get_block_off(sb, nvmm, sih->i_blk_type);
-	dst_blk_off = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 
 	if (ptr != NULL) {
-		if (is_end_blk) {
+		if (is_end_blk)
 			memcpy(kmem + offset, ptr + offset,
 				sb->s_blocksize - offset);
-
-			src_csum_addr = nova_get_data_csum_addr(sb,
-				((src_blk_off + offset - 1) >> strp_shift) + 1);
-			dst_csum_addr = nova_get_data_csum_addr(sb,
-				((dst_blk_off + offset - 1) >> strp_shift) + 1);
-			num_strps = (sb->s_blocksize - offset) >> strp_shift;
-		}
-		else {
+		else
 			memcpy(kmem, ptr, offset);
-
-			src_csum_addr = nova_get_data_csum_addr(sb,
-				src_blk_off >> strp_shift);
-			dst_csum_addr = nova_get_data_csum_addr(sb,
-				dst_blk_off >> strp_shift);
-			num_strps = offset >> strp_shift;
-		}
-		if (num_strps > 0) {
-			memcpy(dst_csum_addr, src_csum_addr,
-				num_strps * NOVA_DATA_CSUM_LEN);
-		}
 	}
 
 	return 0;
@@ -228,11 +204,11 @@ static inline int nova_copy_partial_block(struct super_block *sb,
  * Fill zero otherwise.
  *
  * Also copy unchanged checksums to new places.
- * blocknr: the physical block # of kmem.
+ * kmem_blknr: the physical block # of kmem (start addr of new cow blocks)
  */
 static void nova_handle_head_tail_blocks(struct super_block *sb,
 	struct inode *inode, loff_t pos, size_t count, void *kmem,
-	unsigned long blocknr)
+	unsigned long kmem_blknr)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -263,7 +239,11 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		} else {
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
-					offset, kmem, blocknr, false);
+					offset, kmem, false);
+			if (data_csum) {
+				nova_copy_partial_block_csum(sb, sih, entry,
+					start_blk, offset, kmem_blknr, false);
+			}
 		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem, offset, 0);
@@ -283,9 +263,13 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 					sb->s_blocksize - eblk_offset);
 		} else {
 			/* Copy from original block */
-			blocknr += num_blocks - 1;
 			nova_copy_partial_block(sb, sih, entry, end_blk,
-					eblk_offset, kmem, blocknr, true);
+					eblk_offset, kmem, true);
+			if (data_csum) {
+				kmem_blknr += num_blocks - 1;
+				nova_copy_partial_block_csum(sb, sih, entry,
+					end_blk, eblk_offset, kmem_blknr, true);
+			}
 		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem + eblk_offset,

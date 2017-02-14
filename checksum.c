@@ -718,3 +718,49 @@ int nova_data_csum_init(struct super_block *sb)
 
 	return 0;
 }
+
+int nova_copy_partial_block_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long index, size_t offset, unsigned long dst_blknr,
+	bool is_end_blk)
+{
+	unsigned long src_blknr;
+	unsigned int csum_size = NOVA_DATA_CSUM_LEN;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned int num_strps;
+	size_t src_blk_off, dst_blk_off;
+	void *src_csum_addr, *dst_csum_addr;
+
+	src_blknr = get_nvmm(sb, sih, entry, index);
+	src_blk_off = nova_get_block_off(sb, src_blknr, sih->i_blk_type);
+	dst_blk_off = nova_get_block_off(sb, dst_blknr, sih->i_blk_type);
+
+	if (is_end_blk) {
+		src_csum_addr = nova_get_data_csum_addr(sb,
+			((src_blk_off + offset - 1) >> strp_shift) + 1);
+		dst_csum_addr = nova_get_data_csum_addr(sb,
+			((dst_blk_off + offset - 1) >> strp_shift) + 1);
+		num_strps = (sb->s_blocksize - offset) >> strp_shift;
+	}
+	else {
+		src_csum_addr = nova_get_data_csum_addr(sb,
+			src_blk_off >> strp_shift);
+		dst_csum_addr = nova_get_data_csum_addr(sb,
+			dst_blk_off >> strp_shift);
+		num_strps = offset >> strp_shift;
+	}
+
+	/* Should unlock wprotect, if it's not already unlocked by caller. */
+	if (num_strps > 0) {
+		if ((src_csum_addr == NULL) || (dst_csum_addr == NULL)) {
+			nova_err(sb, "%s: invalid checksum addresses "
+			"src_csum_addr 0x%p, dst_csum_addr 0x%p\n", __func__);
+
+			return -1;
+		}
+
+		memcpy(dst_csum_addr, src_csum_addr, num_strps * csum_size);
+	}
+
+	return 0;
+}
