@@ -388,6 +388,56 @@ u64 nova_create_logentry_transaction(struct super_block *sb,
 	return temp;
 }
 
+u64 nova_create_invalidate_transaction(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int cpu)
+{
+	struct ptr_pair *pair;
+	u64 temp;
+
+	pair = nova_get_journal_pointers(sb, cpu);
+	if (!pair || pair->journal_head == 0 ||
+			pair->journal_head != pair->journal_tail)
+		BUG();
+
+	temp = pair->journal_head;
+
+	switch (type) {
+		case FILE_WRITE:
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_file_write_entry *)entry)->invalid_pages);
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_file_write_entry *)entry)->csum);
+			break;
+		case DIR_LOG:
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_dentry *)entry)->invalid);
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_dentry *)entry)->csum);
+			break;
+		case SET_ATTR:
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_setattr_logentry *)entry)->invalid);
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_setattr_logentry *)entry)->csum);
+			break;
+		case LINK_CHANGE:
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_link_change_entry *)entry)->invalid);
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_link_change_entry *)entry)->csum);
+			break;
+		default:
+			break;
+	}
+
+	pair->journal_tail = temp;
+	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
+
+	nova_dbgv("%s: head 0x%llx, tail 0x%llx\n",
+			__func__, pair->journal_head, pair->journal_tail);
+	return temp;
+}
+
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu)
 {
 	struct ptr_pair *pair;

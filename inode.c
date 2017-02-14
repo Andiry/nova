@@ -358,6 +358,63 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr)
 	return ret;
 }
 
+int nova_execute_invalidate_logentry(struct super_block *sb, void *entry,
+	enum nova_entry_type type, unsigned int num_free)
+{
+	switch (type) {
+		case FILE_WRITE:
+			((struct nova_file_write_entry *)entry)->invalid_pages
+							+= num_free;
+			break;
+		case DIR_LOG:
+			((struct nova_dentry *)entry)->invalid = 1;
+			break;
+		case SET_ATTR:
+			((struct nova_setattr_logentry *)entry)->invalid = 1;
+			break;
+		case LINK_CHANGE:
+			((struct nova_link_change_entry *)entry)->invalid = 1;
+			break;
+		default:
+			break;
+	}
+
+	nova_update_entry_csum(entry);
+	return 0;
+}
+
+int nova_invalidate_logentry(struct super_block *sb, void *entry,
+	enum nova_entry_type type, unsigned int num_free)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int cpu;
+	u64 journal_tail;
+
+	if (replica_log) {
+		nova_memunlock_range(sb, entry, CACHELINE_SIZE);
+
+		nova_execute_invalidate_logentry(sb, entry, type, num_free);
+		nova_update_alter_entry(sb, entry);
+		nova_memlock_range(sb, entry, CACHELINE_SIZE);
+		return 0;
+	}
+
+	cpu = smp_processor_id();
+	spin_lock(&sbi->journal_locks[cpu]);
+	nova_memunlock_journal(sb);
+	journal_tail = nova_create_invalidate_transaction(sb, entry,
+						type, cpu);
+	nova_execute_invalidate_logentry(sb, entry, type, num_free);
+
+	PERSISTENT_BARRIER();
+
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
+	nova_memlock_journal(sb);
+	spin_unlock(&sbi->journal_locks[cpu]);
+
+	return 0;
+}
+
 static int nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
