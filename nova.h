@@ -356,6 +356,13 @@ static inline int nova_update_inode_checksum(struct nova_inode *pi)
 {
 	u32 crc = 0;
 
+	/*
+	 * If replica inode is disabled, we cannot atomically update
+	 * inode field and checksum.
+	 */
+	if (replica_inode == 0)
+		return 0;
+
 	crc = crc32c(~0, (__u8 *)pi,
 			(sizeof(struct nova_inode) - sizeof(__le32)));
 

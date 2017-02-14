@@ -979,38 +979,41 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 			goto out;
 	}
 
-	if (replica_inode) {
-		alter_pi_good = 1;
-		ret = nova_get_reference(sb, alter_pi_addr, &alter_fake_pi,
+	if (replica_inode == 0) {
+		/* We cannot do much */
+		return ret;
+	}
+
+	alter_pi_good = 1;
+	ret = nova_get_reference(sb, alter_pi_addr, &alter_fake_pi,
 				(void **)&alter_pi, sizeof(struct nova_inode));
-		if (ret) {
-			nova_dbg("%s: read alter pi @ 0x%llx failed\n",
+	if (ret) {
+		nova_dbg("%s: read alter pi @ 0x%llx failed\n",
 					__func__, alter_pi_addr);
-			alter_pi_good = 0;
-		}
+		alter_pi_good = 0;
+	}
 
-		if (pi_good == 0 && alter_pi_good == 0)
-			goto out;
+	if (pi_good == 0 && alter_pi_good == 0)
+		goto out;
 
-		if (pi_good == 0) {
-			nova_memunlock_inode(sb, pi);
-			memcpy_to_pmem_nocache(pi, alter_pi,
-						sizeof(struct nova_inode));
-			nova_memlock_inode(sb, pi);
-		} else if (alter_pi_good == 0) {
-			nova_memunlock_inode(sb, alter_pi);
-			memcpy_to_pmem_nocache(alter_pi, pi,
-						sizeof(struct nova_inode));
-			nova_memlock_inode(sb, alter_pi);
-		}
+	if (pi_good == 0) {
+		nova_memunlock_inode(sb, pi);
+		memcpy_to_pmem_nocache(pi, alter_pi,
+					sizeof(struct nova_inode));
+		nova_memlock_inode(sb, pi);
+	} else if (alter_pi_good == 0) {
+		nova_memunlock_inode(sb, alter_pi);
+		memcpy_to_pmem_nocache(alter_pi, pi,
+					sizeof(struct nova_inode));
+		nova_memlock_inode(sb, alter_pi);
+	}
 
-		if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
-			nova_err(sb, "%s: inode %llu shadow mismatch\n",
-							__func__, ino);
-			nova_print_inode(pi);
-			nova_print_inode(alter_pi);
-			diff = 1;
-		}
+	if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
+		nova_err(sb, "%s: inode %llu shadow mismatch\n",
+						__func__, ino);
+		nova_print_inode(pi);
+		nova_print_inode(alter_pi);
+		diff = 1;
 	}
 
 	ret = nova_check_inode_checksum(&fake_pi);
@@ -1026,7 +1029,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 		return ret;
 	}
 
-	if (replica_inode == 0 || alter_pi_good == 0)
+	if (alter_pi_good == 0)
 		goto out;
 
 	ret = nova_check_inode_checksum(&alter_fake_pi);
