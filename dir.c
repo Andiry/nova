@@ -433,13 +433,11 @@ static int nova_can_inplace_update_dentry(struct super_block *sb,
 	return 0;
 }
 
-static void nova_inplace_update_dentry(struct super_block *sb,
+static int nova_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
 	u64 trans_id)
 {
 	unsigned short links_count;
-
-	nova_memunlock_range(sb, dentry, dentry->de_len);
 
 	dentry->trans_id = trans_id;
 	/* Only used for remove_dentry */
@@ -456,14 +454,21 @@ static void nova_inplace_update_dentry(struct super_block *sb,
 
 	/* Update checksum */
 	nova_update_entry_csum(dentry);
+
+	return 0;
+}
+
+static int nova_inplace_update_dentry(struct super_block *sb,
+	struct inode *dir, struct nova_dentry *dentry, int link_change,
+	u64 trans_id)
+{
+	nova_memunlock_range(sb, dentry, dentry->de_len);
+
+	nova_update_dentry(sb, dir, dentry, link_change, trans_id);
 	nova_update_alter_entry(sb, dentry);
 	nova_memlock_range(sb, dentry, dentry->de_len);
 
-	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
-			"name len %u, reassigned %u, csum 0x%x\n",
-			dentry->ino, dentry->de_len,
-			dentry->name_len, dentry->reassigned, dentry->csum);
-
+	return 0;
 }
 
 /* removes a directory entry pointing to the inode. assumes the inode has
