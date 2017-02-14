@@ -1077,10 +1077,11 @@ static inline void nova_update_inode(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 
-	nova_update_tail(pi, update->tail);
-	nova_update_alter_tail(pi, update->alter_tail);
 	sih->log_tail = update->tail;
 	sih->alter_log_tail = update->alter_tail;
+	nova_update_tail(pi, update->tail);
+	if (replica_log)
+		nova_update_alter_tail(pi, update->alter_tail);
 
 	nova_update_inode_checksum(pi);
 	if (inode && update_alter)

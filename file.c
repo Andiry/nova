@@ -446,12 +446,14 @@ next:
 	inode->i_blocks = sih->i_blocks;
 
 	if (update_log) {
-		nova_memunlock_inode(sb, pi);
-		nova_update_tail(pi, update.tail);
-		nova_update_alter_tail(pi, update.alter_tail);
-		nova_memlock_inode(sb, pi);
 		sih->log_tail = update.tail;
 		sih->alter_log_tail = update.alter_tail;
+
+		nova_memunlock_inode(sb, pi);
+		nova_update_tail(pi, update.tail);
+		if (replica_log)
+			nova_update_alter_tail(pi, update.alter_tail);
+		nova_memlock_inode(sb, pi);
 
 		/* Update file tree */
 		ret = nova_reassign_file_tree(sb, sih, begin_tail);
