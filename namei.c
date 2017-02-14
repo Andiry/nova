@@ -840,6 +840,7 @@ static int nova_rename(struct inode *old_dir,
 	struct nova_inode *new_pidir = NULL, *old_pidir = NULL;
 	struct nova_dentry *father_entry = NULL;
 	char *head_addr = NULL;
+	int invalidate_new_inode = 0;
 	struct nova_inode_update update_dir_new;
 	struct nova_inode_update update_dir_old;
 	struct nova_inode_update update_new;
@@ -978,11 +979,13 @@ static int nova_rename(struct inode *old_dir,
 	cpu = smp_processor_id();
 	spin_lock(&sbi->journal_locks[cpu]);
 	nova_memunlock_journal(sb);
+	if (new_inode && new_inode->i_nlink == 0)
+		invalidate_new_inode = 1;
 	journal_tail = nova_create_rename_transaction(sb, old_inode, old_dir,
 				new_inode,
 				old_dir != new_dir ? new_dir : NULL,
 				father_entry,
-				new_inode->i_nlink ? 0 : 1,
+				invalidate_new_inode,
 				cpu);
 
 	nova_update_inode(sb, old_inode, old_pi, &update_old, 0);
@@ -999,7 +1002,7 @@ static int nova_rename(struct inode *old_dir,
 	}
 
 	if (new_inode) {
-		if (!new_inode->i_nlink) {
+		if (invalidate_new_inode) {
 			new_pi->valid = 0;
 			new_pi->delete_trans_id = trans_id;
 		}
