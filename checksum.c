@@ -285,23 +285,24 @@ u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
 
 /* Update copy-on-write data checksums.
  *
- * This function works on a sequence of contiguous data blocks that are just
+ * This function works on a sequence of contiguous data stripes that are just
  * created and the write buffer 'wrbuf' that causes this write transaction. The
- * data of 'wrbuf', and possible partial head and tail blocks are already copied
- * to NVMM data blocks.
+ * data of 'wrbuf', and possible partial head and tail stripes are already
+ * copied to NVMM data blocks.
  *
  * Logically the write buffer is in DRAM and it's checksummed before written to
  * NVMM, but if necessary 'wrbuf' can point to NVMM as well. Partial head and
- * and tail blocks are read from NVMM.
+ * and tail stripes are read from NVMM.
+ * TODO: This partial read should be protected from MCEs.
  *
- * Checksum is calculated over a whole block.
+ * Checksum is calculated over a whole stripe.
  *
  * blocknr: the physical block# of the first data block
  * wrbuf:   write buffer used to create the data blocks
  * offset:  byte offset of 'wrbuf' relative to the start the first block
  * bytes:   #bytes of 'wrbuf' written to the data blocks
  *
- * return: #bytes NOT checksummed (0 means a good exit)
+ * return:  #bytes NOT checksummed (0 means a good exit)
  *
  * */
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
@@ -310,63 +311,79 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info        *si  = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	void *blockptr, *bufptr, *csum_addr;
-	size_t blocksize = nova_inode_blk_size(sih);
+	void *blockptr, *strp_ptr, *bufptr, *csum_addr;
+	size_t blockoff;
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned int strp_index, strp_offset;
+	unsigned long strp_nr;
 	u32 csum;
 	size_t csummed = 0;
 
 	bufptr   = wrbuf;
-	blockptr = nova_get_block(sb,
-			nova_get_block_off(sb, blocknr,	sih->i_blk_type));
+	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
+	blockptr = nova_get_block(sb, blockoff);
+
+	/* strp_nr: global stripe number converted from blocknr and offset
+	 * strp_ptr: virtual address of the 1st stripe
+	 * strp_index: stripe index within a block
+	 * strp_offset: byte offset within the 1st stripe */
+	strp_nr = (blockoff + offset) >> strp_shift;
+	strp_index = offset >> strp_shift;
+	strp_ptr = blockptr + (strp_index << strp_shift);
+	strp_offset = offset - (strp_index << strp_shift);
 
 	/* in case file write entry is given instead of blocknr:
 	 * blocknr  = get_nvmm(sb, sih, entry, entry->pgoff);
 	 * blockptr = nova_get_block(sb, entry->block);
 	 */
 
-	if (offset) { // partial head block
-		csum = nova_calc_data_csum(NOVA_INIT_CSUM, blockptr, offset);
-		csummed = (blocksize - offset) < bytes ?
-				blocksize - offset : bytes;
+	if (strp_offset) { // partial head stripe
+		csum = nova_calc_data_csum(NOVA_INIT_CSUM,
+					strp_ptr, strp_offset);
+		csummed = (strp_size - strp_offset) < bytes ?
+				strp_size - strp_offset : bytes;
 		csum = nova_calc_data_csum(csum, bufptr, csummed);
 
-		if (offset + csummed < blocksize)
+		if (strp_offset + csummed < strp_size)
+			/* Now bytes are less than a stripe size.
+			 * Need to checksum the stripe's unchanged bytes. */
 			csum = nova_calc_data_csum(csum,
-						blockptr + offset + csummed,
-						blocksize - offset - csummed);
+					strp_ptr + strp_offset + csummed,
+					strp_size - strp_offset - csummed);
 
 		csum      = cpu_to_le32(csum);
-		csum_addr = nova_get_data_csum_addr(sb, blocknr);
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
 
-		blocknr  += 1;
+		strp_nr  += 1;
 		bufptr   += csummed;
-		blockptr += blocksize;
+		strp_ptr += strp_size;
 	}
 
 	if (csummed < bytes) {
-		while (csummed + blocksize < bytes) {
+		while (csummed + strp_size < bytes) {
 			csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
-						bufptr, blocksize));
-			csum_addr = nova_get_data_csum_addr(sb, blocknr);
+						bufptr, strp_size));
+			csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
 						NOVA_DATA_CSUM_LEN);
 
-			blocknr  += 1;
-			bufptr   += blocksize;
-			blockptr += blocksize;
-			csummed  += blocksize;
+			strp_nr  += 1;
+			bufptr   += strp_size;
+			strp_ptr += strp_size;
+			csummed  += strp_size;
 		}
 
-		if (csummed < bytes) { // partial tail block
+		if (csummed < bytes) { // partial tail stripe
 			csum = nova_calc_data_csum(NOVA_INIT_CSUM, bufptr,
 							bytes - csummed);
 			csum = nova_calc_data_csum(csum,
-						blockptr + bytes - csummed,
-						blocksize - (bytes - csummed));
+						strp_ptr + bytes - csummed,
+						strp_size - (bytes - csummed));
 
 			csum      = cpu_to_le32(csum);
-			csum_addr = nova_get_data_csum_addr(sb, blocknr);
+			csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
 						NOVA_DATA_CSUM_LEN);
 
@@ -377,54 +394,72 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	return (bytes - csummed);
 }
 
-/* Verify checksums of requested data blocks of a file write entry.
+/* Verify checksums of requested data bytes of a file write entry.
  *
  * This function works on an existing file write 'entry' with its data in NVMM.
  *
- * Only a whole block can be checksum verified.
+ * Only a whole stripe can be checksum verified.
  *
  * index:  start block index of the file where data will be verified
- * blocks: #blocks to be verified starting from index
+ * offset: byte offset within the start block
+ * bytes:  number of bytes to be checked starting from offset
  *
  * return: true or false
  *
  * */
 bool nova_verify_data_csum(struct inode *inode,
 		struct nova_file_write_entry *entry, pgoff_t index,
-		unsigned long blocks)
+		size_t offset, size_t bytes)
 {
 	struct super_block            *sb  = inode->i_sb;
 	struct nova_inode_info        *si  = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	void *blockptr;
+	void *blockptr, *strp_ptr;
+	size_t blockoff;
 	size_t blocksize = nova_inode_blk_size(sih);
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned long block, blocknr;
+	unsigned int strp_index;
+	unsigned long strp, strps, strp_nr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
 
+	/* Only a whole stripe can be checksum verified.
+	 * strps: # of stripes to be checked since offset. */
+	strps = ((offset + bytes - 1) >> strp_shift) - (offset >> strp_shift) + 1;
+
 	blocknr  = get_nvmm(sb, sih, entry, index);
-	blockptr = nova_get_block(sb,
-			nova_get_block_off(sb, blocknr,	sih->i_blk_type));
+	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
+	blockptr = nova_get_block(sb, blockoff);
+
+	/* strp_nr: global stripe number converted from blocknr and offset
+	 * strp_ptr: virtual address of the 1st stripe
+	 * strp_index: stripe index within a block */
+	strp_nr = (blockoff + offset) >> strp_shift;
+	strp_index = offset >> strp_shift;
+	strp_ptr = blockptr + (strp_index << strp_shift);
 
 	match = true;
-	for (block = 0; block < blocks; block++) {
+	for (strp = 0; strp < strps; strp++) {
 		csum_calc = nova_calc_data_csum(NOVA_INIT_CSUM,
-						blockptr, blocksize);
-		csum_addr = nova_get_data_csum_addr(sb, blocknr);
+						strp_ptr, strp_size);
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 		csum_nvmm = le32_to_cpu(*csum_addr);
 		match     = (csum_calc == csum_nvmm);
 
 		if (!match) {
-			nova_dbg("%s: nova data block checksum fail! "
-				"inode %lu block index %lu "
+			block = (strp_index + strp) / (blocksize >> strp_shift);
+			nova_dbg("%s: nova data stripe checksum fail! "
+				"inode %lu block index %lu stripe %lu "
 				"csum calc 0x%08x csum nvmm 0x%08x\n",
-				__func__, inode->i_ino, index + block,
+				__func__, inode->i_ino, index + block, strp_nr,
 				csum_calc, csum_nvmm);
 			break;
 		}
 
-		blocknr  += 1;
-		blockptr += blocksize;
+		strp_nr  += 1;
+		strp_ptr += strp_size;
 	}
 
 	return match;
@@ -434,11 +469,12 @@ int nova_data_csum_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long data_csum_blocks;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 
 	/* Allocate blocks to store data block checksums.
 	 * Always reserve in case user turns it off at init mount but later
 	 * turns it on. */
-	data_csum_blocks = ( (sbi->initsize >> PAGE_SHIFT)
+	data_csum_blocks = ( (sbi->initsize >> strp_shift)
 				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
 	nova_dbg("Reserve %lu blocks for data checksums.\n", data_csum_blocks);
 

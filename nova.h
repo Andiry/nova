@@ -1287,7 +1287,7 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 /* Checksum methods */
-static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 blocknr)
+static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *data_csum_addr;
@@ -1299,7 +1299,7 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 blocknr)
 
 	if (sbi->data_csum_base) {
 		data_csum_addr = (u8 *) nova_get_block(sb, sbi->data_csum_base)
-				+ NOVA_DATA_CSUM_LEN * blocknr;
+				+ NOVA_DATA_CSUM_LEN * strp_nr;
 	} else {
 		data_csum_addr = NULL;
 		nova_dbg("%s: data_csum_base error!\n", __func__);
@@ -1370,7 +1370,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 int nova_update_alter_entry(struct super_block *sb, void *entry);
 bool nova_verify_data_csum(struct inode *inode,
 		struct nova_file_write_entry *entry, pgoff_t index,
-		unsigned long blocks);
+		size_t offset, size_t bytes);
 int nova_data_csum_init(struct super_block *sb);
 
 /*

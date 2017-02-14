@@ -66,7 +66,6 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	do {
 		unsigned long nr, left;
 		unsigned long nvmm;
-		unsigned long csum_blks;
 		void *dax_mem = NULL;
 		int zero = 0;
 
@@ -113,15 +112,12 @@ memcpy:
 			nr = len - copied;
 
 		if ( (!zero) && (data_csum > 0) ) {
-			/* only whole blocks can be verified */
-			csum_blks = ((offset + nr - 1) >> PAGE_SHIFT) + 1;
-			if (!nova_verify_data_csum(inode, entry,
-						index, csum_blks)) {
+			if (!nova_verify_data_csum(inode, entry, index,
+						offset, nr)) {
 				nova_err(sb, "%s: nova data checksum fail! "
 					"inode %lu entry pgoff %lu "
-					"index %lu blocks %lu\n", __func__,
-					inode->i_ino, entry->pgoff,
-					index, csum_blks);
+					"index %lu\n", __func__,
+					inode->i_ino, entry->pgoff, index);
 				error = -EIO;
 				goto out;
 			}
@@ -183,31 +179,60 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 static inline int nova_copy_partial_block(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry, unsigned long index,
-	size_t offset, void* kmem, bool is_end_blk)
+	size_t offset, void* kmem, unsigned long blocknr, bool is_end_blk)
 {
 	void *ptr;
 	unsigned long nvmm;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned int num_strps;
+	size_t src_blk_off, dst_blk_off;
+	void *src_csum_addr, *dst_csum_addr;
 
 	nvmm = get_nvmm(sb, sih, entry, index);
 	ptr = nova_get_block(sb, (nvmm << PAGE_SHIFT));
+	src_blk_off = nova_get_block_off(sb, nvmm, sih->i_blk_type);
+	dst_blk_off = nova_get_block_off(sb, blocknr, sih->i_blk_type);
+
 	if (ptr != NULL) {
-		if (is_end_blk)
+		if (is_end_blk) {
 			memcpy(kmem + offset, ptr + offset,
 				sb->s_blocksize - offset);
-		else 
+
+			src_csum_addr = nova_get_data_csum_addr(sb,
+				((src_blk_off + offset - 1) >> strp_shift) + 1);
+			dst_csum_addr = nova_get_data_csum_addr(sb,
+				((dst_blk_off + offset - 1) >> strp_shift) + 1);
+			num_strps = (sb->s_blocksize - offset) >> strp_shift;
+		}
+		else {
 			memcpy(kmem, ptr, offset);
+
+			src_csum_addr = nova_get_data_csum_addr(sb,
+				src_blk_off >> strp_shift);
+			dst_csum_addr = nova_get_data_csum_addr(sb,
+				dst_blk_off >> strp_shift);
+			num_strps = offset >> strp_shift;
+		}
+		if (num_strps > 0) {
+			memcpy(dst_csum_addr, src_csum_addr,
+				num_strps * NOVA_DATA_CSUM_LEN);
+		}
 	}
 
 	return 0;
 }
 
-/* 
+/*
  * Fill the new start/end block from original blocks.
  * Do nothing if fully covered; copy if original blocks present;
  * Fill zero otherwise.
+ *
+ * Also copy unchanged checksums to new places.
+ * blocknr: the physical block # of kmem.
  */
 static void nova_handle_head_tail_blocks(struct super_block *sb,
-	struct inode *inode, loff_t pos, size_t count, void *kmem)
+	struct inode *inode, loff_t pos, size_t count, void *kmem,
+	unsigned long blocknr)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -238,7 +263,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		} else {
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
-					offset, kmem, false);
+					offset, kmem, blocknr, false);
 		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem, offset, 0);
@@ -258,8 +283,9 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 					sb->s_blocksize - eblk_offset);
 		} else {
 			/* Copy from original block */
+			blocknr += num_blocks - 1;
 			nova_copy_partial_block(sb, sih, entry, end_blk,
-					eblk_offset, kmem, true);
+					eblk_offset, kmem, blocknr, true);
 		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem + eblk_offset,
@@ -467,7 +493,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 
 		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)
 			nova_handle_head_tail_blocks(sb, inode, pos, bytes,
-								kmem);
+								kmem, blocknr);
 
 		/* Now copy from user buf */
 //		nova_dbg("Write: %p\n", kmem);
@@ -765,7 +791,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		if (entry && inplace) {
 			/* We can do inplace write. Find contiguous blocks */
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
-			blk_off = blocknr << PAGE_SHIFT; 
+			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
 		} else {
 			/* Allocate blocks to fill hole */
@@ -793,7 +819,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		kmem = nova_get_block(inode->i_sb, blk_off);
 		if (hole_fill && (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0))
 			nova_handle_head_tail_blocks(sb, inode, pos, bytes,
-								kmem);
+								kmem, blocknr);
 
 		/* Now copy from user buf */
 //		nova_dbg("Write: %p\n", kmem);
@@ -897,7 +923,7 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
 	if (inplace_data_updates) {
-		return nova_inplace_file_write(filp, buf, len, ppos, true);	
+		return nova_inplace_file_write(filp, buf, len, ppos, true);
 	} else {
 		return nova_cow_file_write(filp, buf, len, ppos, true);
 	}
@@ -1200,7 +1226,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 
 		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)))
 			nova_handle_head_tail_blocks(sb, inode, pos,
-							bytes, kmem);
+							bytes, kmem, blocknr);
 
 		NOVA_START_TIMING(memcpy_w_wb_t, memcpy_time);
 		copied = nova_flush_mmap_to_nvmm(sb, inode, pi, pos, bytes,
