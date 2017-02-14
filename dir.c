@@ -143,7 +143,7 @@ void nova_delete_dir_tree(struct super_block *sb,
 
 /* ========================= Entry operations ============================= */
 
-static void nova_update_dentry(struct inode *dir, struct dentry *dentry,
+static void nova_append_dentry(struct inode *dir, struct dentry *dentry,
 	struct nova_dentry *entry, u64 ino, unsigned short de_len,
 	int link_change, u64 trans_id)
 {
@@ -214,7 +214,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 
 	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 
-	nova_update_dentry(dir, dentry, entry, ino, de_len,
+	nova_append_dentry(dir, dentry, entry, ino, de_len,
 						link_change, trans_id);
 	update->curr_entry = curr_p;
 	update->tail = update->curr_entry + de_len;
@@ -229,7 +229,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 
 	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 
-	nova_update_dentry(dir, dentry, entry, ino, de_len,
+	nova_append_dentry(dir, dentry, entry, ino, de_len,
 						link_change, trans_id);
 	update->alter_entry = curr_p;
 
