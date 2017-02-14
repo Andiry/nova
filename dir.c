@@ -581,11 +581,7 @@ int nova_invalidate_dentries(struct super_block *sb,
 	if (!create_dentry)
 		return 0;
 
-	nova_memunlock_range(sb, create_dentry, create_dentry->de_len);
-	create_dentry->reassigned = 1;
-	nova_update_entry_csum(create_dentry);
-	nova_update_alter_entry(sb, create_dentry);
-	nova_memlock_range(sb, create_dentry, create_dentry->de_len);
+	nova_reassign_logentry(sb, create_dentry, DIR_LOG);
 
 	if (!old_entry_freeable(sb, create_dentry->trans_id))
 		return 0;

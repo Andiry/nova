@@ -460,18 +460,10 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 static int nova_reassign_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry)
 {
-	size_t size = sizeof(struct nova_file_write_entry);
-
 	if (!entry || entry->reassigned == 1)
 		return 0;
 
-	nova_memunlock_range(sb, entry, size);
-	entry->reassigned = 1;
-	nova_update_entry_csum(entry);
-	nova_update_alter_entry(sb, entry);
-	nova_memlock_range(sb, entry, size);
-
-	return 0;
+	return nova_reassign_logentry(sb, entry, FILE_WRITE);
 }
 
 static unsigned int nova_free_old_entry(struct super_block *sb,
