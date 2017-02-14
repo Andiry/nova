@@ -352,7 +352,6 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
 	struct nova_link_change_entry *old_entry;
-	size_t size = sizeof(struct nova_link_change_entry);
 	void *addr;
 	int ret;
 
@@ -370,19 +369,9 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 		return ret;
 	}
 
-	nova_memunlock_range(sb, old_entry, size);
-	old_entry->invalid = 1;
-	nova_update_entry_csum(old_entry);
-	nova_update_alter_entry(sb, old_entry);
-	nova_memlock_range(sb, old_entry, size);
+	ret = nova_invalidate_logentry(sb, old_entry, LINK_CHANGE, 0);
 
-	nova_dbg_verbose("invalidate link_change entry @ "
-					"0x%llx: links %u csum 0x%x",
-					old_link_change, old_entry->links,
-					old_entry->csum);
-
-
-	return 0;
+	return ret;
 }
 
 static void nova_update_link_change_entry(struct inode *inode,

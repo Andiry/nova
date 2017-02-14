@@ -358,7 +358,7 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr)
 	return ret;
 }
 
-int nova_execute_invalidate_logentry(struct super_block *sb, void *entry,
+static int nova_execute_invalidate_logentry(struct super_block *sb, void *entry,
 	enum nova_entry_type type, unsigned int num_free)
 {
 	switch (type) {
@@ -419,7 +419,6 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, unsigned int num_free)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	size_t size = sizeof(struct nova_file_write_entry);
 	u64 curr;
 	int ret;
 
@@ -431,14 +430,9 @@ static int nova_invalidate_file_write_entry(struct super_block *sb,
 		return ret;
 	}
 
-	nova_memunlock_range(sb, entry, size);
-	entry->invalid_pages += num_free;
-	nova_update_entry_csum(entry);
+	ret = nova_invalidate_logentry(sb, entry, FILE_WRITE, num_free);
 
-	nova_update_alter_entry(sb, entry);
-	nova_memlock_range(sb, entry, size);
-
-	return 0;
+	return ret;
 }
 
 static int nova_reassign_write_entry(struct super_block *sb,
@@ -1707,7 +1701,6 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 	struct inode *inode, u64 last_setattr)
 {
 	struct nova_setattr_logentry *old_entry;
-	size_t size = sizeof(struct nova_setattr_logentry);
 	void *addr;
 	int ret;
 
@@ -1724,19 +1717,9 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 		return ret;
 	}
 
-	nova_memunlock_range(sb, old_entry, size);
-	old_entry->invalid = 1;
-	nova_update_entry_csum(old_entry);
-	nova_dbg_verbose("invalidate set_attr entry @ 0x%llx: "
-					"ino %lu, attr %u, mode 0x%x, "
-					"csum 0x%x\n", last_setattr,
-					inode->i_ino, old_entry->attr,
-					old_entry->mode, old_entry->csum);
+	ret = nova_invalidate_logentry(sb, old_entry, SET_ATTR, 0);
 
-	nova_update_alter_entry(sb, old_entry);
-	nova_memlock_range(sb, old_entry, size);
-
-	return 0;
+	return ret;
 }
 
 #if 0

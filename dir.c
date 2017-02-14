@@ -600,10 +600,7 @@ int nova_invalidate_dentries(struct super_block *sb,
 		return ret;
 	}
 
-	nova_memunlock_range(sb, create_dentry, create_dentry->de_len);
-	create_dentry->invalid = 1;
-	nova_update_entry_csum(create_dentry);
-	nova_memlock_range(sb, create_dentry, create_dentry->de_len);
+	nova_invalidate_logentry(sb, create_dentry, DIR_LOG, 0);
 
 	ret = nova_check_alter_entry(sb, delete_curr);
 	if (ret) {
@@ -612,15 +609,9 @@ int nova_invalidate_dentries(struct super_block *sb,
 		return ret;
 	}
 
-	nova_memunlock_range(sb, delete_dentry, create_dentry->de_len);
-	delete_dentry->invalid = 1;
-	nova_update_entry_csum(delete_dentry);
+	ret = nova_invalidate_logentry(sb, delete_dentry, DIR_LOG, 0);
 
-	nova_update_alter_entry(sb, create_dentry);
-	nova_update_alter_entry(sb, delete_dentry);
-	nova_memlock_range(sb, delete_dentry, create_dentry->de_len);
-
-	return 0;
+	return ret;
 }
 
 static int nova_readdir_slow(struct file *file, struct dir_context *ctx)
