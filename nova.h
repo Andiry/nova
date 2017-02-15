@@ -1361,6 +1361,9 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 		void *wrbuf, size_t offset, size_t bytes);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
+int nova_check_alter_entry(struct super_block *sb, u64 curr);
+int nova_check_inode_integrity(struct super_block *sb, u64 ino,
+	u64 pi_addr, u64 alter_pi_addr);
 bool nova_verify_data_csum(struct inode *inode,
 		struct nova_file_write_entry *entry, pgoff_t index,
 		unsigned long blocks);
@@ -1442,9 +1445,6 @@ int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, pgoff_t pgoff);
-int nova_check_alter_entry(struct super_block *sb, u64 curr);
-int nova_check_inode_integrity(struct super_block *sb, u64 ino,
-	u64 pi_addr, u64 alter_pi_addr);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 extern void nova_evict_inode(struct inode *inode);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);

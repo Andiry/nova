@@ -329,38 +329,6 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-int nova_check_alter_entry(struct super_block *sb, u64 curr)
-{
-	void *addr, *alter_addr;
-	u64 alter;
-	size_t size;
-	u32 entry_csum;
-	int ret = 0;
-
-	if (replica_metadata == 0)
-		return 0;
-
-	addr = (void *)nova_get_block(sb, curr);
-	ret = nova_get_entry_csum(sb, addr, &entry_csum, &size);
-	if (ret)
-		return ret;
-
-	alter = alter_log_entry(sb, curr);
-	alter_addr = (void *)nova_get_block(sb, alter);
-	ret = memcmp(addr, alter_addr, size);
-
-	if (ret) {
-		nova_dbg("%s: alter entry dismatch\n", __func__);
-		nova_dbg("Main entry:\n");
-		nova_print_log_entry(sb, curr);
-		nova_dbg("Alter entry:\n");
-		nova_print_log_entry(sb, alter);
-		return ret;
-	}
-
-	return ret;
-}
-
 static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
@@ -1004,94 +972,6 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_END_TIMING(free_inode_t, free_time);
 	return err;
-}
-
-int nova_check_inode_integrity(struct super_block *sb, u64 ino,
-	u64 pi_addr, u64 alter_pi_addr)
-{
-	struct nova_inode *pi = NULL, *alter_pi = NULL;
-	struct nova_inode fake_pi, alter_fake_pi;
-	int diff = 0;
-	int ret;
-	int pi_good = 1, alter_pi_good = 0;
-
-	ret = nova_get_reference(sb, pi_addr, &fake_pi,
-			(void **)&pi, sizeof(struct nova_inode));
-	if (ret) {
-		nova_dbg("%s: read pi @ 0x%llx failed\n",
-				__func__, pi_addr);
-		pi_good = 0;
-	}
-
-	if (replica_metadata == 0) {
-		/* We cannot do much */
-		return ret;
-	}
-
-	alter_pi_good = 1;
-	ret = nova_get_reference(sb, alter_pi_addr, &alter_fake_pi,
-				(void **)&alter_pi, sizeof(struct nova_inode));
-	if (ret) {
-		nova_dbg("%s: read alter pi @ 0x%llx failed\n",
-					__func__, alter_pi_addr);
-		alter_pi_good = 0;
-	}
-
-	if (pi_good == 0 && alter_pi_good == 0)
-		goto out;
-
-	if (pi_good == 0) {
-		nova_memunlock_inode(sb, pi);
-		memcpy_to_pmem_nocache(pi, alter_pi,
-					sizeof(struct nova_inode));
-		nova_memlock_inode(sb, pi);
-	} else if (alter_pi_good == 0) {
-		nova_memunlock_inode(sb, alter_pi);
-		memcpy_to_pmem_nocache(alter_pi, pi,
-					sizeof(struct nova_inode));
-		nova_memlock_inode(sb, alter_pi);
-	}
-
-	if (memcmp(pi, alter_pi, sizeof(struct nova_inode))) {
-		nova_err(sb, "%s: inode %llu shadow mismatch\n",
-						__func__, ino);
-		nova_print_inode(pi);
-		nova_print_inode(alter_pi);
-		diff = 1;
-	}
-
-	ret = nova_check_inode_checksum(&fake_pi);
-	nova_dbgv("%s: %d\n", __func__, ret);
-	if (ret == 0) {
-		if (diff) {
-			nova_dbg("Update shadow inode with original inode\n");
-			nova_memunlock_inode(sb, alter_pi);
-			memcpy_to_pmem_nocache(alter_pi, pi,
-						sizeof(struct nova_inode));
-			nova_memlock_inode(sb, alter_pi);
-		}
-		return ret;
-	}
-
-	if (alter_pi_good == 0)
-		goto out;
-
-	ret = nova_check_inode_checksum(&alter_fake_pi);
-	if (ret == 0) {
-		if (diff) {
-			nova_dbg("Update original inode with shadow inode\n");
-			nova_memunlock_inode(sb, pi);
-			memcpy_to_pmem_nocache(pi, alter_pi,
-						sizeof(struct nova_inode));
-			nova_memlock_inode(sb, pi);
-		}
-		return ret;
-	}
-
-out:
-	/* We are in big trouble */
-	nova_err(sb, "%s: inode %llu check failure\n", __func__, ino);
-	return -EIO;
 }
 
 struct inode *nova_iget(struct super_block *sb, unsigned long ino)
