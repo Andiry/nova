@@ -1502,8 +1502,6 @@ u64 nova_create_rename_transaction(struct super_block *sb,
 	int invalidate_new_inode, int cpu);
 u64 nova_create_logentry_transaction(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int cpu);
-u64 nova_create_invalidate_reassign_transaction(struct super_block *sb,
-	void *entry, enum nova_entry_type type, int reassign, int cpu);
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
 int nova_lite_journal_soft_init(struct super_block *sb);
 int nova_lite_journal_hard_init(struct super_block *sb);

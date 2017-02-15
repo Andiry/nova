@@ -394,33 +394,12 @@ static int nova_invalidate_reassign_logentry(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	int cpu;
-	u64 journal_tail;
+	nova_memunlock_range(sb, entry, CACHELINE_SIZE);
 
-	if (replica_log) {
-		nova_memunlock_range(sb, entry, CACHELINE_SIZE);
-
-		nova_execute_invalidate_reassign_logentry(sb, entry, type,
+	nova_execute_invalidate_reassign_logentry(sb, entry, type,
 						reassign, num_free);
-		nova_update_alter_entry(sb, entry);
-		nova_memlock_range(sb, entry, CACHELINE_SIZE);
-		return 0;
-	}
-
-	cpu = smp_processor_id();
-	spin_lock(&sbi->journal_locks[cpu]);
-	nova_memunlock_journal(sb);
-	journal_tail = nova_create_invalidate_reassign_transaction(sb, entry,
-						type, reassign, cpu);
-	nova_execute_invalidate_reassign_logentry(sb, entry, type, reassign,
-						num_free);
-
-	PERSISTENT_BARRIER();
-
-	nova_commit_lite_transaction(sb, journal_tail, cpu);
-	nova_memlock_journal(sb);
-	spin_unlock(&sbi->journal_locks[cpu]);
+	nova_update_alter_entry(sb, entry);
+	nova_memlock_range(sb, entry, CACHELINE_SIZE);
 
 	return 0;
 }

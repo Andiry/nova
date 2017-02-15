@@ -388,6 +388,7 @@ u64 nova_create_logentry_transaction(struct super_block *sb,
 	return temp;
 }
 
+#if 0
 u64 nova_create_invalidate_reassign_transaction(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int reassign, int cpu)
 {
@@ -445,6 +446,7 @@ u64 nova_create_invalidate_reassign_transaction(struct super_block *sb,
 			__func__, pair->journal_head, pair->journal_tail);
 	return temp;
 }
+#endif
 
 void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu)
 {
