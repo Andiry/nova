@@ -92,7 +92,7 @@ static void nova_lite_transaction_for_new_inode(struct super_block *sb,
 	nova_memlock_journal(sb);
 	spin_unlock(&sbi->journal_locks[cpu]);
 
-	if (replica_inode) {
+	if (replica_metadata) {
 		nova_memunlock_inode(sb, pi);
 		nova_update_alter_inode(sb, inode, pi);
 		nova_update_alter_inode(sb, dir, pidir);
@@ -266,7 +266,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	pi = nova_get_inode(sb, inode);
 
 	num_logs = 1;
-	if (replica_log)
+	if (replica_metadata)
 		num_logs = 2;
 
 	si = NOVA_I(inode);
@@ -337,7 +337,7 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	nova_memlock_journal(sb);
 	spin_unlock(&sbi->journal_locks[cpu]);
 
-	if (replica_inode) {
+	if (replica_metadata) {
 		nova_memunlock_inode(sb, pi);
 		nova_update_alter_inode(sb, inode, pi);
 		nova_update_alter_inode(sb, dir, pidir);
@@ -420,7 +420,7 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 	entry = (struct nova_link_change_entry *)nova_get_block(sb,
 							last_log);
 
-	if (replica_log) {
+	if (replica_metadata) {
 		nova_memunlock_range(sb, entry, size);
 		nova_update_link_change_entry(inode, entry, trans_id);
 		// Also update the alter inode log entry.
@@ -490,7 +490,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	nova_memlock_range(sb, entry, size);
 	update->tail = curr_p + size;
 
-	if (replica_log) {
+	if (replica_metadata) {
 		alter_curr_p = nova_get_append_head(sb, pi, sih,
 						update->alter_tail, size,
 						ALTER_LOG, 0, &extended);

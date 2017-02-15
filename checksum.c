@@ -141,7 +141,7 @@ void nova_update_entry_csum(void *entry)
 	size_t entry_len = CACHELINE_SIZE;
 
 	/* No point to update csum if replica log is disabled */
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		goto flush;
 
 	type = nova_get_entry_type(entry);
@@ -244,7 +244,7 @@ int nova_update_alter_entry(struct super_block *sb, void *entry)
 	size_t size;
 	int ret;
 
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		return 0;
 
 	curr = nova_get_addr_off(sbi, entry);
@@ -271,7 +271,7 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 	if (match)
 		return match;
 
-	if (replica_log) {
+	if (replica_metadata) {
 		nova_dbg("%s: nova entry mismatch detected, trying to "
 				"recover from the alternative entry.\n",
 				__func__);

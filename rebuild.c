@@ -147,7 +147,7 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 	nova_memunlock_inode(sb, pi);
 	nova_update_inode_with_rebuild(sb, reb, pi);
 	nova_update_inode_checksum(pi);
-	if (replica_inode) {
+	if (replica_metadata) {
 		alter_pi = (struct nova_inode *)nova_get_block(sb,
 							sih->alter_pi_addr);
 		memcpy_to_pmem_nocache(alter_pi, pi, sizeof(struct nova_inode));
@@ -161,7 +161,7 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 		curr_p = next;
 	}
 
-	if (replica_log)
+	if (replica_metadata)
 		sih->log_pages *= 2;
 
 	return 0;

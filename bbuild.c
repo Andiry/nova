@@ -817,7 +817,7 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 alter_pi_addr = 0;
 	int ret;
 
-	if (replica_inode) {
+	if (replica_metadata) {
 		/* Get alternate inode address */
 		ret = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
 		if (ret)
@@ -895,7 +895,7 @@ static void nova_traverse_dir_inode_log(struct super_block *sb,
 	struct nova_inode *pi, struct scan_bitmap *bm)
 {
 	nova_traverse_inode_log(sb, pi, bm, pi->log_head);
-	if (replica_log)
+	if (replica_metadata)
 		nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
 }
 
@@ -1097,7 +1097,7 @@ static int nova_traverse_file_inode_log(struct super_block *sb,
 	btype = pi->i_blk_type;
 	data_bits = blk_type_to_shift[btype];
 
-	if (replica_log)
+	if (replica_metadata)
 		nova_traverse_inode_log(sb, pi, bm, pi->alter_log_head);
 
 again:
@@ -1370,7 +1370,7 @@ static int failure_thread_func(void *data)
 			set_bm((curr >> PAGE_SHIFT) + i,
 					global_bm[cpuid], BM_4K);
 
-		if (replica_inode) {
+		if (replica_metadata) {
 			for (i = 0; i < 512; i++)
 				set_bm((curr1 >> PAGE_SHIFT) + i,
 					global_bm[cpuid], BM_4K);
@@ -1440,7 +1440,7 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 	int cpuid;
 
 	num_tables = 1;
-	if (replica_inode)
+	if (replica_metadata)
 		num_tables = 2;
 
 	for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {

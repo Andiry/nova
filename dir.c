@@ -219,7 +219,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	update->curr_entry = curr_p;
 	update->tail = update->curr_entry + de_len;
 
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		goto out;
 
 	curr_p = nova_get_append_head(sb, pidir, sih, update->alter_tail,
@@ -317,8 +317,8 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	nova_memlock_inode(sb, pi);
 
-	if (replica_log == 0)
-		goto update_alter_inode;
+	if (replica_metadata == 0)
+		return 0;
 
 	allocated = nova_allocate_inode_log_pages(sb, &sih, 1, &new_block);
 	if (allocated != 1) {
@@ -335,17 +335,9 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	nova_update_alter_tail(pi, new_block + length);
 	nova_update_alter_pages(sb, pi, pi->log_head,
 						pi->alter_log_head);
-	nova_memlock_inode(sb, pi);
-
-update_alter_inode:
-
-	nova_memunlock_inode(sb, pi);
 	nova_update_inode_checksum(pi);
 	nova_flush_buffer(pi, sizeof(struct nova_inode), 0);
 	nova_memlock_inode(sb, pi);
-
-	if (replica_inode == 0)
-		return 0;
 
 	/* Get alternate inode address */
 	ret = nova_get_alter_inode_address(sb, self_ino, &alter_pi_addr);
@@ -466,7 +458,7 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	int cpu;
 	u64 journal_tail;
 
-	if (replica_log) {
+	if (replica_metadata) {
 		nova_memunlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
 
 		nova_update_dentry(sb, dir, dentry, link_change, trans_id);

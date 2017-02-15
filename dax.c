@@ -655,7 +655,7 @@ static int nova_inplace_update_write_entry(struct super_block *sb,
 	int cpu;
 	u64 journal_tail;
 
-	if (replica_log) {
+	if (replica_metadata) {
 		nova_memunlock_range(sb, entry, sizeof(*entry));
 		nova_update_write_entry(sb, entry, trans_id, time, entry_size);
 		nova_update_alter_entry(sb, entry);

@@ -139,8 +139,7 @@ extern unsigned int nova_dbgmask;
 #define FREE_BATCH			(16)
 
 extern int measure_timing;
-extern int replica_inode;
-extern int replica_log;
+extern int replica_metadata;
 extern int inplace_data_updates;
 extern int wprotect;
 
@@ -322,7 +321,7 @@ static inline void nova_update_alter_tail(struct nova_inode *pi, u64 new_tail)
 {
 	timing_t update_time;
 
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		return;
 
 	NOVA_START_TIMING(update_tail_t, update_time);
@@ -372,7 +371,7 @@ static inline int nova_update_inode_checksum(struct nova_inode *pi)
 	 * If replica inode is disabled, we cannot atomically update
 	 * inode field and checksum.
 	 */
-	if (replica_inode == 0)
+	if (replica_metadata == 0)
 		return 0;
 
 	crc = crc32c(~0, (__u8 *)pi,
@@ -1042,7 +1041,7 @@ static inline struct nova_inode *nova_get_alter_inode(struct super_block *sb,
 	void *addr;
 	int rc;
 
-	if (replica_inode == 0)
+	if (replica_metadata == 0)
 		return NULL;
 
 	addr = nova_get_block(sb, sih->alter_pi_addr);
@@ -1058,7 +1057,7 @@ static inline int nova_update_alter_inode(struct super_block *sb,
 {
 	struct nova_inode *alter_pi;
 
-	if (replica_inode == 0)
+	if (replica_metadata == 0)
 		return 0;
 
 	alter_pi = nova_get_alter_inode(sb, inode);
@@ -1080,7 +1079,7 @@ static inline void nova_update_inode(struct super_block *sb,
 	sih->log_tail = update->tail;
 	sih->alter_log_tail = update->alter_tail;
 	nova_update_tail(pi, update->tail);
-	if (replica_log)
+	if (replica_metadata)
 		nova_update_alter_tail(pi, update->alter_tail);
 
 	nova_update_inode_checksum(pi);
@@ -1165,7 +1164,7 @@ static inline u64 alter_log_page(struct super_block *sb, u64 curr)
 	u64 next = 0;
 	int rc;
 
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		return 0;
 
 	curr = BLOCK_OFF(curr);
@@ -1192,7 +1191,7 @@ static inline u64 alter_log_page(struct super_block *sb, u64 curr_p)
 	void *curr_addr = nova_get_block(sb, curr_p);
 	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		return 0;
 
 	return ((struct nova_inode_page_tail *)page_tail)->alter_page;
@@ -1205,7 +1204,7 @@ static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
 	void *curr_addr = nova_get_block(sb, curr_p);
 	unsigned long page_tail = BLOCK_OFF((unsigned long)curr_addr)
 					+ LAST_ENTRY;
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		return 0;
 
 	alter_page = ((struct nova_inode_page_tail *)page_tail)->alter_page;
@@ -1228,7 +1227,7 @@ static inline void nova_set_alter_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode_log_page *alter_page;
 
-	if (replica_log == 0)
+	if (replica_metadata == 0)
 		return;
 
 	curr_page = nova_get_block(sb, BLOCK_OFF(curr));

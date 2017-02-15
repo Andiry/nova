@@ -70,7 +70,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	update.tail = block1 + length;
 
 	update.alter_tail = 0;
-	if (replica_log) {
+	if (replica_metadata) {
 		block2 = next_log_page(sb, block1);
 		log1_page = (struct nova_inode_log_page *)nova_get_block(sb,
 							block1);
@@ -90,7 +90,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	sih->log_pages = 1;
 	sih->i_blocks = 2;
 
-	if (replica_log) {
+	if (replica_metadata) {
 		sih->log_pages++;
 		sih->i_blocks++;
 	}

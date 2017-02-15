@@ -39,20 +39,17 @@
 #include "nova.h"
 
 int measure_timing = 0;
-int replica_inode = 0;
-int replica_log = 0;
+int replica_metadata = 0;
 int wprotect = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
 
 module_param(measure_timing, int, S_IRUGO);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
-module_param(replica_inode, int, S_IRUGO);
-MODULE_PARM_DESC(replica_inode, "Inode replication");
-module_param(replica_log, int, S_IRUGO);
-MODULE_PARM_DESC(replica_log, "Log replication");
+module_param(replica_metadata, int, S_IRUGO);
+MODULE_PARM_DESC(replica_metadata, "Metadata replication");
 module_param(wprotect, int, S_IRUGO);
-MODULE_PARM_DESC(replica_log, "Wprotect (CR0.WP)");
+MODULE_PARM_DESC(wprotect, "Wprotect (CR0.WP)");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;
@@ -508,9 +505,9 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	if (nova_get_block_info(sb, sbi))
 		goto out;
 
-	nova_dbg("measure timing %d, replica inode %d, replica log %d, "
-		"inplace update %d\n", measure_timing, replica_inode,
-		replica_log, inplace_data_updates);
+	nova_dbg("measure timing %d, replica metadata %d, "
+		"inplace update %d\n", measure_timing, replica_metadata,
+		inplace_data_updates);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
