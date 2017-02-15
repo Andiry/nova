@@ -204,16 +204,22 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 	if (ret)
 		return match;
 
+	*ret_size = size;
+
+	/* No need to verify checksum if replica metadata disabled */
+	if (replica_metadata == 0)
+		return true;
+
 	/* No poison block */
 	checksum = nova_calc_entry_csum(entry);
 
 	match = checksum == le32_to_cpu(entry_csum);
-	*ret_size = size;
 
 	return match;
 }
 
-static bool nova_try_alter_entry(struct super_block *sb, void *entry)
+static bool nova_try_alter_entry(struct super_block *sb, void *entry,
+	bool original_match)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *alter_entry;
@@ -229,10 +235,16 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry)
 
 	if (!match) {
 		nova_dbg("%s failed\n", __func__);
+		if (original_match) {
+			memcpy_to_pmem_nocache(alter_entry, entry, size);
+			match = original_match;
+		}
 		return match;
 	}
 
-	memcpy_to_pmem_nocache(entry, alter_entry, size);
+	if (memcmp(entry, alter_entry, size))
+		memcpy_to_pmem_nocache(entry, alter_entry, size);
+
 	return match;
 }
 
@@ -268,16 +280,15 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 
 	match = is_entry_matched(sb, entry, &size);
 
-	/* FIXME: Also check alter entry? */
-	if (match)
+	if (replica_metadata == 0)
 		return match;
 
-	if (replica_metadata) {
+	if (!match)
 		nova_dbg("%s: nova entry mismatch detected, trying to "
 				"recover from the alternative entry.\n",
 				__func__);
-		match = nova_try_alter_entry(sb, entry);
-	}
+
+	match = nova_try_alter_entry(sb, entry, match);
 
 	return match;
 }
