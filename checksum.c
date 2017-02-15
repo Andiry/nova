@@ -136,9 +136,17 @@ u32 nova_calc_entry_csum(void *entry)
 /* Update the log entry checksum. */
 void nova_update_entry_csum(void *entry)
 {
-	u8  type = nova_get_entry_type(entry);
-	u32 csum = nova_calc_entry_csum(entry);
-	size_t entry_len;
+	u8  type;
+	u32 csum;
+	size_t entry_len = CACHELINE_SIZE;
+
+	/* No point to update csum if replica log is disabled */
+	if (replica_log == 0)
+		goto flush;
+
+	type = nova_get_entry_type(entry);
+	csum = nova_calc_entry_csum(entry);
+
 	switch (type) {
 		case DIR_LOG:
 			((struct nova_dentry *) entry)->csum =
@@ -177,6 +185,7 @@ void nova_update_entry_csum(void *entry)
 			break;
 	}
 
+flush:
 	if (entry_len > 0)
 		nova_flush_buffer(entry, entry_len, 0);
 
