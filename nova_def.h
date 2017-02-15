@@ -242,7 +242,7 @@ static inline void nova_flush_buffer(void *buf, uint32_t len, bool fence)
 		PERSISTENT_BARRIER();
 }
 
-/* ==================== Metadata and Data Checksum ====================== */
+/* =============== Integrity and Recovery Parameters =============== */
 #define	NOVA_META_CSUM_LEN	(4)
 #define	NOVA_DATA_CSUM_LEN	(4)
 
@@ -251,5 +251,14 @@ static inline void nova_flush_buffer(void *buf, uint32_t len, bool fence)
 #define	NOVA_INIT_CSUM		(1)
 
 #define	ADDR_ALIGN(p, bytes)	((void *) (((unsigned long) p) & ~(bytes - 1)))
+
+/* Data stripe size in bytes and shift.
+ * In NOVA this size determines how much data is checksummed together, and it
+ * equals to the affordable lost size of data per block (page).
+ * Its value should be no less than the blast radius size of media errors.
+ *
+ * Support NOVA_STRIPE_SHIFT <= PAGE_SHIFT (NOVA file block size shift). */
+#define NOVA_STRIPE_SHIFT	(9)
+#define NOVA_STRIPE_SIZE	(1 << NOVA_STRIPE_SHIFT)
 
 #endif /* _LINUX_NOVA_DEF_H */

@@ -43,6 +43,8 @@ int replica_metadata = 0;
 int metadata_csum = 0;
 int unsafe_metadata = 0;
 int wprotect = 0;
+int data_csum = 0;
+int data_parity = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
 
@@ -56,6 +58,10 @@ module_param(unsafe_metadata, int, S_IRUGO);
 MODULE_PARM_DESC(unsafe_metadata, "Inplace metadata update");
 module_param(wprotect, int, S_IRUGO);
 MODULE_PARM_DESC(wprotect, "Wprotect (CR0.WP)");
+module_param(data_csum, int, S_IRUGO);
+MODULE_PARM_DESC(data_csum, "Data checksum");
+module_param(data_parity, int, S_IRUGO);
+MODULE_PARM_DESC(data_parity, "Data parity");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;
@@ -334,6 +340,9 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	nova_memunlock_reserved(sb, super);
 	/* clear out super-block and inode table */
+	nova_dbg("NOVA reserves %lu blocks, about 1/%lu of total.\n",
+			sbi->reserved_blocks,
+			(sbi->initsize / blocksize) / sbi->reserved_blocks);
 	memset_nt(super, 0, sbi->reserved_blocks * sbi->blocksize);
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
@@ -512,8 +521,10 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 
 	nova_dbg("measure timing %d, replica metadata %d, "
-		"inplace update %d\n", measure_timing, replica_metadata,
-		inplace_data_updates);
+		"metadata checksum %d, inplace metadata update %d, "
+		"inplace update %d, data checksum %d, data parity %d\n",
+		measure_timing, replica_metadata, metadata_csum,
+		unsafe_metadata, inplace_data_updates, data_csum, data_parity);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);

@@ -419,7 +419,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 		}
 
 #if 0
-		if (NOVA_SB(sb)->data_csum_base > 0) {
+		if (data_csum) {
 			csummed = copied - nova_update_cow_csum(inode, blocknr,
 						(void *) buf, offset, copied);
 			if (unlikely(csummed != copied)) {

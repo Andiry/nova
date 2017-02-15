@@ -725,7 +725,7 @@ static int nova_build_blocknode_map(struct super_block *sb,
 	}
 
 	/* Set initial used pages */
-	num_used_block = sbi->reserved_blocks + sbi->data_csum_blocks;
+	num_used_block = sbi->reserved_blocks;
 	for (i = 0; i < num_used_block; i++)
 		set_bm(i, final_bm, BM_4K);
 

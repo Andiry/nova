@@ -144,6 +144,8 @@ extern int metadata_csum;
 extern int unsafe_metadata;
 extern int inplace_data_updates;
 extern int wprotect;
+extern int data_csum;
+extern int data_parity;
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
@@ -507,8 +509,8 @@ struct free_list {
  * The fifth block contains snapshot timestamps.
  * The sixth block contains snapshot infos upon umount.
  *
- * If data block checksum is enabled, a bunch of more blocks are reserverd for
- * checksums and the number is derived according to the whole storage size.
+ * If data protection is enabled, more blocks are reserverd for checksums and
+ * parities and the number is derived according to the whole storage size.
  */
 #define	RESERVED_BLOCKS		6
 
@@ -610,8 +612,6 @@ struct nova_sb_info {
 
 	/* Byte offset of the data block checksum storage start */
 	unsigned long data_csum_base;
-	/* Number of blocks reserved to store data block checksums */
-	unsigned long data_csum_blocks;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)
@@ -1292,14 +1292,19 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 /* Checksum methods */
-static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 blocknr)
+static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *data_csum_addr;
 
+	if (!data_csum) {
+		nova_dbg("%s: Data checksum is disabled!\n", __func__);
+		return NULL;
+	}
+
 	if (sbi->data_csum_base) {
 		data_csum_addr = (u8 *) nova_get_block(sb, sbi->data_csum_base)
-				+ NOVA_DATA_CSUM_LEN * blocknr;
+				+ NOVA_DATA_CSUM_LEN * strp_nr;
 	} else {
 		data_csum_addr = NULL;
 		nova_dbg("%s: data_csum_base error!\n", __func__);
@@ -1369,7 +1374,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 	u64 pi_addr, u64 alter_pi_addr);
 bool nova_verify_data_csum(struct inode *inode,
 		struct nova_file_write_entry *entry, pgoff_t index,
-		unsigned long blocks);
+		size_t offset, size_t bytes);
 int nova_data_csum_init(struct super_block *sb);
 
 /*
