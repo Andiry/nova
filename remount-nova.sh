@@ -3,7 +3,7 @@
 echo "Unmount existing partition..."
 umount /mnt/ramdisk
 rmmod nova
-insmod nova.ko measure_timing=0 inplace_data_updates=1
+insmod nova.ko measure_timing=0 inplace_data_updates=1 replica_metadata=1 metadata_csum=1
 
 echo "Unmount done."
 sleep 1

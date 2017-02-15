@@ -17,7 +17,7 @@
 
 #include "nova.h"
 
-int nova_get_entry_csum(struct super_block *sb, void *entry,
+static int nova_get_entry_csum(struct super_block *sb, void *entry,
 	u32 *entry_csum, size_t *size)
 {
 	struct nova_dentry fake_dentry;
@@ -141,7 +141,7 @@ void nova_update_entry_csum(void *entry)
 	size_t entry_len = CACHELINE_SIZE;
 
 	/* No point to update csum if replica log is disabled */
-	if (replica_metadata == 0)
+	if (replica_metadata == 0 || metadata_csum == 0)
 		goto flush;
 
 	type = nova_get_entry_type(entry);
@@ -207,7 +207,7 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 	*ret_size = size;
 
 	/* No need to verify checksum if replica metadata disabled */
-	if (replica_metadata == 0)
+	if (replica_metadata == 0 || metadata_csum == 0)
 		return true;
 
 	/* No poison block */

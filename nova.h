@@ -140,6 +140,7 @@ extern unsigned int nova_dbgmask;
 
 extern int measure_timing;
 extern int replica_metadata;
+extern int metadata_csum;
 extern int inplace_data_updates;
 extern int wprotect;
 
@@ -371,7 +372,7 @@ static inline int nova_update_inode_checksum(struct nova_inode *pi)
 	 * If replica inode is disabled, we cannot atomically update
 	 * inode field and checksum.
 	 */
-	if (replica_metadata == 0)
+	if (replica_metadata == 0 || metadata_csum == 0)
 		return 0;
 
 	crc = crc32c(~0, (__u8 *)pi,
@@ -385,6 +386,9 @@ static inline int nova_update_inode_checksum(struct nova_inode *pi)
 static inline int nova_check_inode_checksum(struct nova_inode *pi)
 {
 	u32 crc = 0;
+
+	if (metadata_csum == 0)
+		return 0;
 
 	crc = crc32c(~0, (__u8 *)pi,
 			(sizeof(struct nova_inode) - sizeof(__le32)));
@@ -1354,8 +1358,6 @@ void nova_init_header(struct super_block *sb,
 int nova_recovery(struct super_block *sb);
 
 /* checksum.c */
-int nova_get_entry_csum(struct super_block *sb, void *entry,
-	u32 *entry_csum, size_t *size);
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
