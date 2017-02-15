@@ -75,7 +75,7 @@ int nova_get_entry_csum(struct super_block *sb, void *entry,
 }
 
 /* Calculate the entry checksum. */
-u32 nova_calc_entry_csum(void *entry)
+static u32 nova_calc_entry_csum(void *entry)
 {
 	u8 type;
 	u32 csum = 0;
@@ -191,7 +191,8 @@ flush:
 
 }
 
-bool is_entry_matched(struct super_block *sb, void *entry, size_t *ret_size)
+static bool is_entry_matched(struct super_block *sb, void *entry,
+	size_t *ret_size)
 {
 	u32 checksum;
 	u32 entry_csum;
@@ -282,7 +283,7 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 }
 
 /* Calculate the data checksum. */
-u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
+static u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
 {
 	u32 csum;
 

@@ -1356,10 +1356,8 @@ int nova_recovery(struct super_block *sb);
 /* checksum.c */
 int nova_get_entry_csum(struct super_block *sb, void *entry,
 	u32 *entry_csum, size_t *size);
-u32 nova_calc_entry_csum(void *entry);
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
-u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 		void *wrbuf, size_t offset, size_t bytes);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
