@@ -1648,7 +1648,7 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 	entry = (struct nova_setattr_logentry *)nova_get_block(sb,
 							last_log);
 
-	if (replica_metadata) {
+	if (replica_metadata || unsafe_metadata) {
 		nova_memunlock_range(sb, entry, size);
 		nova_update_setattr_entry(inode, entry, attr, trans_id);
 		// Also update the alter inode log entry.

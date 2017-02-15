@@ -41,6 +41,7 @@
 int measure_timing = 0;
 int replica_metadata = 0;
 int metadata_csum = 0;
+int unsafe_metadata = 0;
 int wprotect = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
@@ -51,6 +52,8 @@ module_param(replica_metadata, int, S_IRUGO);
 MODULE_PARM_DESC(replica_metadata, "Metadata replication");
 module_param(metadata_csum, int, S_IRUGO);
 MODULE_PARM_DESC(metadata_csum, "Metadata checksum");
+module_param(unsafe_metadata, int, S_IRUGO);
+MODULE_PARM_DESC(unsafe_metadata, "Inplace metadata update");
 module_param(wprotect, int, S_IRUGO);
 MODULE_PARM_DESC(wprotect, "Wprotect (CR0.WP)");
 

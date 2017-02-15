@@ -458,7 +458,7 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	int cpu;
 	u64 journal_tail;
 
-	if (replica_metadata) {
+	if (replica_metadata || unsafe_metadata) {
 		nova_memunlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
 
 		nova_update_dentry(sb, dir, dentry, link_change, trans_id);
