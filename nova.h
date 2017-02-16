@@ -200,12 +200,13 @@ struct nova_lite_journal_entry {
 
 struct nova_file_write_entry {
 	u8	entry_type;
-	u8	reassigned;
-	u8	padding[2];
+	u8	reassigned;	/* Data is not latest */
+	u8	updating;	/* Date being written */
+	u8	padding;
 	__le32	num_pages;
 	__le64	block;
 	__le64	pgoff;
-	__le32	invalid_pages;
+	__le32	invalid_pages;	/* For GC */
 	/* For both ctime and mtime */
 	__le32	mtime;
 	__le64	size;

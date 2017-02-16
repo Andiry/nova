@@ -378,6 +378,7 @@ void nova_init_file_write_entry(struct super_block *sb,
 	memset(entry, 0, sizeof(struct nova_file_write_entry));
 	entry->entry_type = FILE_WRITE;
 	entry->reassigned = 0;
+	entry->updating = 0;
 	entry->trans_id = trans_id;
 	entry->pgoff = cpu_to_le64(pgoff);
 	entry->num_pages = cpu_to_le32(num_pages);
