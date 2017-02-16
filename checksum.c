@@ -541,6 +541,76 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	return (bytes - csummed);
 }
 
+static int nova_update_block_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long pgoff)
+{
+	unsigned long blocknr;
+	void *dax_mem = NULL, *csum_addr;
+	u64 blockoff;
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned long strp_nr;
+	u32 csum;
+	int i;
+	int count;
+
+	count = blk_type_to_size[sih->i_blk_type] / strp_size;
+
+	blocknr = get_nvmm(sb, sih, entry, pgoff);
+	dax_mem = nova_get_block(sb, (blocknr << PAGE_SHIFT));
+
+	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
+	strp_nr = blockoff >> strp_shift;
+
+	for (i = 0; i < count; i++) {
+		csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
+						dax_mem, strp_size));
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+		memcpy_to_pmem_nocache(csum_addr, &csum,
+					NOVA_DATA_CSUM_LEN);
+		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+
+		strp_nr  += 1;
+		dax_mem  += strp_size;
+	}
+
+	return 0;
+}
+
+/* Reset data csum for updating entries */
+int nova_reset_data_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry)
+{
+	struct nova_file_write_entry fake_entry, *curr;
+	size_t size = sizeof(struct nova_file_write_entry);
+	unsigned long pgoff, end_pgoff;
+	int ret;
+
+	ret = memcpy_from_pmem(&fake_entry, entry, size);
+	if (ret < 0)
+		return ret;
+
+	if (fake_entry.invalid_pages == fake_entry.num_pages) {
+		/* Dead entry */
+		goto out;
+	}
+
+	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
+	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
+		curr = nova_get_write_entry(sb, sih, pgoff);
+		if (curr != entry)
+			continue;
+
+		nova_update_block_csum(sb, sih, &fake_entry, pgoff);
+	}
+
+out:
+	nova_set_write_entry_updating(sb, entry, 0);
+	return ret;
+}
+
 /* Verify checksums of requested data bytes of a file write entry.
  *
  * This function works on an existing file write 'entry' with its data in NVMM.
