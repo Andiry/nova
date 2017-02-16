@@ -1410,7 +1410,7 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	length = sb->s_blocksize - offset;
 	pgoff = newsize >> sb->s_blocksize_bits;
 
-	nvmm = nova_find_nvmm_block(sb, si, NULL, pgoff);
+	nvmm = nova_find_nvmm_block(sb, sih, NULL, pgoff);
 	if (nvmm == 0)
 		return;
 

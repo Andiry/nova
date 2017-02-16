@@ -1401,7 +1401,7 @@ static int nova_get_mmap_addr(struct inode *inode, struct vm_area_struct *vma,
 
 	pi = nova_get_inode(sb, inode);
 
-	nvmm = nova_find_nvmm_block(sb, si, NULL, pgoff);
+	nvmm = nova_find_nvmm_block(sb, sih, NULL, pgoff);
 
 	ret = nova_get_nvmm_pfn(sb, pi, si, nvmm, pgoff, vm_flags,
 						kmem, pfn);
