@@ -141,7 +141,10 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 		nova_block_parity(sb, parbuf, blockptr);
 
 		par_addr = nova_get_parity_addr(sb, blocknr);
+
+		nova_memunlock_range(sb, par_addr, strp_size);
 		memcpy_to_pmem_nocache(par_addr, parbuf, strp_size);
+		nova_memlock_range(sb, par_addr, strp_size);
 
 		blocknr  += 1;
 		blockptr += blocksize;
@@ -203,8 +206,11 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	csum_nvmm = le32_to_cpu(*csum_addr);
 	match     = (csum_calc == csum_nvmm);
 
-	if (match)
+	if (match) {
+		nova_memunlock_range(sb, bad_strp, strp_size);
 	        memcpy_to_pmem_nocache(bad_strp, strp_buf, strp_size);
+		nova_memlock_range(sb, bad_strp, strp_size);
+	}
 
 	if (strp_buf != NULL)
 		kfree(strp_buf);

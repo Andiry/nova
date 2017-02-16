@@ -767,7 +767,6 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 		num_strps = offset >> strp_shift;
 	}
 
-	/* Should unlock wprotect, if it's not already unlocked by caller. */
 	if (num_strps > 0) {
 		if ((src_csum_ptr == NULL) || (dst_csum_ptr == NULL)) {
 			nova_err(sb, "%s: invalid checksum addresses "
@@ -777,6 +776,7 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 		}
 
 		/* TODO: Handle MCE: src_csum_ptr read from NVMM */
+		/* Should memunlock, if it's not already unlocked by caller. */
 		memcpy_from_pmem(dst_csum_ptr, src_csum_ptr,
 					num_strps * csum_size);
 	}
