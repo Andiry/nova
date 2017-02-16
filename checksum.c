@@ -495,7 +495,9 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 
 		csum      = cpu_to_le32(csum);
 		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
+		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 
 		strp_nr  += 1;
 		bufptr   += csummed;
@@ -507,8 +509,10 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 			csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
 						bufptr, strp_size));
 			csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+			nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
 						NOVA_DATA_CSUM_LEN);
+			nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 
 			strp_nr  += 1;
 			bufptr   += strp_size;
@@ -525,8 +529,10 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 
 			csum      = cpu_to_le32(csum);
 			csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+			nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
 						NOVA_DATA_CSUM_LEN);
+			nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 
 			csummed = bytes;
 		}
