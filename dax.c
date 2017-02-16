@@ -707,14 +707,11 @@ static int nova_inplace_update_write_entry(struct super_block *sb,
 	return 0;
 }
 
-static int nova_set_write_entry_updating(struct super_block *sb,
-	struct nova_file_write_entry *entry)
+int nova_set_write_entry_updating(struct super_block *sb,
+	struct nova_file_write_entry *entry, int set)
 {
-	if (data_csum == 0)
-		return 0;
-
 	nova_memunlock_range(sb, entry, sizeof(*entry));
-	entry->updating = 1;
+	entry->updating = set ? 1 : 0;
 	nova_update_entry_csum(entry);
 	nova_update_alter_entry(sb, entry);
 	nova_memlock_range(sb, entry, sizeof(*entry));
@@ -811,7 +808,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
 			if (data_csum)
-				nova_set_write_entry_updating(sb, entry);
+				nova_set_write_entry_updating(sb, entry, 1);
 		} else {
 			/* Allocate blocks to fill hole */
 			allocated = nova_new_data_blocks(sb, sih, &blocknr, ent_blks,
