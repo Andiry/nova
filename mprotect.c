@@ -182,7 +182,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma)
 	update.tail = pi->log_tail;
 	update.alter_tail = pi->alter_log_tail;
 	while (start_blk < end_blk) {
-		entry = nova_get_write_entry(sb, si, start_blk);
+		entry = nova_get_write_entry(sb, sih, start_blk);
 		if (!entry) {
 			nova_dbgv("%s: Found hole: pgoff %lu\n",
 					__func__, start_blk);

@@ -907,9 +907,8 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 
 static inline struct nova_file_write_entry *
 nova_get_write_entry(struct super_block *sb,
-	struct nova_inode_info *si, unsigned long blocknr)
+	struct nova_inode_info_header *sih, unsigned long blocknr)
 {
-	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
 
 	entry = radix_tree_lookup(&sih->tree, blocknr);
@@ -966,7 +965,7 @@ static inline u64 nova_find_nvmm_block(struct super_block *sb,
 	unsigned long nvmm;
 
 	if (!entry) {
-		entry = nova_get_write_entry(sb, si, blocknr);
+		entry = nova_get_write_entry(sb, &si->header, blocknr);
 		if (!entry)
 			return 0;
 	}

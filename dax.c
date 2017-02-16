@@ -79,7 +79,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			}
 		}
 
-		entry = nova_get_write_entry(sb, si, index);
+		entry = nova_get_write_entry(sb, sih, index);
 		if (unlikely(entry == NULL)) {
 			nova_dbgv("Required extent not found: pgoff %lu, "
 				"inode size %lld\n", index, isize);
@@ -255,7 +255,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	nova_dbg_verbose("%s: start offset %lu start blk %lu %p\n", __func__,
 				offset, start_blk, kmem);
 	if (offset != 0) {
-		entry = nova_get_write_entry(sb, si, start_blk);
+		entry = nova_get_write_entry(sb, sih, start_blk);
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL) {
 			/* Fill zero */
@@ -275,7 +275,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	nova_dbg_verbose("%s: end offset %lu, end blk %lu %p\n", __func__,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
-		entry = nova_get_write_entry(sb, si, end_blk);
+		entry = nova_get_write_entry(sb, sih, end_blk);
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL) {
 			/* Fill zero */
@@ -614,7 +614,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 
 	*ret_entry = NULL;
 	*inplace = 0;
-	entry = nova_get_write_entry(sb, si, start_blk);
+	entry = nova_get_write_entry(sb, sih, start_blk);
 	if (entry) {
 		/* We can do inplace write. Find contiguous blocks */
 		if (entry->reassigned == 0)
