@@ -414,7 +414,7 @@ out:
 }
 
 /* Calculate the data checksum. */
-static u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
+u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
 {
 	u32 csum;
 
