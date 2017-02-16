@@ -114,7 +114,8 @@ memcpy:
 		if ( (!zero) && (data_csum > 0) ) {
 			if (!nova_verify_data_csum(inode, entry, index,
 						offset, nr)) {
-				nova_err(sb, "%s: nova data checksum fail! "
+				nova_err(sb, "%s: nova data checksum and "
+					"recovery fail! "
 					"inode %lu entry pgoff %lu "
 					"index %lu\n", __func__,
 					inode->i_ino, entry->pgoff, index);
@@ -240,7 +241,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
 					offset, kmem, false);
-			if (data_csum) {
+			if (data_csum > 0) {
 				nova_copy_partial_block_csum(sb, sih, entry,
 					start_blk, offset, kmem_blknr, false);
 			}
@@ -256,6 +257,8 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
 		entry = nova_get_write_entry(sb, sih, end_blk);
+		if ( (data_csum > 0) || (data_parity > 0) )
+			kmem_blknr += num_blocks - 1;
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL) {
 			/* Fill zero */
@@ -265,11 +268,9 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, end_blk,
 					eblk_offset, kmem, true);
-			if (data_csum) {
-				kmem_blknr += num_blocks - 1;
+			if (data_csum > 0)
 				nova_copy_partial_block_csum(sb, sih, entry,
 					end_blk, eblk_offset, kmem_blknr, true);
-			}
 		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem + eblk_offset,
@@ -498,6 +499,10 @@ static ssize_t nova_cow_file_write(struct file *filp,
 					"csummed %zu\n", __func__,
 					copied, csummed);
 			}
+		}
+		if ( (copied > 0) && (data_parity > 0) ) {
+			nova_update_cow_parity(inode, blocknr, (void *) buf,
+						offset, copied);
 		}
 
 		if (pos + copied > inode->i_size)

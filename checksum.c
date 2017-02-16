@@ -636,7 +636,7 @@ bool nova_verify_data_csum(struct inode *inode,
 	size_t blocksize = nova_inode_blk_size(sih);
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	unsigned long block, blocknr;
+	unsigned long blocknr;
 	unsigned int strp_index;
 	unsigned long strp, strps, strp_nr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
@@ -666,17 +666,38 @@ bool nova_verify_data_csum(struct inode *inode,
 		match     = (csum_calc == csum_nvmm);
 
 		if (!match) {
-			block = (strp_index + strp) / (blocksize >> strp_shift);
 			nova_dbg("%s: nova data stripe checksum fail! "
-				"inode %lu block index %lu stripe %lu "
+				"inode %lu block offset %lu stripe nr %lu "
 				"csum calc 0x%08x csum nvmm 0x%08x\n",
-				__func__, inode->i_ino, index + block, strp_nr,
+				__func__, inode->i_ino, blockoff, strp_nr,
 				csum_calc, csum_nvmm);
-			break;
+
+			if (data_parity > 0)
+				nova_dbg("%s: nova data recovery begins.\n",
+						__func__);
+			else
+				break;
+
+			if (nova_restore_data(sb, blocknr, strp_index) == 0) {
+				nova_dbg("%s: nova data recovery success!\n",
+						__func__);
+				match = true;
+			} else {
+				nova_dbg("%s: nova data recovery fail!\n",
+						__func__);
+				break;
+			}
 		}
 
-		strp_nr  += 1;
-		strp_ptr += strp_size;
+		strp_nr    += 1;
+		strp_index += 1;
+		strp_ptr   += strp_size;
+		if (strp_index == (blocksize >> strp_shift)) {
+			blocknr += 1;
+			blockoff += blocksize;
+			strp_index = 0;
+		}
+
 	}
 
 	return match;
@@ -701,17 +722,10 @@ int nova_data_csum_init(struct super_block *sb)
 		/* New data blocks will be checksummed.
 		 * Old data blocks will be checksummed on access. */
 		nova_dbg("Data checksum is enabled.\n");
-		if (data_parity) {
-			nova_dbg("Data parity is enabled.\n");
-		}
 	} else {
 		/* New data blocks will not be checksummed.
 		 * Preserve but ignore existing checksums. */
 		nova_dbg("Data checksum is disabled.\n");
-		if (data_parity) {
-			nova_dbg("Cannot enable data parity w/o data_csum.\n");
-			data_parity = 0;
-		}
 	}
 
 	sbi->reserved_blocks += data_csum_blocks;
@@ -728,38 +742,43 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	unsigned int csum_size = NOVA_DATA_CSUM_LEN;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int num_strps;
+	unsigned long src_strp_nr, dst_strp_nr;
 	size_t src_blk_off, dst_blk_off;
-	void *src_csum_addr, *dst_csum_addr;
+	void *src_csum_ptr, *dst_csum_ptr;
 
 	src_blknr = get_nvmm(sb, sih, entry, index);
 	src_blk_off = nova_get_block_off(sb, src_blknr, sih->i_blk_type);
 	dst_blk_off = nova_get_block_off(sb, dst_blknr, sih->i_blk_type);
 
+	/* num_strps: the number of unmodified stripes, i.e. their checksums do
+	 * not change. */
 	if (is_end_blk) {
-		src_csum_addr = nova_get_data_csum_addr(sb,
-			((src_blk_off + offset - 1) >> strp_shift) + 1);
-		dst_csum_addr = nova_get_data_csum_addr(sb,
-			((dst_blk_off + offset - 1) >> strp_shift) + 1);
+		src_strp_nr = ((src_blk_off + offset - 1) >> strp_shift) + 1;
+		dst_strp_nr = ((dst_blk_off + offset - 1) >> strp_shift) + 1;
+		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
+		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr);
 		num_strps = (sb->s_blocksize - offset) >> strp_shift;
 	}
 	else {
-		src_csum_addr = nova_get_data_csum_addr(sb,
-			src_blk_off >> strp_shift);
-		dst_csum_addr = nova_get_data_csum_addr(sb,
-			dst_blk_off >> strp_shift);
+		src_strp_nr = src_blk_off >> strp_shift;
+		dst_strp_nr = dst_blk_off >> strp_shift;
+		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
+		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr);
 		num_strps = offset >> strp_shift;
 	}
 
 	/* Should unlock wprotect, if it's not already unlocked by caller. */
 	if (num_strps > 0) {
-		if ((src_csum_addr == NULL) || (dst_csum_addr == NULL)) {
+		if ((src_csum_ptr == NULL) || (dst_csum_ptr == NULL)) {
 			nova_err(sb, "%s: invalid checksum addresses "
-			"src_csum_addr 0x%p, dst_csum_addr 0x%p\n", __func__);
+			"src_csum_ptr 0x%p, dst_csum_ptr 0x%p\n", __func__);
 
 			return -1;
 		}
 
-		memcpy(dst_csum_addr, src_csum_addr, num_strps * csum_size);
+		/* TODO: Handle MCE: src_csum_ptr read from NVMM */
+		memcpy_from_pmem(dst_csum_ptr, src_csum_ptr,
+					num_strps * csum_size);
 	}
 
 	return 0;
