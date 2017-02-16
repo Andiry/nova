@@ -667,6 +667,7 @@ static int nova_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
 	u64 entry_size)
 {
+	entry->updating = 0;
 	entry->trans_id = cpu_to_le64(trans_id);
 	entry->mtime = cpu_to_le32(time);
 	entry->size = cpu_to_le64(entry_size);
@@ -706,6 +707,21 @@ static int nova_inplace_update_write_entry(struct super_block *sb,
 	return 0;
 }
 
+static int nova_set_write_entry_updating(struct super_block *sb,
+	struct nova_file_write_entry *entry)
+{
+	if (data_csum == 0)
+		return 0;
+
+	nova_memunlock_range(sb, entry, sizeof(*entry));
+	entry->updating = 1;
+	nova_update_entry_csum(entry);
+	nova_update_alter_entry(sb, entry);
+	nova_memlock_range(sb, entry, sizeof(*entry));
+
+	return 0;
+}
+
 ssize_t nova_inplace_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
@@ -720,7 +736,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	struct nova_inode_update update;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, ret;
+	size_t count, offset, copied, ret, csummed;
 	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
@@ -794,6 +810,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
+			if (data_csum)
+				nova_set_write_entry_updating(sb, entry);
 		} else {
 			/* Allocate blocks to fill hole */
 			allocated = nova_new_data_blocks(sb, sih, &blocknr, ent_blks,
@@ -830,6 +848,17 @@ ssize_t nova_inplace_file_write(struct file *filp,
 						buf, bytes);
 		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+		if ( (copied > 0) && (data_csum > 0) ) {
+			csummed = copied - nova_update_cow_csum(inode, blocknr,
+						(void *) buf, offset, copied);
+			if (unlikely(csummed != copied)) {
+				nova_dbg("%s: not all data bytes are "
+					"checksummed! copied %zu, "
+					"csummed %zu\n", __func__,
+					copied, csummed);
+			}
+		}
 
 		if (pos + copied > inode->i_size)
 			entry_size = cpu_to_le64(pos + copied);
