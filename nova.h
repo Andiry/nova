@@ -1565,6 +1565,9 @@ int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
 	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
 
+/* parity.c */
+int nova_block_parity(struct super_block *sb, void *parity, void *block);
+
 /* rebuild.c */
 int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,

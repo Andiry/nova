@@ -99,6 +99,23 @@ int nova_block_parity(struct super_block *sb, void *parity, void *block)
 	return 0;
 }
 
+int nova_update_block_parity(struct super_block *sb, unsigned long blocknr,
+	void *parbuf, void *blockptr)
+{
+	unsigned char *par_addr;
+	size_t strp_size = NOVA_STRIPE_SIZE;
+
+	nova_block_parity(sb, parbuf, blockptr);
+
+	par_addr = nova_get_parity_addr(sb, blocknr);
+
+	nova_memunlock_range(sb, par_addr, strp_size);
+	memcpy_to_pmem_nocache(par_addr, parbuf, strp_size);
+	nova_memlock_range(sb, par_addr, strp_size);
+
+	return 0;
+}
+
 /* Update copy-on-write data parity.
  * TODO: Checksum the parity stripe? */
 size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
@@ -110,7 +127,7 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	size_t blockoff;
 	size_t blocksize = nova_inode_blk_size(sih);
 	size_t strp_size = NOVA_STRIPE_SIZE;
-	unsigned char *blockptr, *strp_ptr, *bufptr, *parbuf, *par_addr;
+	unsigned char *blockptr, *strp_ptr, *bufptr, *parbuf;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
 	unsigned long block, blocks;
@@ -138,13 +155,7 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	for (block = 0; block < blocks; block++) {
 		/* FIXME: Now always read from nvmm.
 		 * Also need to read the write buffer. */
-		nova_block_parity(sb, parbuf, blockptr);
-
-		par_addr = nova_get_parity_addr(sb, blocknr);
-
-		nova_memunlock_range(sb, par_addr, strp_size);
-		memcpy_to_pmem_nocache(par_addr, parbuf, strp_size);
-		nova_memlock_range(sb, par_addr, strp_size);
+		nova_update_block_parity(sb, blocknr, parbuf, blockptr);
 
 		blocknr  += 1;
 		blockptr += blocksize;
