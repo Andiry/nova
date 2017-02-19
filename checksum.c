@@ -550,6 +550,7 @@ static int nova_update_block_csum(struct super_block *sb,
 	u64 blockoff;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned char *parbuf;
 	unsigned long strp_nr;
 	u32 csum;
 	int i;
@@ -576,11 +577,23 @@ static int nova_update_block_csum(struct super_block *sb,
 		dax_mem  += strp_size;
 	}
 
+	/* parity buffer for rolling updates */
+	parbuf = kmalloc(strp_size, GFP_KERNEL);
+	if (!parbuf) {
+		nova_err(sb, "%s: parity buffer allocation error\n",
+				__func__);
+		return -ENOMEM;
+	}
+
+	nova_update_block_parity(sb, blocknr, parbuf, dax_mem);
+
+	kfree(parbuf);
+
 	return 0;
 }
 
 /* Reset data csum for updating entries */
-int nova_reset_data_csum(struct super_block *sb,
+int nova_reset_data_csum_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry)
 {
 	struct nova_file_write_entry fake_entry, *curr;
@@ -607,7 +620,9 @@ int nova_reset_data_csum(struct super_block *sb,
 	}
 
 out:
-	nova_set_write_entry_updating(sb, entry, 0);
+	if (ret == 0)
+		nova_set_write_entry_updating(sb, entry, 0);
+
 	return ret;
 }
 
