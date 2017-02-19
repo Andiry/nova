@@ -1412,13 +1412,6 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	unsigned long index, size_t offset, unsigned long dst_blknr,
 	bool is_end_blk);
 
-/* parity.c */
-int nova_data_parity_init(struct super_block *sb);
-size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, size_t offset, size_t bytes);
-int nova_restore_data(struct super_block *sb, unsigned long blocknr,
-        unsigned int strp_id);
-
 /*
  * Inodes and files operations
  */
@@ -1568,6 +1561,11 @@ int nova_append_link_change_entry(struct super_block *sb,
 /* parity.c */
 int nova_update_block_parity(struct super_block *sb, unsigned long blocknr,
 	void *parbuf, void *blockptr);
+size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
+	void *wrbuf, size_t offset, size_t bytes);
+int nova_restore_data(struct super_block *sb, unsigned long blocknr,
+        unsigned int strp_id);
+int nova_data_parity_init(struct super_block *sb);
 
 /* rebuild.c */
 int nova_rebuild_file_inode_tree(struct super_block *sb,
