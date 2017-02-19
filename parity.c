@@ -36,7 +36,7 @@ static int nova_delta_parity(void *parity, void *delta,
 
 	if (offset + bytes > strp_size) {
 		nova_dbg("%s: parity stripe length error\n", __func__);
-		return -1;
+		return -EIO;
 	}
 
 	for (byte = offset; byte < bytes; byte++) {
@@ -57,7 +57,7 @@ static int nova_block_parity(struct super_block *sb, void *parity, void *block)
 
 	if ((parity == NULL) || (block == NULL)) {
 		nova_dbg("%s: pointer error\n", __func__);
-		return -1;
+		return -EINVAL;
 	}
 
 	memcpy(parity, strp_ptr, strp_size);
@@ -120,7 +120,7 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	if (parbuf == NULL) {
 		nova_err(sb, "%s: parity buffer allocation error\n",
 				__func__);
-		return -1;
+		return -ENOMEM;
 	}
 
 	for (block = 0; block < blocks; block++) {
@@ -132,8 +132,7 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 		blockptr += blocksize;
 	}
 
-	if (parbuf != NULL)
-		kfree(parbuf);
+	kfree(parbuf);
 
 	return 0;
 }
@@ -161,13 +160,13 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	if (strp_buf == NULL) {
 		nova_err(sb, "%s: stripe buffer allocation error\n",
 				__func__);
-		return -1;
+		return -ENOMEM;
 	}
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 	if (par_addr == NULL) {
 		nova_err(sb, "%s: parity address error\n", __func__);
-		return -1;
+		return -EIO;
 	}
 
 	memcpy_from_pmem(strp_buf, par_addr, strp_size);
@@ -194,13 +193,12 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 		nova_memlock_range(sb, bad_strp, strp_size);
 	}
 
-	if (strp_buf != NULL)
-		kfree(strp_buf);
+	kfree(strp_buf);
 
 	if (match)
 	        return 0;
 	else
-	        return -1;
+	        return -EIO;
 }
 
 int nova_data_parity_init(struct super_block *sb)

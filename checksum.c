@@ -787,7 +787,7 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 			nova_err(sb, "%s: invalid checksum addresses "
 			"src_csum_ptr 0x%p, dst_csum_ptr 0x%p\n", __func__);
 
-			return -1;
+			return -EIO;
 		}
 
 		/* TODO: Handle MCE: src_csum_ptr read from NVMM */
