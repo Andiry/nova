@@ -56,7 +56,8 @@ extern int nova_writeable(void *vaddr, unsigned long size, int rw);
 extern int nova_dax_mem_protect(struct super_block *sb,
 				 void *vaddr, unsigned long size, int rw);
 int nova_mmap_to_new_blocks(struct vm_area_struct *vma);
-int nova_destroy_vma_tree(struct super_block *sb, int set_read);
+int nova_set_vmas_readonly(struct super_block *sb);
+int nova_destroy_vma_tree(struct super_block *sb);
 
 static inline int nova_is_protected(struct super_block *sb)
 {

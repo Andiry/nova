@@ -333,7 +333,7 @@ out:
 	return 0;
 }
 
-int nova_destroy_vma_tree(struct super_block *sb, int set_read)
+int nova_set_vmas_readonly(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct vma_item *item;
@@ -346,8 +346,27 @@ int nova_destroy_vma_tree(struct super_block *sb, int set_read)
 		item = container_of(temp, struct vma_item, node);
 		temp = rb_next(temp);
 		rb_erase(&item->node, &sbi->vma_tree);
-		if (set_read)
-			nova_set_vma_read(item->vma);
+		nova_set_vma_read(item->vma);
+		kfree(item);
+	}
+	spin_unlock(&sbi->vma_lock);
+
+	return 0;
+}
+
+int nova_destroy_vma_tree(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct vma_item *item;
+	struct rb_node *temp;
+
+	nova_dbgv("%s\n", __func__);
+	spin_lock(&sbi->vma_lock);
+	temp = rb_first(&sbi->vma_tree);
+	while (temp) {
+		item = container_of(temp, struct vma_item, node);
+		temp = rb_next(temp);
+		rb_erase(&item->node, &sbi->vma_tree);
 		kfree(item);
 	}
 	spin_unlock(&sbi->vma_lock);
@@ -357,7 +376,12 @@ int nova_destroy_vma_tree(struct super_block *sb, int set_read)
 
 #else
 
-int nova_destroy_vma_tree(struct super_block *sb, int set_read)
+int nova_set_vmas_readonly(struct super_block *sb)
+{
+	return 0;
+}
+
+int nova_destroy_vma_tree(struct super_block *sb)
 {
 	return 0;
 }
