@@ -1623,6 +1623,9 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 
 	item->vma = vma;
 
+	nova_dbgv("Insert vma %p, start 0x%lx, end 0x%lx\n",
+			vma, vma->vm_start, vma->vm_end);
+
 	spin_lock(&sbi->vma_lock);
 
 	temp = &(sbi->vma_tree.rb_node);
@@ -1686,6 +1689,9 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 	spin_unlock(&sbi->vma_lock);
 
 	if (found) {
+		nova_dbgv("Remove vma %p, start 0x%lx, end 0x%lx\n",
+				curr->vma, curr->vma->vm_start,
+				curr->vma->vm_end);
 		kfree(curr);
 	}
 
@@ -1762,7 +1768,7 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	vma->vm_ops = &nova_dax_vm_ops;
 
-#ifdef MPROTEC_READ
+#ifdef MPROTECT_READ
 	/* Check SHARED WRITE vma */
 	nova_insert_write_vma(vma);
 #endif

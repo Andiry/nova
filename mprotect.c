@@ -335,10 +335,14 @@ int nova_destroy_vma_tree(struct super_block *sb, int set_read)
 	struct vma_item *item;
 	struct rb_node *temp;
 
+	nova_dbgv("%s\n", __func__);
 	spin_lock(&sbi->vma_lock);
 	temp = rb_first(&sbi->vma_tree);
 	while (temp) {
 		item = container_of(temp, struct vma_item, node);
+		nova_dbgv("Remove vma %p, start 0x%lx, end 0x%lx\n",
+				item->vma, item->vma->vm_start,
+				item->vma->vm_end);
 		temp = rb_next(temp);
 		rb_erase(&item->node, &sbi->vma_tree);
 		if (set_read)
