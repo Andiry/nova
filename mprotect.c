@@ -310,6 +310,7 @@ static int nova_set_vma_read(struct vm_area_struct *vma)
 	struct mm_struct *mm = vma->vm_mm;
 	unsigned long oldflags = vma->vm_flags;
 	unsigned long newflags;
+	pgprot_t new_page_prot;
 
 	down_write(&mm->mmap_sem);
 
@@ -317,10 +318,13 @@ static int nova_set_vma_read(struct vm_area_struct *vma)
 	if (oldflags == newflags)
 		goto out;
 
-	vma->vm_flags = newflags;
-	vma_set_page_prot(vma);
+	nova_dbgv("Set vma %p read, start 0x%lx, end 0x%lx\n",
+				vma, vma->vm_start,
+				vma->vm_end);
+
+	new_page_prot = vm_get_page_prot(newflags);
 	change_protection(vma, vma->vm_start, vma->vm_end,
-				vma->vm_page_prot, 0, 0);
+				new_page_prot, 0, 0);
 	vma->original_write = 1;
 
 out:
@@ -340,9 +344,6 @@ int nova_destroy_vma_tree(struct super_block *sb, int set_read)
 	temp = rb_first(&sbi->vma_tree);
 	while (temp) {
 		item = container_of(temp, struct vma_item, node);
-		nova_dbgv("Remove vma %p, start 0x%lx, end 0x%lx\n",
-				item->vma, item->vma->vm_start,
-				item->vma->vm_end);
 		temp = rb_next(temp);
 		rb_erase(&item->node, &sbi->vma_tree);
 		if (set_read)

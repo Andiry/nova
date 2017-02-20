@@ -1701,19 +1701,15 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 static int nova_restore_vma_write(struct vm_area_struct *vma)
 {
 	struct mm_struct *mm = vma->vm_mm;
-	unsigned long oldflags = vma->vm_flags;
-	unsigned long newflags;
 
 	down_write(&mm->mmap_sem);
 
-	newflags = oldflags | VM_WRITE;
-	if (oldflags == newflags)
-		goto out;
+	nova_dbgv("Restore vma %p write, start 0x%lx, end 0x%lx\n",
+				vma, vma->vm_start,
+				vma->vm_end);
 
 	nova_mmap_to_new_blocks(vma);
 
-	vma->vm_flags = newflags;
-	vma_set_page_prot(vma);
 	vma->original_write = 0;
 
 out:
