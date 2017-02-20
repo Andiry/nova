@@ -796,7 +796,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
-			if (data_csum)
+			if (data_csum || data_parity)
 				nova_set_write_entry_updating(sb, entry, 1);
 		} else {
 			/* Allocate blocks to fill hole */
