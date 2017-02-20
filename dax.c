@@ -846,6 +846,11 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			}
 		}
 
+		if ( (copied > 0) && (data_parity > 0) ) {
+			nova_update_cow_parity(inode, blocknr, (void *) buf,
+						offset, copied);
+		}
+
 		if (pos + copied > inode->i_size)
 			entry_size = cpu_to_le64(pos + copied);
 		else
