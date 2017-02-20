@@ -167,7 +167,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma)
 
 	pi = nova_get_inode(sb, inode);
 
-	nova_dbgv("%s:: inode %lu, vm_start(0x%lx), vm_end(0x%lx), "
+	nova_dbgv("%s: inode %lu, vm_start(0x%lx), vm_end(0x%lx), "
 			"vma pgoff(0x%lx)\n", __func__, inode->i_ino,
 			vma->vm_start, vma->vm_end, vma->vm_pgoff);
 
@@ -345,9 +345,7 @@ int nova_set_vmas_readonly(struct super_block *sb)
 	while (temp) {
 		item = container_of(temp, struct vma_item, node);
 		temp = rb_next(temp);
-		rb_erase(&item->node, &sbi->vma_tree);
 		nova_set_vma_read(item->vma);
-		kfree(item);
 	}
 	spin_unlock(&sbi->vma_lock);
 

@@ -1712,8 +1712,6 @@ static int nova_restore_vma_write(struct vm_area_struct *vma)
 
 	vma->original_write = 0;
 
-out:
-	nova_insert_write_vma(vma);
 	up_write(&mm->mmap_sem);
 
 	return 0;
