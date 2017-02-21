@@ -80,6 +80,9 @@ static int nova_update_entry_pfn(struct super_block *sb,
 	pfn = nova_get_pfn(sb, entry->block);
 	size = entry->num_pages << PAGE_SHIFT;
 
+	nova_dbgv("%s: addr 0x%lx, size 0x%lx\n", __func__,
+			addr, size);
+
 	newflags = vma->vm_flags | VM_WRITE;
 	new_prot = vm_get_page_prot(newflags);
 
@@ -126,7 +129,8 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 	return ret;
 }
 
-int nova_mmap_to_new_blocks(struct vm_area_struct *vma)
+int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
+	unsigned long address)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
@@ -158,7 +162,9 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma)
 	int ret;
 
 	start_blk = vma->vm_pgoff;
-	num_blocks = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
+	start_blk += (address - vma->vm_start) >> sb->s_blocksize_bits;
+//	num_blocks = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
+	num_blocks = 1;
 	end_blk = start_blk + num_blocks;
 	if (start_blk >= end_blk)
 		return 0;
@@ -168,8 +174,9 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma)
 	pi = nova_get_inode(sb, inode);
 
 	nova_dbgv("%s: inode %lu, vm_start(0x%lx), vm_end(0x%lx), "
-			"vma pgoff(0x%lx)\n", __func__, inode->i_ino,
-			vma->vm_start, vma->vm_end, vma->vm_pgoff);
+			"vma pgoff(0x%lx), address 0x%lx\n", __func__,
+			inode->i_ino, vma->vm_start, vma->vm_end,
+			vma->vm_pgoff, address);
 
 	time = CURRENT_TIME_SEC.tv_sec;
 

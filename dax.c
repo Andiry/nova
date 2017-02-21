@@ -777,10 +777,10 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	nova_dbgv("%s: inode %lu, offset %lld, count %lu\n",
-			__func__, inode->i_ino,	pos, count);
-
 	trans_id = nova_get_trans_id(sb);
+
+	nova_dbgv("%s: trans_id %llu, inode %lu, offset %lld, count %lu\n",
+			__func__, trans_id, inode->i_ino, pos, count);
 	update.tail = sih->log_tail;
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
@@ -1698,19 +1698,18 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 	return 0;
 }
 
-static int nova_restore_vma_write(struct vm_area_struct *vma)
+static int nova_restore_page_write(struct vm_area_struct *vma,
+	unsigned long address)
 {
 	struct mm_struct *mm = vma->vm_mm;
 
 	down_write(&mm->mmap_sem);
 
-	nova_dbgv("Restore vma %p write, start 0x%lx, end 0x%lx\n",
-				vma, vma->vm_start,
-				vma->vm_end);
+	nova_dbgv("Restore vma %p write, start 0x%lx, end 0x%lx, "
+			" address 0x%lx\n", vma, vma->vm_start,
+			vma->vm_end, address);
 
-	nova_mmap_to_new_blocks(vma);
-
-	vma->original_write = 0;
+	nova_mmap_to_new_blocks(vma, address);
 
 	up_write(&mm->mmap_sem);
 
@@ -1750,7 +1749,7 @@ static const struct vm_operations_struct nova_dax_vm_ops = {
 #ifdef MPROTECT_READ
 	.open = nova_vma_open,
 	.close = nova_vma_close,
-	.dax_cow = nova_restore_vma_write,
+	.dax_cow = nova_restore_page_write,
 #endif
 };
 

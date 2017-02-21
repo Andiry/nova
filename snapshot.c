@@ -1041,6 +1041,7 @@ int nova_create_snapshot(struct super_block *sb)
 	 * snapshot that is being created.
 	 */
 	sbi->create_snapshot_trans_id = trans_id;
+	nova_dbgv("%s: trans id %llu\n", __func__, trans_id);
 
 	timestamp = CURRENT_TIME_SEC.tv_sec;
 
