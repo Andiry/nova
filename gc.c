@@ -125,7 +125,7 @@ static void free_curr_page(struct super_block *sb,
 			nova_get_blocknr(sb, curr_head, btype), 1);
 }
 
-int nova_gc_assign_file_entry(struct super_block *sb,
+static int nova_gc_assign_file_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *old_entry,
 	struct nova_file_write_entry *new_entry)
