@@ -130,7 +130,7 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 }
 
 int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
-	unsigned long address)
+	unsigned long address, int num_blocks)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
@@ -141,7 +141,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry entry_data;
 	struct nova_inode_update update;
-	unsigned long start_blk, num_blocks, end_blk;
+	unsigned long start_blk, end_blk;
 	unsigned long entry_pgoff;
 	unsigned long from_blocknr = 0;
 	unsigned long blocknr = 0;
@@ -163,8 +163,6 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 
 	start_blk = vma->vm_pgoff;
 	start_blk += (address - vma->vm_start) >> sb->s_blocksize_bits;
-//	num_blocks = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
-	num_blocks = 1;
 	end_blk = start_blk + num_blocks;
 	if (start_blk >= end_blk)
 		return 0;
