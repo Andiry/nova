@@ -1586,6 +1586,11 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
 	u64 trans_id);
+int nova_invalidate_link_change_entry(struct super_block *sb,
+	u64 old_link_change);
+int nova_append_link_change_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);
@@ -1598,11 +1603,6 @@ int nova_assign_write_entry(struct super_block *sb,
 extern const struct inode_operations nova_dir_inode_operations;
 extern const struct inode_operations nova_special_inode_operations;
 extern struct dentry *nova_get_parent(struct dentry *child);
-int nova_invalidate_link_change_entry(struct super_block *sb,
-	u64 old_link_change);
-int nova_append_link_change_entry(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode,
-	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
 
 /* parity.c */
 int nova_update_block_parity(struct super_block *sb, unsigned long blocknr,
