@@ -1,7 +1,7 @@
-From 4fee8ca6e9149e351f41fec8c8485251e38b275a Mon Sep 17 00:00:00 2001
+From d4aff252e7f57522b5588fd0defc83e918f8f1dd Mon Sep 17 00:00:00 2001
 From: Andiry Xu <jix024@cs.ucsd.edu>
 Date: Fri, 10 Feb 2017 12:42:21 -0800
-Subject: [PATCH 5/6] Add dax_cow method to x86 fault handler
+Subject: [PATCH 5/8] Add dax_cow method to x86 fault handler
 
 Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
 ---
@@ -33,7 +33,7 @@ index e3254ca..664a49e 100644
  		bad_area_access_error(regs, error_code, address, vma);
  		return;
 diff --git a/include/linux/mm.h b/include/linux/mm.h
-index fe6b403..87a9285 100644
+index b84615b..4333f21 100644
 --- a/include/linux/mm.h
 +++ b/include/linux/mm.h
 @@ -389,6 +389,8 @@ struct vm_operations_struct {

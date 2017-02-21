@@ -1,7 +1,7 @@
-From 53b4fc991fa99339818575cdf4091f0d4b9845db Mon Sep 17 00:00:00 2001
+From c4d65e0c2aeaa75999b17e928f9de985f18251bb Mon Sep 17 00:00:00 2001
 From: Andiry Xu <jix024@cs.ucsd.edu>
-Date: Fri, 6 Jan 2017 15:37:34 -0800
-Subject: [PATCH 1/6] Export radix_tree_replace_slot
+Date: Sat, 4 Feb 2017 01:13:40 -0800
+Subject: [PATCH 1/8] Export radix_tree_replace_slot
 
 Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
 ---
@@ -9,10 +9,10 @@ Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
  1 file changed, 1 insertion(+)
 
 diff --git a/lib/radix-tree.c b/lib/radix-tree.c
-index 6f382e0..1ee7449 100644
+index 84812a9..72fab49 100644
 --- a/lib/radix-tree.c
 +++ b/lib/radix-tree.c
-@@ -1099,6 +1099,7 @@ void radix_tree_replace_slot(struct radix_tree_root *root,
+@@ -1102,6 +1102,7 @@ void radix_tree_replace_slot(struct radix_tree_root *root,
  {
  	replace_slot(root, NULL, slot, item, true);
  }

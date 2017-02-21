@@ -1,7 +1,7 @@
-From c854f6048e556fcfa6a2d9011273f2e9bd5ae434 Mon Sep 17 00:00:00 2001
+From 345841b302f67bd4053e3641b6a29474a30a33cb Mon Sep 17 00:00:00 2001
 From: Andiry Xu <jix024@cs.ucsd.edu>
 Date: Fri, 10 Feb 2017 12:40:37 -0800
-Subject: [PATCH 3/6] DAX iomap wprotect
+Subject: [PATCH 3/8] DAX iomap wprotect
 
 Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
 ---
@@ -9,10 +9,10 @@ Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
  1 file changed, 22 insertions(+), 2 deletions(-)
 
 diff --git a/fs/dax.c b/fs/dax.c
-index 5c74f60..e8cf75c 100644
+index c45598b..94f14db 100644
 --- a/fs/dax.c
 +++ b/fs/dax.c
-@@ -975,6 +975,24 @@ static sector_t dax_iomap_sector(struct iomap *iomap, loff_t pos)
+@@ -995,6 +995,24 @@ static sector_t dax_iomap_sector(struct iomap *iomap, loff_t pos)
  	return iomap->blkno + (((pos & PAGE_MASK) - iomap->offset) >> 9);
  }
  
@@ -37,7 +37,7 @@ index 5c74f60..e8cf75c 100644
  static loff_t
  dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
  		struct iomap *iomap)
-@@ -1024,9 +1042,11 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
+@@ -1049,9 +1067,11 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
  		if (map_len > end - pos)
  			map_len = end - pos;
  

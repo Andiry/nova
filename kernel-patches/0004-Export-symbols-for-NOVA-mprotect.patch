@@ -1,7 +1,7 @@
-From c1db0e8f190777016aadc8120dcfb242ecba8a21 Mon Sep 17 00:00:00 2001
+From e660129ebfaca5af9c5484d5d352b2a87543db11 Mon Sep 17 00:00:00 2001
 From: Andiry Xu <jix024@cs.ucsd.edu>
 Date: Fri, 10 Feb 2017 12:41:47 -0800
-Subject: [PATCH 4/6] Export symbols for NOVA mprotect
+Subject: [PATCH 4/8] Export symbols for NOVA mprotect
 
 Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
 ---
@@ -11,7 +11,7 @@ Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
  3 files changed, 3 insertions(+), 1 deletion(-)
 
 diff --git a/mm/memory.c b/mm/memory.c
-index 7d23b50..2422426 100644
+index 6bf2b47..b0a9152 100644
 --- a/mm/memory.c
 +++ b/mm/memory.c
 @@ -1693,7 +1693,7 @@ static int remap_pte_range(struct mm_struct *mm, pmd_t *pmd,

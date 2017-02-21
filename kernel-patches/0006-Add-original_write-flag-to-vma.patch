@@ -1,7 +1,7 @@
-From 84c8f812e03948460b09874cbe60df4d879ee87d Mon Sep 17 00:00:00 2001
+From 7289c2a8db60a8e8cd3a8ef76790d71051fee31b Mon Sep 17 00:00:00 2001
 From: Andiry Xu <jix024@cs.ucsd.edu>
 Date: Tue, 15 Nov 2016 10:14:44 -0800
-Subject: [PATCH 6/6] Add original_write flag to vma
+Subject: [PATCH 6/8] Add original_write flag to vma
 
 Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
 ---

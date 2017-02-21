@@ -1,7 +1,7 @@
-From 1787654ed8edbe5ae6760cee89add62905f0cdf8 Mon Sep 17 00:00:00 2001
+From 47e8a86a6aca6c875a8d1193fc035400f6d24e74 Mon Sep 17 00:00:00 2001
 From: Andiry Xu <jix024@cs.ucsd.edu>
 Date: Mon, 6 Feb 2017 09:57:55 -0800
-Subject: [PATCH 2/6] Add devm_memremap_ro
+Subject: [PATCH 2/8] Add devm_memremap_ro
 
 Signed-off-by: Andiry Xu <jix024@cs.ucsd.edu>
 ---
@@ -110,7 +110,7 @@ index 7aaa263..152afa1 100644
  EXPORT_SYMBOL(ioremap_prot);
  
 diff --git a/drivers/nvdimm/pmem.c b/drivers/nvdimm/pmem.c
-index 7282d74..d865858 100644
+index 5b536be..ad737ca 100644
 --- a/drivers/nvdimm/pmem.c
 +++ b/drivers/nvdimm/pmem.c
 @@ -33,6 +33,11 @@
@@ -125,7 +125,7 @@ index 7282d74..d865858 100644
  static struct device *to_dev(struct pmem_device *pmem)
  {
  	/*
-@@ -284,6 +289,7 @@ static int pmem_attach_disk(struct device *dev,
+@@ -286,6 +291,7 @@ static int pmem_attach_disk(struct device *dev,
  
  	pmem->pfn_flags = PFN_DEV;
  	if (is_nd_pfn(dev)) {
@@ -133,7 +133,7 @@ index 7282d74..d865858 100644
  		addr = devm_memremap_pages(dev, &pfn_res, &q->q_usage_counter,
  				altmap);
  		pfn_sb = nd_pfn->pfn_sb;
-@@ -293,12 +299,19 @@ static int pmem_attach_disk(struct device *dev,
+@@ -295,12 +301,19 @@ static int pmem_attach_disk(struct device *dev,
  		res = &pfn_res; /* for badblocks populate */
  		res->start += pmem->data_offset;
  	} else if (pmem_should_map_pages(dev)) {
@@ -169,7 +169,7 @@ index 82ef36e..f739134 100644
  
  void *__devm_memremap_pages(struct device *dev, struct resource *res);
 diff --git a/kernel/memremap.c b/kernel/memremap.c
-index b501e39..c7fc72f 100644
+index 9ecedc2..071b491 100644
 --- a/kernel/memremap.c
 +++ b/kernel/memremap.c
 @@ -162,6 +162,30 @@ void *devm_memremap(struct device *dev, resource_size_t offset,
