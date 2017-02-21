@@ -1078,6 +1078,21 @@ out:
 	sih->i_size = entry->size;
 }
 
+static void nova_traverse_file_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry, struct task_ring *ring,
+	unsigned long base, struct scan_bitmap *bm)
+{
+	sih->i_size = entry->size;
+
+	if (entry->num_pages != entry->invalid_pages) {
+		if (entry->pgoff < base + MAX_PGOFF &&
+				entry->pgoff + entry->num_pages > base)
+			nova_set_ring_array(sb, sih, entry,
+						ring, base, bm);
+	}
+}
+
 static int nova_traverse_file_inode_log(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	struct task_ring *ring, struct scan_bitmap *bm)
@@ -1144,29 +1159,23 @@ again:
 							ring, base, data_bits,
 							bm);
 				curr_p += sizeof(struct nova_setattr_logentry);
-				continue;
+				break;
 			case LINK_CHANGE:
 				curr_p += sizeof(struct nova_link_change_entry);
-				continue;
+				break;
 			case FILE_WRITE:
+				entry = (struct nova_file_write_entry *)addr;
+				nova_traverse_file_write_entry(sb, sih, entry,
+							ring, base, bm);
+				curr_p += sizeof(struct nova_file_write_entry);
 				break;
 			default:
 				nova_dbg("%s: unknown type %d, 0x%llx\n",
 							__func__, type, curr_p);
 				NOVA_ASSERT(0);
+				BUG();
 		}
 
-		entry = (struct nova_file_write_entry *)addr;
-		sih->i_size = entry->size;
-
-		if (entry->num_pages != entry->invalid_pages) {
-			if (entry->pgoff < base + MAX_PGOFF &&
-					entry->pgoff + entry->num_pages > base)
-				nova_set_ring_array(sb, sih, entry,
-							ring, base, bm);
-		}
-
-		curr_p += sizeof(struct nova_file_write_entry);
 	}
 
 	if (base == 0) {
