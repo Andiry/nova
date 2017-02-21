@@ -150,6 +150,21 @@ extern int data_parity;
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
 
+/* ======================= Lite journal ========================= */
+
+#define	JOURNAL_INODE	1
+#define	JOURNAL_ENTRY	2
+
+/* Lite journal */
+struct nova_lite_journal_entry {
+	__le64 type;
+	__le64 data1;
+	__le64 data2;
+	__le32 padding;
+	__le32 csum;
+} __attribute((__packed__));
+
+
 /* ======================= Log entry ========================= */
 /* Inode entry in the log */
 
@@ -160,6 +175,24 @@ extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
 #define	BLOCK_OFF(p)	((p) & ~INVALID_MASK)
 
 #define	ENTRY_LOC(p)	((p) & INVALID_MASK)
+
+#define	LAST_ENTRY	4064
+#define	PAGE_TAIL(p)	(BLOCK_OFF(p) + LAST_ENTRY)
+
+struct nova_inode_page_tail {
+	__le64	trans_id;	/* For snapshot list page */
+	__le64	padding2;
+	__le64	alter_page;	/* Corresponding page in the other log */
+	__le64	next_page;
+} __attribute((__packed__));
+
+/* Fit in PAGE_SIZE */
+struct	nova_inode_log_page {
+	char padding[LAST_ENTRY];
+	struct nova_inode_page_tail page_tail;
+} __attribute((__packed__));
+
+#define	EXTEND_THRESHOLD	256
 
 enum nova_entry_type {
 	FILE_WRITE = 1,
@@ -186,18 +219,6 @@ static inline void nova_set_entry_type(void *p, enum nova_entry_type type)
 	*(u8 *)p = type;
 }
 
-#define	JOURNAL_INODE	1
-#define	JOURNAL_ENTRY	2
-
-/* Lite journal */
-struct nova_lite_journal_entry {
-	__le64 type;
-	__le64 data1;
-	__le64 data2;
-	__le32 padding;
-	__le32 csum;
-} __attribute((__packed__));
-
 struct nova_file_write_entry {
 	u8	entry_type;
 	u8	reassigned;	/* Data is not latest */
@@ -214,24 +235,6 @@ struct nova_file_write_entry {
 	__le32	csumpadding;
 	__le32	csum;
 } __attribute((__packed__));
-
-struct nova_inode_page_tail {
-	__le64	trans_id;	/* For snapshot list page */
-	__le64	padding2;
-	__le64	alter_page;	/* Corresponding page in the other log */
-	__le64	next_page;
-} __attribute((__packed__));
-
-#define	LAST_ENTRY	4064
-#define	PAGE_TAIL(p)	(BLOCK_OFF(p) + LAST_ENTRY)
-
-/* Fit in PAGE_SIZE */
-struct	nova_inode_log_page {
-	char padding[LAST_ENTRY];
-	struct nova_inode_page_tail page_tail;
-} __attribute((__packed__));
-
-#define	EXTEND_THRESHOLD	256
 
 /*
  * Structure of a directory log entry in NOVA.
