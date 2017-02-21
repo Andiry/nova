@@ -353,6 +353,9 @@ static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 		case LINK_CHANGE:
 			((struct nova_link_change_entry *)entry)->invalid = 1;
 			break;
+		case MMAP_WRITE:
+			((struct nova_mmap_entry *)entry)->invalid = 1;
+			break;
 		default:
 			break;
 	}
@@ -1995,6 +1998,7 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	struct nova_dentry *dentry;
 	struct nova_setattr_logentry *setattr_entry;
 	struct nova_link_change_entry *linkc_entry;
+	struct nova_mmap_entry *mmap_entry;
 	void *addr;
 	u8 type;
 	bool ret = true;
@@ -2027,6 +2031,12 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 			if (sih->last_dentry == curr_p)
 				ret = false;
 			*length = le16_to_cpu(dentry->de_len);
+			break;
+		case MMAP_WRITE:
+			mmap_entry = (struct nova_mmap_entry *)addr;
+			if (mmap_entry->invalid == 0)
+				ret = false;
+			*length = sizeof(struct nova_mmap_entry);
 			break;
 		case NEXT_PAGE:
 			/* No more entries in this page */
@@ -2170,6 +2180,9 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 			break;
 		case LINK_CHANGE:
 			sih->last_link_change = new_curr;
+			break;
+		case MMAP_WRITE:
+			/* Do nothing right now */
 			break;
 		case FILE_WRITE:
 			new_addr = (void *)nova_get_block(sb, new_curr);

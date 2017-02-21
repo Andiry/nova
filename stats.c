@@ -302,6 +302,13 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 			curr, entry->trans_id, entry->links, entry->flags);
 }
 
+static inline void nova_print_mmap_entry(struct super_block *sb,
+	u64 curr, struct nova_mmap_entry *entry)
+{
+	nova_dbg("mmap write entry @ 0x%llx: trans %llu, paoff %llu, pages %u\n",
+			curr, entry->trans_id, entry->pgoff, entry->num_pages);
+}
+
 static inline size_t nova_print_dentry(struct super_block *sb,
 	u64 curr, struct nova_dentry *entry)
 {
@@ -330,6 +337,10 @@ u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 		case LINK_CHANGE:
 			nova_print_link_change_entry(sb, curr, addr);
 			curr += sizeof(struct nova_link_change_entry);
+			break;
+		case MMAP_WRITE:
+			nova_print_mmap_entry(sb, curr, addr);
+			curr += sizeof(struct nova_mmap_entry);
 			break;
 		case FILE_WRITE:
 			nova_print_file_write_entry(sb, curr, addr);

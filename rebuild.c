@@ -198,6 +198,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_setattr_logentry *attr_entry = NULL;
 	struct nova_link_change_entry *link_change_entry = NULL;
+	struct nova_mmap_entry *mmap_entry = NULL;
 	struct nova_inode_rebuild rebuild, *reb;
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
@@ -278,6 +279,11 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				nova_rebuild_handle_write_entry(sb, sih, reb,
 						entry, &curr_trans_id);
 				curr_p += sizeof(struct nova_file_write_entry);
+				break;
+			case MMAP_WRITE:
+				mmap_entry = (struct nova_mmap_entry *)addr;
+				/* FIXME */
+				curr_p += sizeof(struct nova_mmap_entry);
 				break;
 			default:
 				nova_err(sb, "unknown type %d, 0x%llx\n",

@@ -367,6 +367,9 @@ u64 nova_create_logentry_transaction(struct super_block *sb,
 		case LINK_CHANGE:
 			size = sizeof(struct nova_link_change_entry);
 			break;
+		case MMAP_WRITE:
+			size = sizeof(struct nova_mmap_entry);
+			break;
 		default:
 			break;
 	}
@@ -433,6 +436,12 @@ u64 nova_create_invalidate_reassign_transaction(struct super_block *sb,
 				&((struct nova_link_change_entry *)entry)->invalid);
 			temp = nova_append_entry_journal(sb, temp,
 				&((struct nova_link_change_entry *)entry)->csum);
+			break;
+		case MMAP_WRITE:
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_mmap_entry *)entry)->invalid);
+			temp = nova_append_entry_journal(sb, temp,
+				&((struct nova_mmap_entry *)entry)->csum);
 			break;
 		default:
 			break;

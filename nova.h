@@ -199,6 +199,7 @@ enum nova_entry_type {
 	DIR_LOG,
 	SET_ATTR,
 	LINK_CHANGE,
+	MMAP_WRITE,
 	NEXT_PAGE,
 };
 
@@ -287,6 +288,17 @@ struct nova_link_change_entry {
 	__le32	ctime;
 	__le32	flags;
 	__le32	generation;
+	__le64	trans_id;
+	__le32	csumpadding;
+	__le32	csum;
+} __attribute((__packed__));
+
+struct nova_mmap_entry {
+	u8	entry_type;
+	u8	invalid;
+	u8	paddings[2];
+	__le32	num_pages;
+	__le64	pgoff;
 	__le64	trans_id;
 	__le32	csumpadding;
 	__le32	csum;

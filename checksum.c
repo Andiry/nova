@@ -24,6 +24,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 	struct nova_file_write_entry fake_wentry;
 	struct nova_setattr_logentry fake_sentry;
 	struct nova_link_change_entry fake_lcentry;
+	struct nova_mmap_entry fake_mmapentry;
 	int ret = 0;
 	u8 type;
 
@@ -60,6 +61,13 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 			if (ret < 0)
 				break;
 			*entry_csum = fake_lcentry.csum;
+			break;
+		case MMAP_WRITE:
+			*size = sizeof(struct nova_mmap_entry);
+			ret = memcpy_from_pmem(&fake_mmapentry, entry, *size);
+			if (ret < 0)
+				break;
+			*entry_csum = fake_mmapentry.csum;
 			break;
 		default:
 			*entry_csum = 0;
@@ -103,6 +111,11 @@ static u32 nova_calc_entry_csum(void *entry)
 		case LINK_CHANGE:
 			entry_len = sizeof(struct nova_link_change_entry);
 			csum_addr = &((struct nova_link_change_entry *)
+					entry)->csum;
+			break;
+		case MMAP_WRITE:
+			entry_len = sizeof(struct nova_mmap_entry);
+			csum_addr = &((struct nova_mmap_entry *)
 					entry)->csum;
 			break;
 		default:
@@ -175,6 +188,13 @@ void nova_update_entry_csum(void *entry)
 					cpu_to_le32(csum);
 			entry_len = sizeof(struct nova_link_change_entry);
 			nova_dbgv("%s: update nova_link_change_entry csum to "
+				"0x%08x\n", __func__, csum);
+			break;
+		case MMAP_WRITE:
+			((struct nova_mmap_entry *) entry)->csum =
+					cpu_to_le32(csum);
+			entry_len = sizeof(struct nova_mmap_entry);
+			nova_dbgv("%s: update nova_mmap_entry csum to "
 				"0x%08x\n", __func__, csum);
 			break;
 		default:
