@@ -1234,6 +1234,18 @@ static inline u64 alter_log_entry(struct super_block *sb, u64 curr_p)
 	return alter_page + ENTRY_LOC(curr_p);
 }
 
+static inline void nova_set_next_page_flag(struct super_block *sb, u64 curr_p)
+{
+	void *p;
+
+	if (ENTRY_LOC(curr_p) >= LAST_ENTRY)
+		return;
+
+	p = nova_get_block(sb, curr_p);
+	nova_set_entry_type(p, NEXT_PAGE);
+	nova_flush_buffer(p, CACHELINE_SIZE, 1);
+}
+
 static inline void nova_set_next_page_address(struct super_block *sb,
 	struct nova_inode_log_page *curr_page, u64 next_page, int fence)
 {
@@ -1487,6 +1499,11 @@ extern const struct inode_operations nova_file_inode_operations;
 extern const struct file_operations nova_dax_file_operations;
 int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 
+/* gc.c */
+int nova_inode_log_fast_gc(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages);
+
 /* inode.c */
 extern const struct address_space_operations nova_aops_dax;
 int nova_init_inode_inuse_list(struct super_block *sb);
@@ -1523,6 +1540,8 @@ int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
 int nova_allocate_inode_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long num_pages,
 	u64 *new_block);
+int nova_free_contiguous_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 head);
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
