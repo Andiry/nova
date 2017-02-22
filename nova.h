@@ -1631,7 +1631,7 @@ int nova_set_write_entry_updating(struct super_block *sb,
 	struct nova_file_write_entry *entry, int set);
 int nova_inplace_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
-	u64 entry_size);
+	u64 file_size);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);

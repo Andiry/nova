@@ -721,7 +721,7 @@ out:
 
 int nova_inplace_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
-	u64 entry_size)
+	u64 file_size)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	int cpu;
@@ -729,7 +729,7 @@ int nova_inplace_update_write_entry(struct super_block *sb,
 
 	if (replica_metadata || unsafe_metadata) {
 		nova_memunlock_range(sb, entry, sizeof(*entry));
-		nova_update_write_entry(sb, entry, trans_id, time, entry_size);
+		nova_update_write_entry(sb, entry, trans_id, time, file_size);
 		nova_update_alter_entry(sb, entry);
 		nova_memlock_range(sb, entry, sizeof(*entry));
 		return 0;
@@ -740,7 +740,7 @@ int nova_inplace_update_write_entry(struct super_block *sb,
 	nova_memunlock_journal(sb);
 	journal_tail = nova_create_logentry_transaction(sb, entry,
 						FILE_WRITE, cpu);
-	nova_update_write_entry(sb, entry, trans_id, time, entry_size);
+	nova_update_write_entry(sb, entry, trans_id, time, file_size);
 
 	PERSISTENT_BARRIER();
 

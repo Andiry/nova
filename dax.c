@@ -358,7 +358,8 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 
 void nova_init_file_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size)
+	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time,
+	u64 file_size)
 {
 	memset(entry, 0, sizeof(struct nova_file_write_entry));
 	entry->entry_type = FILE_WRITE;
@@ -372,7 +373,7 @@ void nova_init_file_write_entry(struct super_block *sb,
 							sih->i_blk_type));
 	entry->mtime = cpu_to_le32(time);
 
-	entry->size = size;
+	entry->size = file_size;
 }
 
 static ssize_t nova_cow_file_write(struct file *filp,
@@ -395,7 +396,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	unsigned int data_bits;
 	int allocated = 0;
 	void* kmem;
-	u64 entry_size;
+	u64 file_size;
 	size_t bytes;
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
@@ -506,13 +507,13 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		}
 
 		if (pos + copied > inode->i_size)
-			entry_size = cpu_to_le64(pos + copied);
+			file_size = cpu_to_le64(pos + copied);
 		else
-			entry_size = cpu_to_le64(inode->i_size);
+			file_size = cpu_to_le64(inode->i_size);
 
 		nova_init_file_write_entry(sb, sih, &entry_data, trans_id,
 					start_blk, allocated, blocknr, time,
-					entry_size);
+					file_size);
 
 		ret = nova_append_file_write_entry(sb, pi, inode,
 					&entry_data, &update);
@@ -683,7 +684,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	unsigned long step = 0;
 	u64 begin_tail = 0;
 	u64 trans_id;
-	u64 entry_size;
+	u64 file_size;
 	u32 time;
 
 	if (len == 0)
@@ -796,15 +797,15 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		}
 
 		if (pos + copied > inode->i_size)
-			entry_size = cpu_to_le64(pos + copied);
+			file_size = cpu_to_le64(pos + copied);
 		else
-			entry_size = cpu_to_le64(inode->i_size);
+			file_size = cpu_to_le64(inode->i_size);
 
 		/* Handle hole fill write */
 		if (hole_fill) {
 			nova_init_file_write_entry(sb, sih, &entry_data,
 						trans_id, start_blk, allocated,
-						blocknr, time, entry_size);
+						blocknr, time, file_size);
 
 			ret = nova_append_file_write_entry(sb, pi, inode,
 						&entry_data, &update);
@@ -816,7 +817,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		} else {
 			/* Update existing entry */
 			nova_inplace_update_write_entry(sb, entry, trans_id,
-					       time, entry_size);
+					       time, file_size);
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
