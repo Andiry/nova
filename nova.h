@@ -312,6 +312,9 @@ struct nova_log_entry_info {
 	void *data;
 	u64 trans_id;
 	u64 curr_p;	/* output */
+	u64 file_size;
+	u32 time;
+	int inplace;	/* For file write entry */
 };
 
 static inline size_t nova_get_log_entry_size(struct super_block *sb,

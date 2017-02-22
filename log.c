@@ -245,12 +245,12 @@ static void nova_update_link_change_entry(struct inode *inode,
 
 static int nova_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
-	u64 entry_size)
+	u64 file_size)
 {
 	entry->updating = 0;
 	entry->trans_id = cpu_to_le64(trans_id);
 	entry->mtime = cpu_to_le32(time);
-	entry->size = cpu_to_le64(entry_size);
+	entry->size = cpu_to_le64(file_size);
 	nova_update_entry_csum(entry);
 	return 0;
 }
@@ -262,8 +262,13 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 
 	switch (type) {
 		case FILE_WRITE:
-			memcpy_to_pmem_nocache(entry, entry_info->data,
-				sizeof(struct nova_file_write_entry));
+			if (entry_info->inplace)
+				nova_update_write_entry(sb, entry,
+					entry_info->trans_id, entry_info->time,
+					entry_info->file_size);
+			else
+				memcpy_to_pmem_nocache(entry, entry_info->data,
+					sizeof(struct nova_file_write_entry));
 			break;
 		case SET_ATTR:
 			nova_update_setattr_entry(inode, entry,
@@ -785,6 +790,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	entry_info.update = update;
 	entry_info.data = data;
 	entry_info.trans_id = data->trans_id;
+	entry_info.inplace = 0;
 
 	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret)
