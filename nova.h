@@ -304,6 +304,34 @@ struct nova_mmap_entry {
 	__le32	csum;
 } __attribute((__packed__));
 
+static inline size_t nova_get_log_entry_size(struct super_block *sb,
+	enum nova_entry_type type)
+{
+	size_t size = 0;
+
+	switch (type) {
+		case FILE_WRITE:
+			size = sizeof(struct nova_file_write_entry);
+			break;
+		case DIR_LOG:
+			size = NOVA_DENTRY_HEADER_LEN;
+			break;
+		case SET_ATTR:
+			size = sizeof(struct nova_setattr_logentry);
+			break;
+		case LINK_CHANGE:
+			size = sizeof(struct nova_link_change_entry);
+			break;
+		case MMAP_WRITE:
+			size = sizeof(struct nova_mmap_entry);
+			break;
+		default:
+			break;
+	}
+
+	return size;
+}
+
 enum alloc_type {
 	LOG = 1,
 	DATA,

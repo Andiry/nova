@@ -354,25 +354,7 @@ u64 nova_create_logentry_transaction(struct super_block *sb,
 			pair->journal_head != pair->journal_tail)
 		BUG();
 
-	switch (type) {
-		case FILE_WRITE:
-			size = sizeof(struct nova_file_write_entry);
-			break;
-		case DIR_LOG:
-			size = NOVA_DENTRY_HEADER_LEN;
-			break;
-		case SET_ATTR:
-			size = sizeof(struct nova_setattr_logentry);
-			break;
-		case LINK_CHANGE:
-			size = sizeof(struct nova_link_change_entry);
-			break;
-		case MMAP_WRITE:
-			size = sizeof(struct nova_mmap_entry);
-			break;
-		default:
-			break;
-	}
+	size = nova_get_log_entry_size(sb, type);
 
 	temp = pair->journal_head;
 
