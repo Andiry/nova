@@ -723,20 +723,13 @@ out:
 
 int nova_inplace_update_write_entry(struct super_block *sb,
 	struct inode *inode, struct nova_file_write_entry *entry,
-	u64 trans_id, u32 time, u64 file_size)
+	struct nova_log_entry_info *entry_info)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_log_entry_info entry_info;
-
-	entry_info.type = FILE_WRITE;
-	entry_info.trans_id = trans_id;
-	entry_info.time = time;
-	entry_info.file_size = file_size;
-	entry_info.inplace = 1;
 
 	return nova_inplace_update_log_entry(sb, inode, sih, entry,
-					&entry_info);
+					entry_info);
 }
 
 int nova_set_write_entry_updating(struct super_block *sb,

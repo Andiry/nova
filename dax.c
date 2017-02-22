@@ -816,8 +816,16 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			}
 		} else {
 			/* Update existing entry */
+			struct nova_log_entry_info entry_info;
+
+			entry_info.type = FILE_WRITE;
+			entry_info.trans_id = trans_id;
+			entry_info.time = time;
+			entry_info.file_size = file_size;
+			entry_info.inplace = 1;
+
 			nova_inplace_update_write_entry(sb, inode, entry,
-						trans_id, time, file_size);
+							&entry_info);
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
