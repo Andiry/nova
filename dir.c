@@ -421,68 +421,18 @@ static int nova_can_inplace_update_dentry(struct super_block *sb,
 	return 0;
 }
 
-static int nova_update_dentry(struct super_block *sb,
-	struct inode *dir, struct nova_dentry *dentry,
-	struct nova_log_entry_info *entry_info)
-{
-	unsigned short links_count;
-	int link_change = entry_info->link_change;
-
-	dentry->trans_id = entry_info->trans_id;
-	/* Only used for remove_dentry */
-	dentry->ino = cpu_to_le64(0);
-	dentry->invalid = 1;
-	dentry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-
-	links_count = cpu_to_le16(dir->i_nlink);
-	if (links_count == 0 && link_change == -1)
-		links_count = 0;
-	else
-		links_count += link_change;
-	dentry->links_count = cpu_to_le16(links_count);
-
-	/* Update checksum */
-	nova_update_entry_csum(dentry);
-
-	return 0;
-}
-
 static int nova_inplace_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
 	u64 trans_id)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_log_entry_info entry_info;
-	int cpu;
-	u64 journal_tail;
 
 	entry_info.type = DIR_LOG;
 	entry_info.link_change = link_change;
 	entry_info.trans_id = trans_id;
 
-	if (replica_metadata || unsafe_metadata) {
-		nova_memunlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
-
-		nova_update_dentry(sb, dir, dentry, &entry_info);
-		nova_update_alter_entry(sb, dentry);
-		nova_memlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
-		return 0;
-	}
-
-	cpu = smp_processor_id();
-	spin_lock(&sbi->journal_locks[cpu]);
-	nova_memunlock_journal(sb);
-	journal_tail = nova_create_logentry_transaction(sb, dentry,
-						DIR_LOG, cpu);
-	nova_update_dentry(sb, dir, dentry, &entry_info);
-
-	PERSISTENT_BARRIER();
-
-	nova_commit_lite_transaction(sb, journal_tail, cpu);
-	nova_memlock_journal(sb);
-	spin_unlock(&sbi->journal_locks[cpu]);
-
-	return 0;
+	return nova_inplace_update_log_entry(sb, dir, dentry,
+					&entry_info);
 }
 
 /* removes a directory entry pointing to the inode. assumes the inode has

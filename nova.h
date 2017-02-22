@@ -1602,6 +1602,9 @@ int nova_invalidate_logentry(struct super_block *sb, void *entry,
 	enum nova_entry_type type, unsigned int num_free);
 int nova_reassign_logentry(struct super_block *sb, void *entry,
 	enum nova_entry_type type);
+int nova_inplace_update_log_entry(struct super_block *sb,
+	struct inode *inode, void *entry,
+	struct nova_log_entry_info *entry_info);
 void nova_clear_last_page_tail(struct super_block *sb,
 	struct inode *inode, loff_t newsize);
 unsigned int nova_free_old_entry(struct super_block *sb,

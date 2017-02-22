@@ -255,6 +255,32 @@ static int nova_update_write_entry(struct super_block *sb,
 	return 0;
 }
 
+static int nova_update_dentry(struct super_block *sb,
+	struct inode *dir, struct nova_dentry *dentry,
+	struct nova_log_entry_info *entry_info)
+{
+	unsigned short links_count;
+	int link_change = entry_info->link_change;
+
+	dentry->trans_id = entry_info->trans_id;
+	/* Only used for remove_dentry */
+	dentry->ino = cpu_to_le64(0);
+	dentry->invalid = 1;
+	dentry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+
+	links_count = cpu_to_le16(dir->i_nlink);
+	if (links_count == 0 && link_change == -1)
+		links_count = 0;
+	else
+		links_count += link_change;
+	dentry->links_count = cpu_to_le16(links_count);
+
+	/* Update checksum */
+	nova_update_entry_csum(dentry);
+
+	return 0;
+}
+
 static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 	void *entry, struct nova_log_entry_info *entry_info)
 {
@@ -269,6 +295,9 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 			else
 				memcpy_to_pmem_nocache(entry, entry_info->data,
 					sizeof(struct nova_file_write_entry));
+			break;
+		case DIR_LOG:
+			nova_update_dentry(sb, inode, entry, entry_info);
 			break;
 		case SET_ATTR:
 			nova_update_setattr_entry(inode, entry,
@@ -343,7 +372,7 @@ static int nova_append_log_entry(struct super_block *sb,
 	return 0;
 }
 
-static int nova_inplace_update_log_entry(struct super_block *sb,
+int nova_inplace_update_log_entry(struct super_block *sb,
 	struct inode *inode, void *entry,
 	struct nova_log_entry_info *entry_info)
 {
