@@ -229,21 +229,55 @@ static void nova_update_setattr_entry(struct inode *inode,
 	nova_flush_buffer(entry, sizeof(struct nova_setattr_logentry), 0);
 }
 
-/* Returns new tail after append */
-static int nova_append_setattr_entry(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	struct nova_inode_update *update, u64 *last_setattr, u64 trans_id)
+static void nova_update_link_change_entry(struct inode *inode,
+	struct nova_link_change_entry *entry, u64 trans_id)
+{
+	entry->entry_type	= LINK_CHANGE;
+	entry->trans_id		= trans_id;
+	entry->invalid		= 0;
+	entry->links		= cpu_to_le16(inode->i_nlink);
+	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->flags		= cpu_to_le32(inode->i_flags);
+	entry->generation	= cpu_to_le32(inode->i_generation);
+
+	nova_update_entry_csum(entry);
+}
+
+static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
+	enum nova_entry_type type, void *entry, void *data, struct iattr *attr,
+	u64 trans_id)
+{
+	switch (type) {
+		case FILE_WRITE:
+			memcpy_to_pmem_nocache(entry, data,
+				sizeof(struct nova_file_write_entry));
+			break;
+		case SET_ATTR:
+			nova_update_setattr_entry(inode, entry, attr, trans_id);
+			break;
+		case LINK_CHANGE:
+			nova_update_link_change_entry(inode, entry, trans_id);
+			break;
+		case MMAP_WRITE:
+			break;
+		default:
+			break;
+	}
+
+	return 0;
+}
+
+static int nova_append_log_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode, enum nova_entry_type type,
+	size_t size, struct iattr *attr, struct nova_inode_update *update,
+	void *data, u64 *ret_curr, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_setattr_logentry *entry, *alter_entry;
+	void *entry, *alter_entry;
 	u64 tail, alter_tail;
 	u64 curr_p, alter_curr_p;
 	int extended = 0;
-	size_t size = sizeof(struct nova_setattr_logentry);
-	timing_t append_time;
-
-	NOVA_START_TIMING(append_setattr_t, append_time);
 
 	tail = update->tail;
 	alter_tail = update->alter_tail;
@@ -256,12 +290,13 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
 				__func__, inode->i_ino, curr_p);
 
-	entry = (struct nova_setattr_logentry *)nova_get_block(sb, curr_p);
+	entry = nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
 	nova_memunlock_range(sb, entry, size);
 	memset(entry, 0, size);
-	nova_update_setattr_entry(inode, entry, attr, trans_id);
+	nova_update_log_entry(sb, inode, type, entry, data, attr, trans_id);
 	nova_memlock_range(sb, entry, size);
+	update->curr_entry = curr_p;
 	update->tail = curr_p + size;
 
 	if (replica_metadata) {
@@ -270,21 +305,48 @@ static int nova_append_setattr_entry(struct super_block *sb,
 		if (alter_curr_p == 0)
 			return -ENOSPC;
 
-		alter_entry = (struct nova_setattr_logentry *)nova_get_block(sb,
-						alter_curr_p);
+		alter_entry = nova_get_block(sb, alter_curr_p);
 		nova_memunlock_range(sb, alter_entry, size);
 		memset(alter_entry, 0, size);
-		nova_update_setattr_entry(inode, alter_entry, attr, trans_id);
+		nova_update_log_entry(sb, inode, type, alter_entry, data, attr,
+					trans_id);
 		nova_memlock_range(sb, alter_entry, size);
 
+		update->alter_entry = alter_curr_p;
 		update->alter_tail = alter_curr_p + size;
+	}
+
+	*ret_curr = curr_p;
+	return 0;
+}
+
+/* Returns new tail after append */
+static int nova_append_setattr_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
+	struct nova_inode_update *update, u64 *last_setattr, u64 trans_id)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	size_t size = sizeof(struct nova_setattr_logentry);
+	u64 curr_p = 0;
+	timing_t append_time;
+	int ret;
+
+	NOVA_START_TIMING(append_setattr_t, append_time);
+
+	ret = nova_append_log_entry(sb, pi, inode, SET_ATTR, size, attr,
+			update, NULL, &curr_p, trans_id);
+	if (ret) {
+		nova_err(sb, "%s failed\n", __func__);
+		goto out;
 	}
 
 	*last_setattr = sih->last_setattr;
 	sih->last_setattr = curr_p;
 
+out:
 	NOVA_END_TIMING(append_setattr_t, append_time);
-	return 0;
+	return ret;
 }
 
 /* Invalidate old link change entry */
@@ -472,20 +534,6 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 	return ret;
 }
 
-static void nova_update_link_change_entry(struct inode *inode,
-	struct nova_link_change_entry *entry, u64 trans_id)
-{
-	entry->entry_type	= LINK_CHANGE;
-	entry->trans_id		= trans_id;
-	entry->invalid		= 0;
-	entry->links		= cpu_to_le16(inode->i_nlink);
-	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
-	entry->flags		= cpu_to_le32(inode->i_flags);
-	entry->generation	= cpu_to_le32(inode->i_generation);
-
-	nova_update_entry_csum(entry);
-}
-
 static int nova_can_inplace_update_lcentry(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 latest_snapshot_trans_id)
 {
@@ -549,11 +597,10 @@ int nova_append_link_change_entry(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_link_change_entry *entry, *alter_entry;
-	u64 curr_p, alter_curr_p;
 	size_t size = sizeof(struct nova_link_change_entry);
+	u64 curr_p;
 	u64 latest_snapshot_trans_id = 0;
-	int extended = 0;
+	int ret = 0;
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
@@ -573,42 +620,18 @@ int nova_append_link_change_entry(struct super_block *sb,
 		goto out;
 	}
 
-	curr_p = nova_get_append_head(sb, pi, sih, update->tail, size,
-						MAIN_LOG, 0, &extended);
-	if (curr_p == 0)
-		return -ENOSPC;
-
-	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
-				__func__, inode->i_ino, curr_p);
-
-	entry = (struct nova_link_change_entry *)nova_get_block(sb, curr_p);
-	nova_memunlock_range(sb, entry, size);
-	memset(entry, 0, size);
-	nova_update_link_change_entry(inode, entry, trans_id);
-	nova_memlock_range(sb, entry, size);
-	update->tail = curr_p + size;
-
-	if (replica_metadata) {
-		alter_curr_p = nova_get_append_head(sb, pi, sih,
-						update->alter_tail, size,
-						ALTER_LOG, 0, &extended);
-		if (alter_curr_p == 0)
-			return -ENOSPC;
-
-		alter_entry = (struct nova_link_change_entry *)nova_get_block(sb,
-						alter_curr_p);
-		nova_memunlock_range(sb, alter_entry, size);
-		memset(alter_entry, 0, size);
-		nova_update_link_change_entry(inode, alter_entry, trans_id);
-		nova_memlock_range(sb, alter_entry, size);
-		update->alter_tail = alter_curr_p + size;
+	ret = nova_append_log_entry(sb, pi, inode, LINK_CHANGE, size, NULL,
+			update, NULL, &curr_p, trans_id);
+	if (ret) {
+		nova_err(sb, "%s failed\n", __func__);
+		goto out;
 	}
 
 	*old_linkc = sih->last_link_change;
 	sih->last_link_change = curr_p;
 out:
 	NOVA_END_TIMING(append_link_change_t, append_time);
-	return 0;
+	return ret;
 }
 
 int nova_assign_write_entry(struct super_block *sb,
@@ -684,58 +707,22 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
-	struct nova_file_write_entry *entry, *alter_entry;
-	u64 tail, alter_tail;
-	u64 curr_p, alter_curr_p;
-	int extended = 0;
 	size_t size = sizeof(struct nova_file_write_entry);
+	u64 curr_p = 0;
 	timing_t append_time;
+	int ret;
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	tail = update->tail;
-	alter_tail = update->alter_tail;
-
-	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
-						MAIN_LOG, 0, &extended);
-	if (curr_p == 0)
-		return -ENOSPC;
-
-	entry = (struct nova_file_write_entry *)nova_get_block(sb, curr_p);
-	nova_memunlock_range(sb, entry, size);
 	nova_update_entry_csum(data);
-	memcpy_to_pmem_nocache(entry, data,
-			sizeof(struct nova_file_write_entry));
-	nova_memlock_range(sb, entry, size);
-	nova_dbg_verbose("file %lu entry @ 0x%llx: pgoff %llu, num %u, "
-			"block %llu, size %llu, csum 0x%x\n", inode->i_ino,
-			curr_p, entry->pgoff, entry->num_pages,
-			entry->block >> PAGE_SHIFT, entry->size, entry->csum);
-	/* entry->invalid is set to 0 */
-	update->curr_entry = curr_p;
-	update->tail = curr_p + size;
 
-	if (replica_metadata) {
-		alter_curr_p = nova_get_append_head(sb, pi, sih, alter_tail,
-						size, ALTER_LOG, 0, &extended);
-		if (alter_curr_p == 0)
-			return -ENOSPC;
-
-		alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
-						alter_curr_p);
-		nova_memunlock_range(sb, alter_entry, size);
-		memcpy_to_pmem_nocache(alter_entry, data,
-				sizeof(struct nova_file_write_entry));
-		nova_memlock_range(sb, alter_entry, size);
-		update->alter_entry = alter_curr_p;
-
-		update->alter_tail = alter_curr_p + size;
-	}
+	ret = nova_append_log_entry(sb, pi, inode, FILE_WRITE, size, NULL,
+			update, data, &curr_p, data->trans_id);
+	if (ret)
+		nova_err(sb, "%s failed\n", __func__);
 
 	NOVA_END_TIMING(append_file_entry_t, append_time);
-	return 0;
+	return ret;
 }
 
 int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
