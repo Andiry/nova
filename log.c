@@ -256,19 +256,22 @@ static int nova_update_write_entry(struct super_block *sb,
 }
 
 static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
-	enum nova_entry_type type, void *entry, void *data, struct iattr *attr,
-	u64 trans_id)
+	void *entry, struct nova_log_entry_info *entry_info)
 {
+	enum nova_entry_type type = entry_info->type;
+
 	switch (type) {
 		case FILE_WRITE:
-			memcpy_to_pmem_nocache(entry, data,
+			memcpy_to_pmem_nocache(entry, entry_info->data,
 				sizeof(struct nova_file_write_entry));
 			break;
 		case SET_ATTR:
-			nova_update_setattr_entry(inode, entry, attr, trans_id);
+			nova_update_setattr_entry(inode, entry,
+					entry_info->attr, entry_info->trans_id);
 			break;
 		case LINK_CHANGE:
-			nova_update_link_change_entry(inode, entry, trans_id);
+			nova_update_link_change_entry(inode, entry,
+					entry_info->trans_id);
 			break;
 		case MMAP_WRITE:
 			break;
@@ -287,10 +290,7 @@ static int nova_append_log_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	void *entry, *alter_entry;
 	enum nova_entry_type type = entry_info->type;
-	struct iattr *attr = entry_info->attr;
 	struct nova_inode_update *update = entry_info->update;
-	void *data = entry_info->data;
-	u64 trans_id = entry_info->trans_id;
 	u64 tail, alter_tail;
 	u64 curr_p, alter_curr_p;
 	size_t size;
@@ -313,7 +313,7 @@ static int nova_append_log_entry(struct super_block *sb,
 	/* inode is already updated with attr */
 	nova_memunlock_range(sb, entry, size);
 	memset(entry, 0, size);
-	nova_update_log_entry(sb, inode, type, entry, data, attr, trans_id);
+	nova_update_log_entry(sb, inode, entry, entry_info);
 	nova_memlock_range(sb, entry, size);
 	update->curr_entry = curr_p;
 	update->tail = curr_p + size;
@@ -327,8 +327,7 @@ static int nova_append_log_entry(struct super_block *sb,
 		alter_entry = nova_get_block(sb, alter_curr_p);
 		nova_memunlock_range(sb, alter_entry, size);
 		memset(alter_entry, 0, size);
-		nova_update_log_entry(sb, inode, type, alter_entry, data, attr,
-					trans_id);
+		nova_update_log_entry(sb, inode, alter_entry, entry_info);
 		nova_memlock_range(sb, alter_entry, size);
 
 		update->alter_entry = alter_curr_p;
