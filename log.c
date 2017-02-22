@@ -280,13 +280,17 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 }
 
 static int nova_append_log_entry(struct super_block *sb,
-	struct nova_inode *pi, struct inode *inode, enum nova_entry_type type,
-	struct iattr *attr, struct nova_inode_update *update,
-	void *data, u64 *ret_curr, u64 trans_id)
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_log_entry_info *entry_info)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	void *entry, *alter_entry;
+	enum nova_entry_type type = entry_info->type;
+	struct iattr *attr = entry_info->attr;
+	struct nova_inode_update *update = entry_info->update;
+	void *data = entry_info->data;
+	u64 trans_id = entry_info->trans_id;
 	u64 tail, alter_tail;
 	u64 curr_p, alter_curr_p;
 	size_t size;
@@ -331,7 +335,7 @@ static int nova_append_log_entry(struct super_block *sb,
 		update->alter_tail = alter_curr_p + size;
 	}
 
-	*ret_curr = curr_p;
+	entry_info->curr_p = curr_p;
 	return 0;
 }
 
@@ -342,21 +346,24 @@ static int nova_append_setattr_entry(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	u64 curr_p = 0;
+	struct nova_log_entry_info entry_info;
 	timing_t append_time;
 	int ret;
 
 	NOVA_START_TIMING(append_setattr_t, append_time);
+	entry_info.type = SET_ATTR;
+	entry_info.attr = attr;
+	entry_info.update = update;
+	entry_info.trans_id = trans_id;
 
-	ret = nova_append_log_entry(sb, pi, inode, SET_ATTR, attr,
-			update, NULL, &curr_p, trans_id);
+	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
 		goto out;
 	}
 
 	*last_setattr = sih->last_setattr;
-	sih->last_setattr = curr_p;
+	sih->last_setattr = entry_info.curr_p;
 
 out:
 	NOVA_END_TIMING(append_setattr_t, append_time);
@@ -611,7 +618,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	u64 curr_p;
+	struct nova_log_entry_info entry_info;
 	u64 latest_snapshot_trans_id = 0;
 	int ret = 0;
 	timing_t append_time;
@@ -633,15 +640,18 @@ int nova_append_link_change_entry(struct super_block *sb,
 		goto out;
 	}
 
-	ret = nova_append_log_entry(sb, pi, inode, LINK_CHANGE, NULL,
-			update, NULL, &curr_p, trans_id);
+	entry_info.type = LINK_CHANGE;
+	entry_info.update = update;
+	entry_info.trans_id = trans_id;
+
+	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
 		goto out;
 	}
 
 	*old_linkc = sih->last_link_change;
-	sih->last_link_change = curr_p;
+	sih->last_link_change = entry_info.curr_p;
 out:
 	NOVA_END_TIMING(append_link_change_t, append_time);
 	return ret;
@@ -764,7 +774,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update)
 {
-	u64 curr_p = 0;
+	struct nova_log_entry_info entry_info;
 	timing_t append_time;
 	int ret;
 
@@ -772,8 +782,12 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	nova_update_entry_csum(data);
 
-	ret = nova_append_log_entry(sb, pi, inode, FILE_WRITE, NULL,
-			update, data, &curr_p, data->trans_id);
+	entry_info.type = FILE_WRITE;
+	entry_info.update = update;
+	entry_info.data = data;
+	entry_info.trans_id = data->trans_id;
+
+	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret)
 		nova_err(sb, "%s failed\n", __func__);
 

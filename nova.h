@@ -304,6 +304,16 @@ struct nova_mmap_entry {
 	__le32	csum;
 } __attribute((__packed__));
 
+/* Log appending information */
+struct nova_log_entry_info {
+	enum nova_entry_type type;
+	struct iattr *attr;
+	struct nova_inode_update *update;
+	void *data;
+	u64 trans_id;
+	u64 curr_p;	/* output */
+};
+
 static inline size_t nova_get_log_entry_size(struct super_block *sb,
 	enum nova_entry_type type)
 {
