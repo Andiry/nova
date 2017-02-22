@@ -344,8 +344,8 @@ static int nova_append_log_entry(struct super_block *sb,
 }
 
 static int nova_inplace_update_log_entry(struct super_block *sb,
-	struct inode *inode, struct nova_inode_info_header *sih,
-	void *entry, struct nova_log_entry_info *entry_info)
+	struct inode *inode, void *entry,
+	struct nova_log_entry_info *entry_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	enum nova_entry_type type = entry_info->type;
@@ -490,7 +490,7 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 	entry_info.attr = attr;
 	entry_info.trans_id = trans_id;
 
-	return nova_inplace_update_log_entry(sb, inode, sih, entry,
+	return nova_inplace_update_log_entry(sb, inode, entry,
 					&entry_info);
 }
 
@@ -608,7 +608,7 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 	entry_info.type = LINK_CHANGE;
 	entry_info.trans_id = trans_id;
 
-	return nova_inplace_update_log_entry(sb, inode, sih, entry,
+	return nova_inplace_update_log_entry(sb, inode, entry,
 					&entry_info);
 }
 
@@ -725,10 +725,7 @@ int nova_inplace_update_write_entry(struct super_block *sb,
 	struct inode *inode, struct nova_file_write_entry *entry,
 	struct nova_log_entry_info *entry_info)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
-
-	return nova_inplace_update_log_entry(sb, inode, sih, entry,
+	return nova_inplace_update_log_entry(sb, inode, entry,
 					entry_info);
 }
 
