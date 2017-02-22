@@ -652,62 +652,6 @@ out:
 	return ent_blks;
 }
 
-static int nova_update_write_entry(struct super_block *sb,
-	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
-	u64 entry_size)
-{
-	entry->updating = 0;
-	entry->trans_id = cpu_to_le64(trans_id);
-	entry->mtime = cpu_to_le32(time);
-	entry->size = cpu_to_le64(entry_size);
-	nova_update_entry_csum(entry);
-	return 0;
-}
-
-static int nova_inplace_update_write_entry(struct super_block *sb,
-	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
-	u64 entry_size)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	int cpu;
-	u64 journal_tail;
-
-	if (replica_metadata || unsafe_metadata) {
-		nova_memunlock_range(sb, entry, sizeof(*entry));
-		nova_update_write_entry(sb, entry, trans_id, time, entry_size);
-		nova_update_alter_entry(sb, entry);
-		nova_memlock_range(sb, entry, sizeof(*entry));
-		return 0;
-	}
-
-	cpu = smp_processor_id();
-	spin_lock(&sbi->journal_locks[cpu]);
-	nova_memunlock_journal(sb);
-	journal_tail = nova_create_logentry_transaction(sb, entry,
-						FILE_WRITE, cpu);
-	nova_update_write_entry(sb, entry, trans_id, time, entry_size);
-
-	PERSISTENT_BARRIER();
-
-	nova_commit_lite_transaction(sb, journal_tail, cpu);
-	nova_memlock_journal(sb);
-	spin_unlock(&sbi->journal_locks[cpu]);
-
-	return 0;
-}
-
-int nova_set_write_entry_updating(struct super_block *sb,
-	struct nova_file_write_entry *entry, int set)
-{
-	nova_memunlock_range(sb, entry, sizeof(*entry));
-	entry->updating = set ? 1 : 0;
-	nova_update_entry_csum(entry);
-	nova_update_alter_entry(sb, entry);
-	nova_memlock_range(sb, entry, sizeof(*entry));
-
-	return 0;
-}
-
 ssize_t nova_inplace_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
 {
