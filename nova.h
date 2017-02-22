@@ -314,6 +314,7 @@ struct nova_log_entry_info {
 	u64 curr_p;	/* output */
 	u64 file_size;
 	u32 time;
+	int link_change;
 	int inplace;	/* For file write entry */
 };
 

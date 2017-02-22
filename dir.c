@@ -422,12 +422,13 @@ static int nova_can_inplace_update_dentry(struct super_block *sb,
 }
 
 static int nova_update_dentry(struct super_block *sb,
-	struct inode *dir, struct nova_dentry *dentry, int link_change,
-	u64 trans_id)
+	struct inode *dir, struct nova_dentry *dentry,
+	struct nova_log_entry_info *entry_info)
 {
 	unsigned short links_count;
+	int link_change = entry_info->link_change;
 
-	dentry->trans_id = trans_id;
+	dentry->trans_id = entry_info->trans_id;
 	/* Only used for remove_dentry */
 	dentry->ino = cpu_to_le64(0);
 	dentry->invalid = 1;
@@ -451,13 +452,18 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	u64 trans_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_log_entry_info entry_info;
 	int cpu;
 	u64 journal_tail;
+
+	entry_info.type = DIR_LOG;
+	entry_info.link_change = link_change;
+	entry_info.trans_id = trans_id;
 
 	if (replica_metadata || unsafe_metadata) {
 		nova_memunlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
 
-		nova_update_dentry(sb, dir, dentry, link_change, trans_id);
+		nova_update_dentry(sb, dir, dentry, &entry_info);
 		nova_update_alter_entry(sb, dentry);
 		nova_memlock_range(sb, dentry, NOVA_DENTRY_HEADER_LEN);
 		return 0;
@@ -468,7 +474,7 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	nova_memunlock_journal(sb);
 	journal_tail = nova_create_logentry_transaction(sb, dentry,
 						DIR_LOG, cpu);
-	nova_update_dentry(sb, dir, dentry, link_change, trans_id);
+	nova_update_dentry(sb, dir, dentry, &entry_info);
 
 	PERSISTENT_BARRIER();
 
