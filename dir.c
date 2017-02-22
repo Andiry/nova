@@ -186,11 +186,7 @@ static void nova_append_dentry(struct inode *dir, struct dentry *dentry,
 	nova_flush_buffer(entry, de_len, 0);
 }
 
-/*
- * Append a nova_dentry to the current nova_inode_log_page.
- * Note unlike append_file_write_entry(), this method returns the tail pointer
- * after append.
- */
+/* Append a nova_dentry to the current nova_inode_log_page. */
 static int nova_append_dir_inode_entry(struct super_block *sb,
 	struct nova_inode *pidir, struct inode *dir,
 	u64 ino, struct dentry *dentry, unsigned short de_len,
