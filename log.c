@@ -269,7 +269,7 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 
 static int nova_append_log_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, enum nova_entry_type type,
-	size_t size, struct iattr *attr, struct nova_inode_update *update,
+	struct iattr *attr, struct nova_inode_update *update,
 	void *data, u64 *ret_curr, u64 trans_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
@@ -277,7 +277,10 @@ static int nova_append_log_entry(struct super_block *sb,
 	void *entry, *alter_entry;
 	u64 tail, alter_tail;
 	u64 curr_p, alter_curr_p;
+	size_t size;
 	int extended = 0;
+
+	size = nova_get_log_entry_size(sb, type);
 
 	tail = update->tail;
 	alter_tail = update->alter_tail;
@@ -327,14 +330,13 @@ static int nova_append_setattr_entry(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	size_t size = sizeof(struct nova_setattr_logentry);
 	u64 curr_p = 0;
 	timing_t append_time;
 	int ret;
 
 	NOVA_START_TIMING(append_setattr_t, append_time);
 
-	ret = nova_append_log_entry(sb, pi, inode, SET_ATTR, size, attr,
+	ret = nova_append_log_entry(sb, pi, inode, SET_ATTR, attr,
 			update, NULL, &curr_p, trans_id);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
@@ -597,7 +599,6 @@ int nova_append_link_change_entry(struct super_block *sb,
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	size_t size = sizeof(struct nova_link_change_entry);
 	u64 curr_p;
 	u64 latest_snapshot_trans_id = 0;
 	int ret = 0;
@@ -620,7 +621,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 		goto out;
 	}
 
-	ret = nova_append_log_entry(sb, pi, inode, LINK_CHANGE, size, NULL,
+	ret = nova_append_log_entry(sb, pi, inode, LINK_CHANGE, NULL,
 			update, NULL, &curr_p, trans_id);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
@@ -707,7 +708,6 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update)
 {
-	size_t size = sizeof(struct nova_file_write_entry);
 	u64 curr_p = 0;
 	timing_t append_time;
 	int ret;
@@ -716,7 +716,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	nova_update_entry_csum(data);
 
-	ret = nova_append_log_entry(sb, pi, inode, FILE_WRITE, size, NULL,
+	ret = nova_append_log_entry(sb, pi, inode, FILE_WRITE, NULL,
 			update, data, &curr_p, data->trans_id);
 	if (ret)
 		nova_err(sb, "%s failed\n", __func__);
