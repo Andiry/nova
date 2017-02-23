@@ -64,6 +64,7 @@ const char *Timingstring[TIMING_NUM] =
 
 	"append_dir_entry",
 	"append_file_entry",
+	"append_mmap_entry",
 	"append_link_change",
 	"append_setattr",
 	"log_fast_gc",

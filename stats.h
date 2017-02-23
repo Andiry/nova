@@ -69,6 +69,7 @@ enum timing_category {
 	/* Logging */
 	append_dir_entry_t,
 	append_file_entry_t,
+	append_mmap_entry_t,
 	append_link_change_t,
 	append_setattr_t,
 	fast_gc_t,
