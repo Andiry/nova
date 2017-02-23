@@ -1475,6 +1475,8 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 bool nova_verify_data_csum(struct inode *inode,
 	struct nova_file_write_entry *entry, pgoff_t index,
 	size_t offset, size_t bytes);
+int nova_reset_mmap_csum_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_mmap_entry *entry);
 int nova_data_csum_init(struct super_block *sb);
 int nova_copy_partial_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,

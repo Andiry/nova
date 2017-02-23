@@ -282,7 +282,8 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				break;
 			case MMAP_WRITE:
 				mmap_entry = (struct nova_mmap_entry *)addr;
-				/* FIXME */
+				nova_reset_mmap_csum_parity(sb, sih,
+						mmap_entry);
 				curr_p += sizeof(struct nova_mmap_entry);
 				break;
 			default:
