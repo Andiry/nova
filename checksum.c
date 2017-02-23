@@ -561,7 +561,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	return (bytes - csummed);
 }
 
-static int nova_update_block_csum(struct super_block *sb,
+static int nova_update_block_csum_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff)
 {
@@ -636,7 +636,7 @@ int nova_reset_data_csum_parity(struct super_block *sb,
 		if (curr != entry)
 			continue;
 
-		nova_update_block_csum(sb, sih, &fake_entry, pgoff);
+		nova_update_block_csum_parity(sb, sih, &fake_entry, pgoff);
 	}
 
 out:
