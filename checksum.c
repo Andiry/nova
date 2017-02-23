@@ -646,6 +646,37 @@ out:
 	return ret;
 }
 
+/* Reset data csum for mmap entries */
+int nova_reset_mmap_csum_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_mmap_entry *entry)
+{
+	struct nova_mmap_entry fake_entry;
+	size_t size = sizeof(struct nova_mmap_entry);
+	unsigned long pgoff, end_pgoff;
+	int ret;
+
+	ret = memcpy_from_pmem(&fake_entry, entry, size);
+	if (ret < 0)
+		return ret;
+
+	if (fake_entry.invalid == 1) {
+		/* Dead entry */
+		goto out;
+	}
+
+	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
+	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
+		/* FIXME: Check dirty? */
+		nova_update_block_csum_parity(sb, sih, NULL, pgoff);
+	}
+
+out:
+	if (ret == 0)
+		ret = nova_invalidate_logentry(sb, entry, MMAP_WRITE, 0);
+
+	return ret;
+}
+
 /* Verify checksums of requested data bytes of a file write entry.
  *
  * This function works on an existing file write 'entry' with its data in NVMM.
