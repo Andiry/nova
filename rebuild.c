@@ -186,6 +186,10 @@ static void nova_rebuild_handle_write_entry(struct super_block *sb,
 		*curr_trans_id = entry->trans_id;
 	}
 
+	if (entry->updating) {
+		nova_reset_data_csum_parity(sb, sih, entry);
+	}
+
 	/* Update sih->i_size for setattr apply operations */
 	sih->i_size = le64_to_cpu(reb->i_size);
 }
