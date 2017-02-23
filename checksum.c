@@ -578,10 +578,9 @@ static int nova_update_block_csum(struct super_block *sb,
 
 	count = blk_type_to_size[sih->i_blk_type] / strp_size;
 
-	blocknr = get_nvmm(sb, sih, entry, pgoff);
-	dax_mem = nova_get_block(sb, (blocknr << PAGE_SHIFT));
+	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
+	dax_mem = nova_get_block(sb, blockoff);
 
-	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 	strp_nr = blockoff >> strp_shift;
 
 	for (i = 0; i < count; i++) {
@@ -605,6 +604,7 @@ static int nova_update_block_csum(struct super_block *sb,
 		return -ENOMEM;
 	}
 
+	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
 	nova_update_block_parity(sb, blocknr, parbuf, dax_mem);
 
 	kfree(parbuf);
