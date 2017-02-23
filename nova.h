@@ -1658,8 +1658,9 @@ extern const struct inode_operations nova_special_inode_operations;
 extern struct dentry *nova_get_parent(struct dentry *child);
 
 /* parity.c */
-int nova_update_block_parity(struct super_block *sb, unsigned long blocknr,
-	void *parbuf, void *blockptr);
+int nova_update_pgoff_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long pgoff);
 size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	void *wrbuf, size_t offset, size_t bytes);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,

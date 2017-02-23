@@ -70,8 +70,8 @@ static int nova_block_parity(struct super_block *sb, void *parity, void *block)
 	return 0;
 }
 
-int nova_update_block_parity(struct super_block *sb, unsigned long blocknr,
-	void *parbuf, void *blockptr)
+static int nova_update_block_parity(struct super_block *sb,
+	unsigned long blocknr, void *parbuf, void *blockptr)
 {
 	unsigned char *par_addr;
 	size_t strp_size = NOVA_STRIPE_SIZE;
@@ -83,6 +83,35 @@ int nova_update_block_parity(struct super_block *sb, unsigned long blocknr,
 	nova_memunlock_range(sb, par_addr, strp_size);
 	memcpy_to_pmem_nocache(par_addr, parbuf, strp_size);
 	nova_memlock_range(sb, par_addr, strp_size);
+
+	return 0;
+}
+
+int nova_update_pgoff_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long pgoff)
+{
+	unsigned int strp_size = NOVA_STRIPE_SIZE;
+	unsigned long blocknr;
+	void *dax_mem = NULL;
+	u64 blockoff;
+	unsigned char *parbuf;
+
+	/* parity buffer for rolling updates */
+	parbuf = kmalloc(strp_size, GFP_KERNEL);
+	if (!parbuf) {
+		nova_err(sb, "%s: parity buffer allocation error\n",
+				__func__);
+		return -ENOMEM;
+	}
+
+	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
+	dax_mem = nova_get_block(sb, blockoff);
+
+	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
+	nova_update_block_parity(sb, blocknr, parbuf, dax_mem);
+
+	kfree(parbuf);
 
 	return 0;
 }

@@ -561,16 +561,14 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	return (bytes - csummed);
 }
 
-static int nova_update_block_csum_parity(struct super_block *sb,
+static int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff)
 {
-	unsigned long blocknr;
 	void *dax_mem = NULL, *csum_addr;
 	u64 blockoff;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	unsigned char *parbuf;
 	unsigned long strp_nr;
 	u32 csum;
 	int i;
@@ -595,19 +593,6 @@ static int nova_update_block_csum_parity(struct super_block *sb,
 		strp_nr  += 1;
 		dax_mem  += strp_size;
 	}
-
-	/* parity buffer for rolling updates */
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (!parbuf) {
-		nova_err(sb, "%s: parity buffer allocation error\n",
-				__func__);
-		return -ENOMEM;
-	}
-
-	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
-	nova_update_block_parity(sb, blocknr, parbuf, dax_mem);
-
-	kfree(parbuf);
 
 	return 0;
 }
@@ -636,7 +621,8 @@ int nova_reset_data_csum_parity(struct super_block *sb,
 		if (curr != entry)
 			continue;
 
-		nova_update_block_csum_parity(sb, sih, &fake_entry, pgoff);
+		nova_update_block_csum(sb, sih, &fake_entry, pgoff);
+		nova_update_pgoff_parity(sb, sih, &fake_entry, pgoff);
 	}
 
 out:
@@ -667,7 +653,8 @@ int nova_reset_mmap_csum_parity(struct super_block *sb,
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
 	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
 		/* FIXME: Check dirty? */
-		nova_update_block_csum_parity(sb, sih, NULL, pgoff);
+		nova_update_block_csum(sb, sih, NULL, pgoff);
+		nova_update_pgoff_parity(sb, sih, NULL, pgoff);
 	}
 
 out:
