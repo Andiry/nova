@@ -174,7 +174,10 @@ static int nova_reset_data_csum_parity(struct super_block *sb,
 	struct nova_file_write_entry fake_entry, *curr;
 	size_t size = sizeof(struct nova_file_write_entry);
 	unsigned long pgoff, end_pgoff;
-	int ret;
+	int ret = 0;
+
+	if (data_csum == 0 && data_parity == 0)
+		goto out;
 
 	ret = memcpy_from_pmem(&fake_entry, entry, size);
 	if (ret < 0)
@@ -191,8 +194,10 @@ static int nova_reset_data_csum_parity(struct super_block *sb,
 		if (curr != entry)
 			continue;
 
-		nova_update_block_csum(sb, sih, &fake_entry, pgoff);
-		nova_update_pgoff_parity(sb, sih, &fake_entry, pgoff);
+		if (data_csum)
+			nova_update_block_csum(sb, sih, &fake_entry, pgoff);
+		if (data_parity)
+			nova_update_pgoff_parity(sb, sih, &fake_entry, pgoff);
 	}
 
 out:
@@ -209,7 +214,10 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 	struct nova_mmap_entry fake_entry;
 	size_t size = sizeof(struct nova_mmap_entry);
 	unsigned long pgoff, end_pgoff;
-	int ret;
+	int ret = 0;
+
+	if (data_csum == 0 && data_parity == 0)
+		goto out;
 
 	ret = memcpy_from_pmem(&fake_entry, entry, size);
 	if (ret < 0)
@@ -223,8 +231,10 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
 	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
 		/* FIXME: Check dirty? */
-		nova_update_block_csum(sb, sih, NULL, pgoff);
-		nova_update_pgoff_parity(sb, sih, NULL, pgoff);
+		if (data_csum)
+			nova_update_block_csum(sb, sih, NULL, pgoff);
+		if (data_parity)
+			nova_update_pgoff_parity(sb, sih, NULL, pgoff);
 	}
 
 out:
