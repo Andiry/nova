@@ -1707,6 +1707,58 @@ static const struct vm_operations_struct nova_dax_vm_ops = {
 #endif
 };
 
+int nova_append_write_mmap_to_log(struct vm_area_struct *vma)
+{
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode *pi;
+	struct nova_mmap_entry data;
+	struct nova_inode_update update;
+	unsigned long num_pages;
+	u64 trans_id;
+	int ret;
+
+	/* Only for csum and parity update */
+	if (data_csum == 0 && data_parity == 0)
+		return 0;
+
+	if (!(vma->vm_flags & VM_WRITE))
+		return 0;
+
+	inode_lock(inode);
+	pi = nova_get_inode(sb, inode);
+	trans_id = nova_get_trans_id(sb);
+	update.tail = update.alter_tail = 0;
+
+	memset(&data, 0, sizeof(struct nova_mmap_entry));
+	data.entry_type = MMAP_WRITE;
+	data.trans_id = trans_id;
+	data.pgoff = cpu_to_le64(vma->vm_pgoff);
+	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	data.num_pages = cpu_to_le64(num_pages);
+	data.invalid = 0;
+
+	nova_dbgv("%s : Appending mmap log entry for inode %lu, "
+			"pgoff %llu, %llu pages\n",
+			__func__, inode->i_ino,
+			data.pgoff, data.num_pages);
+
+	ret = nova_append_mmap_entry(sb, pi, inode, &data, &update);
+	if (ret) {
+		nova_dbg("%s: append setattr entry failure\n", __func__);
+		goto out;
+	}
+
+	nova_memunlock_inode(sb, pi);
+	nova_update_inode(sb, inode, pi, &update, 1);
+	nova_memlock_inode(sb, pi);
+out:
+	inode_unlock(inode);
+
+	return 0;
+}
+
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	file_accessed(file);
@@ -1719,6 +1771,8 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	/* Check SHARED WRITE vma */
 	nova_insert_write_vma(vma);
 #endif
+
+	nova_append_write_mmap_to_log(vma);
 
 	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "

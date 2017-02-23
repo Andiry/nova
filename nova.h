@@ -296,10 +296,10 @@ struct nova_link_change_entry {
 struct nova_mmap_entry {
 	u8	entry_type;
 	u8	invalid;
-	u8	paddings[2];
-	__le32	num_pages;
-	__le64	pgoff;
+	u8	paddings[6];
 	__le64	trans_id;
+	__le64	pgoff;
+	__le64	num_pages;
 	__le32	csumpadding;
 	__le32	csum;
 } __attribute((__packed__));
@@ -1642,6 +1642,9 @@ int nova_set_write_entry_updating(struct super_block *sb,
 int nova_inplace_update_write_entry(struct super_block *sb,
 	struct inode *inode, struct nova_file_write_entry *entry,
 	struct nova_log_entry_info *entry_info);
+int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, struct nova_mmap_entry *data,
+	struct nova_inode_update *update);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);

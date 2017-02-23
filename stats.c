@@ -306,8 +306,9 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 static inline void nova_print_mmap_entry(struct super_block *sb,
 	u64 curr, struct nova_mmap_entry *entry)
 {
-	nova_dbg("mmap write entry @ 0x%llx: trans %llu, paoff %llu, pages %u\n",
-			curr, entry->trans_id, entry->pgoff, entry->num_pages);
+	nova_dbg("mmap write entry @ 0x%llx: trans %llu, paoff %llu, "
+			"pages %llu\n", curr, entry->trans_id,
+			entry->pgoff, entry->num_pages);
 }
 
 static inline size_t nova_print_dentry(struct super_block *sb,
