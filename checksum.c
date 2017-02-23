@@ -561,7 +561,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	return (bytes - csummed);
 }
 
-static int nova_update_block_csum(struct super_block *sb,
+int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff)
 {
@@ -595,73 +595,6 @@ static int nova_update_block_csum(struct super_block *sb,
 	}
 
 	return 0;
-}
-
-/* Reset data csum for updating entries */
-int nova_reset_data_csum_parity(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry)
-{
-	struct nova_file_write_entry fake_entry, *curr;
-	size_t size = sizeof(struct nova_file_write_entry);
-	unsigned long pgoff, end_pgoff;
-	int ret;
-
-	ret = memcpy_from_pmem(&fake_entry, entry, size);
-	if (ret < 0)
-		return ret;
-
-	if (fake_entry.invalid_pages == fake_entry.num_pages) {
-		/* Dead entry */
-		goto out;
-	}
-
-	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
-	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
-		curr = nova_get_write_entry(sb, sih, pgoff);
-		if (curr != entry)
-			continue;
-
-		nova_update_block_csum(sb, sih, &fake_entry, pgoff);
-		nova_update_pgoff_parity(sb, sih, &fake_entry, pgoff);
-	}
-
-out:
-	if (ret == 0)
-		nova_set_write_entry_updating(sb, entry, 0);
-
-	return ret;
-}
-
-/* Reset data csum for mmap entries */
-int nova_reset_mmap_csum_parity(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_mmap_entry *entry)
-{
-	struct nova_mmap_entry fake_entry;
-	size_t size = sizeof(struct nova_mmap_entry);
-	unsigned long pgoff, end_pgoff;
-	int ret;
-
-	ret = memcpy_from_pmem(&fake_entry, entry, size);
-	if (ret < 0)
-		return ret;
-
-	if (fake_entry.invalid == 1) {
-		/* Dead entry */
-		goto out;
-	}
-
-	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
-	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
-		/* FIXME: Check dirty? */
-		nova_update_block_csum(sb, sih, NULL, pgoff);
-		nova_update_pgoff_parity(sb, sih, NULL, pgoff);
-	}
-
-out:
-	if (ret == 0)
-		ret = nova_invalidate_logentry(sb, entry, MMAP_WRITE, 0);
-
-	return ret;
 }
 
 /* Verify checksums of requested data bytes of a file write entry.
