@@ -557,6 +557,11 @@ void nova_print_free_lists(struct super_block *sb)
 			free_list->block_end - free_list->block_start + 1,
 			free_list->num_free_blocks, free_list->num_blocknode);
 
+		nova_dbg("Free list %d: csum start %lu, csum blocks %lu, "
+			"parity start %lu, parity blocks %lu\n",
+			i, free_list->csum_start, free_list->num_csum_blocks,
+			free_list->parity_start, free_list->num_parity_blocks);
+
 		nova_dbg("Free list %d: alloc log count %lu, "
 			"allocated log pages %lu, alloc data count %lu, "
 			"allocated data pages %lu, free log count %lu, "
