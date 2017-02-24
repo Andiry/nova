@@ -770,3 +770,23 @@ int nova_data_csum_init(struct super_block *sb)
 	return 0;
 }
 
+int nova_data_csum_init_free_list(struct super_block *sb,
+	struct free_list *free_list)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	unsigned long data_csum_blocks;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+
+	/* Allocate blocks to store data block checksums.
+	 * Always reserve in case user turns it off at init mount but later
+	 * turns it on. */
+	data_csum_blocks = ( (sbi->initsize >> strp_shift)
+				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
+	free_list->csum_start = free_list->block_start;
+	free_list->block_start += data_csum_blocks / sbi->cpus;
+	if (data_csum_blocks % sbi->cpus)
+		free_list->block_start++;
+
+	return 0;
+}
+
