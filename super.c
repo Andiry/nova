@@ -43,6 +43,7 @@ int replica_metadata = 0;
 int metadata_csum = 0;
 int unsafe_metadata = 0;
 int wprotect = 0;
+int mmap_cow = 0;
 int data_csum = 0;
 int data_parity = 0;
 int support_clwb = 0;
@@ -58,6 +59,8 @@ module_param(unsafe_metadata, int, S_IRUGO);
 MODULE_PARM_DESC(unsafe_metadata, "Inplace metadata update");
 module_param(wprotect, int, S_IRUGO);
 MODULE_PARM_DESC(wprotect, "Wprotect (CR0.WP)");
+module_param(mmap_cow, int, S_IRUGO);
+MODULE_PARM_DESC(mmap_cow, "Mmap CoW on snapshot");
 module_param(data_csum, int, S_IRUGO);
 MODULE_PARM_DESC(data_csum, "Data checksum");
 module_param(data_parity, int, S_IRUGO);
@@ -522,9 +525,11 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	nova_dbg("measure timing %d, replica metadata %d, "
 		"metadata checksum %d, inplace metadata update %d, "
-		"inplace update %d, data checksum %d, data parity %d\n",
+		"inplace update %d, wprotect %d, mmap Cow %d, "
+		"data checksum %d, data parity %d\n",
 		measure_timing, replica_metadata, metadata_csum,
-		unsafe_metadata, inplace_data_updates, data_csum, data_parity);
+		unsafe_metadata, inplace_data_updates, wprotect, mmap_cow,
+		data_csum, data_parity);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
