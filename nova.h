@@ -543,6 +543,7 @@ struct free_list {
 	spinlock_t s_lock;
 	struct rb_root	block_free_tree;
 	struct nova_range_node *first_node;
+	int 		index;
 	unsigned long	csum_start;
 	unsigned long	parity_start;
 	unsigned long	block_start;
@@ -1421,7 +1422,8 @@ static inline void *nova_get_data_csum_addr1(struct super_block *sb, u64 strp_nr
 	/* Range test */
 	if (((NOVA_DATA_CSUM_LEN * strp_nr) >> PAGE_SHIFT) >=
 			free_list->num_csum_blocks) {
-		nova_dbg("%s: Invalid strp number %llu\n", __func__, strp_nr);
+		nova_dbg("%s: Invalid strp number %llu, free list %d\n",
+				__func__, strp_nr, free_list->index);
 		return NULL;
 	}
 
@@ -1487,7 +1489,8 @@ static inline void *nova_get_parity_addr1(struct super_block *sb,
 	/* Range test */
 	if (((blocknr - free_list->block_start) >> BLOCK_SHIFT) >=
 			free_list->num_parity_blocks) {
-		nova_dbg("%s: Invalid blocknr %lu\n", __func__, blocknr);
+		nova_dbg("%s: Invalid blocknr %lu, free list %d\n",
+				__func__, blocknr, free_list->index);
 		return NULL;
 	}
 

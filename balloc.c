@@ -43,6 +43,7 @@ int nova_alloc_block_free_lists(struct super_block *sb)
 		free_list = nova_get_free_list(sb, i);
 		free_list->block_free_tree = RB_ROOT;
 		spin_lock_init(&free_list->s_lock);
+		free_list->index = i;
 	}
 
 	return 0;
