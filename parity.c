@@ -97,6 +97,11 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	u64 blockoff;
 	unsigned char *parbuf;
 
+	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
+	/* Truncated? */
+	if (blockoff == 0)
+		return 0;
+
 	/* parity buffer for rolling updates */
 	parbuf = kmalloc(strp_size, GFP_KERNEL);
 	if (!parbuf) {
@@ -105,18 +110,11 @@ int nova_update_pgoff_parity(struct super_block *sb,
 		return -ENOMEM;
 	}
 
-	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
-	if (blockoff == 0) {
-		nova_dbg("%s: inode %lu, pgoff %lu not present\n",
-				__func__, sih->ino, pgoff);
-		goto out;
-	}
-
 	dax_mem = nova_get_block(sb, blockoff);
 
 	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
 	nova_update_block_parity(sb, blocknr, parbuf, dax_mem);
-out:
+
 	kfree(parbuf);
 	return 0;
 }

@@ -577,11 +577,10 @@ int nova_update_block_csum(struct super_block *sb,
 	count = blk_type_to_size[sih->i_blk_type] / strp_size;
 
 	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
-	if (blockoff == 0) {
-		nova_dbg("%s: inode %lu, pgoff %lu not present\n",
-				__func__, sih->ino, pgoff);
+
+	/* Truncated? */
+	if (blockoff == 0)
 		return 0;
-	}
 
 	dax_mem = nova_get_block(sb, blockoff);
 
