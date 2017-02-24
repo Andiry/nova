@@ -102,6 +102,12 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 			free_list->first_node = blknode;
 			free_list->num_blocknode = 1;
 		}
+
+		nova_dbgv("%s: free list %d: block start %lu, end %lu, "
+				"%lu free blocks\n", __func__, i,
+				free_list->block_start,
+				free_list->block_end,
+				free_list->num_free_blocks);
 	}
 
 	free_list = nova_get_free_list(sb, (sbi->cpus - 1));
