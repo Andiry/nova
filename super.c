@@ -570,10 +570,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	nova_data_csum_init(sb);
-
-	nova_data_parity_init(sb);
-
 	nova_snapshot_init(sb);
 
 	if (nova_parse_options(data, sbi, 0))

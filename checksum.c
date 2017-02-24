@@ -740,36 +740,6 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	return 0;
 }
 
-int nova_data_csum_init(struct super_block *sb)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	unsigned long data_csum_blocks;
-	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-
-	/* Allocate blocks to store data block checksums.
-	 * Always reserve in case user turns it off at init mount but later
-	 * turns it on. */
-	data_csum_blocks = ( (sbi->initsize >> strp_shift)
-				* NOVA_DATA_CSUM_LEN ) >> PAGE_SHIFT;
-	nova_dbg("Reserve %lu blocks for data checksums.\n", data_csum_blocks);
-
-	if (data_csum) {
-		/* Put data checksums immediately after reserved blocks. */
-		sbi->data_csum_base = (sbi->reserved_blocks) << PAGE_SHIFT;
-		/* New data blocks will be checksummed.
-		 * Old data blocks will be checksummed on access. */
-		nova_dbg("Data checksum is enabled.\n");
-	} else {
-		/* New data blocks will not be checksummed.
-		 * Preserve but ignore existing checksums. */
-		nova_dbg("Data checksum is disabled.\n");
-	}
-
-	sbi->reserved_blocks += data_csum_blocks;
-
-	return 0;
-}
-
 int nova_data_csum_init_free_list(struct super_block *sb,
 	struct free_list *free_list)
 {

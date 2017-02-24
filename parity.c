@@ -230,36 +230,6 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	        return -EIO;
 }
 
-int nova_data_parity_init(struct super_block *sb)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	unsigned long blocksize, total_blocks, parity_blocks;
-	unsigned int strp_size = NOVA_STRIPE_SIZE;
-
-	/* Allocate blocks to store data block parities.
-	 * Always reserve in case user turns it off at init mount but later
-	 * turns it on.
-	 *
-	 * (data_blocks + parity_blocks) == total_blocks
-	 * parity_blocks = (data_blocks * strp_size) / blocksize
-	 * */
-	blocksize = sb->s_blocksize;
-	total_blocks = sbi->initsize / blocksize;
-	parity_blocks = total_blocks / (blocksize / strp_size + 1);
-	nova_dbg("Reserve %lu blocks for data parity.\n", parity_blocks);
-
-	if (data_parity > 0) {
-		sbi->data_parity_base = (sbi->reserved_blocks) * blocksize;
-		nova_dbg("Data parity is enabled.\n");
-	} else {
-		nova_dbg("Data parity is disabled.\n");
-	}
-
-	sbi->reserved_blocks += parity_blocks;
-
-	return 0;
-}
-
 int nova_data_parity_init_free_list(struct super_block *sb,
 	struct free_list *free_list)
 {

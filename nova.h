@@ -674,12 +674,6 @@ struct nova_sb_info {
 	/* Shared free block list */
 	unsigned long per_list_blocks;
 	struct free_list shared_free_list;
-
-	/* Byte offset of the data checksum storage start */
-	unsigned long data_csum_base;
-
-	/* Byte offset of the data parity storage start */
-	unsigned long data_parity_base;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)
@@ -1374,27 +1368,6 @@ static inline int is_dir_init_entry(struct super_block *sb,
 static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	void *data_csum_addr;
-
-	if (!data_csum) {
-		nova_dbg("%s: Data checksum is disabled!\n", __func__);
-		return NULL;
-	}
-
-	if (sbi->data_csum_base) {
-		data_csum_addr = (u8 *) nova_get_block(sb, sbi->data_csum_base)
-				+ NOVA_DATA_CSUM_LEN * strp_nr;
-	} else {
-		data_csum_addr = NULL;
-		nova_dbg("%s: data_csum_base error!\n", __func__);
-	}
-
-	return data_csum_addr;
-}
-
-static inline void *nova_get_data_csum_addr1(struct super_block *sb, u64 strp_nr)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct free_list *free_list;
 	unsigned long blocknr;
 	void *data_csum_addr;
@@ -1433,34 +1406,7 @@ static inline void *nova_get_data_csum_addr1(struct super_block *sb, u64 strp_nr
 	return data_csum_addr;
 }
 
-static inline void *nova_get_parity_addr(struct super_block *sb, u64 blocknr)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	unsigned long parity_base_nr;
-	void *parity_base, *parity_addr;
-
-	if (data_parity == 0) {
-		nova_dbg("%s: Data parity is disabled!\n", __func__);
-		return NULL;
-	}
-
-	/* This address calculation assumes parity blocks are placed before real
-	 * data blocks begin. */
-	if (sbi->data_parity_base) {
-		parity_base_nr = nova_get_blocknr(sb, sbi->data_parity_base,
-						NOVA_BLOCK_TYPE_4K);
-		parity_base = nova_get_block(sb, sbi->data_parity_base);
-		parity_addr = (u8 *) parity_base +
-			((blocknr - parity_base_nr) << NOVA_STRIPE_SHIFT);
-	} else {
-		parity_addr = NULL;
-		nova_dbg("%s: data_parity_base error!\n", __func__);
-	}
-
-	return parity_addr;
-}
-
-static inline void *nova_get_parity_addr1(struct super_block *sb,
+static inline void *nova_get_parity_addr(struct super_block *sb,
 	unsigned long blocknr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -1482,7 +1428,6 @@ static inline void *nova_get_parity_addr1(struct super_block *sb,
 		return NULL;
 	}
 
-	blocknr -= index * sbi->per_list_blocks;
 	free_list = nova_get_free_list(sb, index);
 	blockoff = free_list->parity_start << PAGE_SHIFT;
 
@@ -1566,11 +1511,12 @@ int nova_update_block_csum(struct super_block *sb,
 bool nova_verify_data_csum(struct inode *inode,
 	struct nova_file_write_entry *entry, pgoff_t index,
 	size_t offset, size_t bytes);
-int nova_data_csum_init(struct super_block *sb);
 int nova_copy_partial_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long index, size_t offset, unsigned long dst_blknr,
 	bool is_end_blk);
+int nova_data_csum_init_free_list(struct super_block *sb,
+	struct free_list *free_list);
 
 /*
  * Inodes and files operations
@@ -1754,7 +1700,8 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	void *wrbuf, size_t offset, size_t bytes);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int strp_id);
-int nova_data_parity_init(struct super_block *sb);
+int nova_data_parity_init_free_list(struct super_block *sb,
+	struct free_list *free_list);
 
 /* rebuild.c */
 int nova_rebuild_file_inode_tree(struct super_block *sb,

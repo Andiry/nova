@@ -71,6 +71,9 @@ static void nova_init_free_list(struct super_block *sb,
 					per_list_blocks - 1;
 	if (index == 0)
 		free_list->block_start += sbi->reserved_blocks;
+
+	nova_data_csum_init_free_list(sb, free_list);
+	nova_data_parity_init_free_list(sb, free_list);
 }
 
 void nova_init_blockmap(struct super_block *sb, int recovery)
