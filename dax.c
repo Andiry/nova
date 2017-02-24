@@ -1544,7 +1544,6 @@ static int nova_dax_pfn_mkwrite(struct vm_area_struct *vma,
 	return ret;
 }
 
-#ifdef MPROTECT_READ
 static inline int nova_rbtree_compare_vma(struct vma_item *curr,
 	struct vm_area_struct *vma)
 {
@@ -1566,6 +1565,9 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	struct vma_item *item, *curr;
 	struct rb_node **temp, *parent;
 	int compVal;
+
+	if (mmap_cow == 0)
+		return 0;
 
 	if ((vma->vm_flags & flags) != flags)
 		return 0;
@@ -1620,6 +1622,9 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 	int compVal;
 	int found = 0;
 
+	if (mmap_cow == 0)
+		return 0;
+
 	spin_lock(&sbi->vma_lock);
 
 	temp = sbi->vma_tree.rb_node;
@@ -1656,6 +1661,9 @@ static int nova_restore_page_write(struct vm_area_struct *vma,
 {
 	struct mm_struct *mm = vma->vm_mm;
 
+	if (mmap_cow == 0)
+		return 0;
+
 	down_write(&mm->mmap_sem);
 
 	nova_dbgv("Restore vma %p write, start 0x%lx, end 0x%lx, "
@@ -1678,7 +1686,8 @@ static void nova_vma_open(struct vm_area_struct *vma)
 			__LINE__, vma->vm_start, vma->vm_end,
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
 
-	nova_insert_write_vma(vma);
+	if (mmap_cow)
+		nova_insert_write_vma(vma);
 }
 
 static void nova_vma_close(struct vm_area_struct *vma)
@@ -1690,21 +1699,18 @@ static void nova_vma_close(struct vm_area_struct *vma)
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
 
 	vma->original_write = 0;
-	nova_remove_write_vma(vma);
+	if (mmap_cow)
+		nova_remove_write_vma(vma);
 }
-
-#endif
 
 static const struct vm_operations_struct nova_dax_vm_ops = {
 	.fault	= nova_dax_fault,
 	.pmd_fault = nova_dax_pmd_fault,
 	.page_mkwrite = nova_dax_fault,
 	.pfn_mkwrite = nova_dax_pfn_mkwrite,
-#ifdef MPROTECT_READ
 	.open = nova_vma_open,
 	.close = nova_vma_close,
 	.dax_cow = nova_restore_page_write,
-#endif
 };
 
 int nova_append_write_mmap_to_log(struct vm_area_struct *vma)
@@ -1767,10 +1773,9 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	vma->vm_ops = &nova_dax_vm_ops;
 
-#ifdef MPROTECT_READ
 	/* Check SHARED WRITE vma */
-	nova_insert_write_vma(vma);
-#endif
+	if (mmap_cow)
+		nova_insert_write_vma(vma);
 
 	nova_append_write_mmap_to_log(vma);
 

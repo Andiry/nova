@@ -308,8 +308,6 @@ out:
 	return ret;
 }
 
-#ifdef MPROTECT_READ
-
 static int nova_set_vma_read(struct vm_area_struct *vma)
 {
 	struct mm_struct *mm = vma->vm_mm;
@@ -344,6 +342,9 @@ int nova_set_vmas_readonly(struct super_block *sb)
 	struct vma_item *item;
 	struct rb_node *temp;
 
+	if (mmap_cow == 0)
+		return 0;
+
 	nova_dbgv("%s\n", __func__);
 	spin_lock(&sbi->vma_lock);
 	temp = rb_first(&sbi->vma_tree);
@@ -363,6 +364,9 @@ int nova_destroy_vma_tree(struct super_block *sb)
 	struct vma_item *item;
 	struct rb_node *temp;
 
+	if (mmap_cow == 0)
+		return 0;
+
 	nova_dbgv("%s\n", __func__);
 	spin_lock(&sbi->vma_lock);
 	temp = rb_first(&sbi->vma_tree);
@@ -376,17 +380,3 @@ int nova_destroy_vma_tree(struct super_block *sb)
 
 	return 0;
 }
-
-#else
-
-int nova_set_vmas_readonly(struct super_block *sb)
-{
-	return 0;
-}
-
-int nova_destroy_vma_tree(struct super_block *sb)
-{
-	return 0;
-}
-
-#endif
