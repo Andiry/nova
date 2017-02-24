@@ -543,10 +543,13 @@ struct free_list {
 	spinlock_t s_lock;
 	struct rb_root	block_free_tree;
 	struct nova_range_node *first_node;
+	unsigned long	csum_start;
+	unsigned long	parity_start;
 	unsigned long	block_start;
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;
 	unsigned long	num_blocknode;
+	u32		csum;		/* Protect integrity */
 
 	/* Statistics */
 	unsigned long	alloc_log_count;
