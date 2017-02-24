@@ -281,6 +281,9 @@ int nova_data_parity_init_free_list(struct super_block *sb,
 	if (parity_blocks % sbi->cpus)
 		free_list->block_start++;
 
+	free_list->num_parity_blocks =
+		free_list->block_start - free_list->parity_start;
+
 	return 0;
 }
 

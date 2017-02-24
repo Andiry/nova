@@ -787,6 +787,9 @@ int nova_data_csum_init_free_list(struct super_block *sb,
 	if (data_csum_blocks % sbi->cpus)
 		free_list->block_start++;
 
+	free_list->num_csum_blocks =
+		free_list->block_start - free_list->csum_start;
+
 	return 0;
 }
 

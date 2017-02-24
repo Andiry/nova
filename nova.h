@@ -549,6 +549,8 @@ struct free_list {
 	unsigned long	block_end;
 	unsigned long	num_free_blocks;
 	unsigned long	num_blocknode;
+	unsigned long	num_csum_blocks;
+	unsigned long	num_parity_blocks;
 	u32		csum;		/* Protect integrity */
 
 	/* Statistics */
@@ -1389,6 +1391,46 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr)
 	return data_csum_addr;
 }
 
+static inline void *nova_get_data_csum_addr1(struct super_block *sb, u64 strp_nr)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct free_list *free_list;
+	unsigned long blocknr;
+	void *data_csum_addr;
+	u64 blockoff;
+	int index;
+	int BLOCK_SHIFT = PAGE_SHIFT - NOVA_STRIPE_SHIFT;
+
+	if (!data_csum) {
+		nova_dbg("%s: Data checksum is disabled!\n", __func__);
+		return NULL;
+	}
+
+	blocknr = strp_nr >> BLOCK_SHIFT;
+	index = blocknr / sbi->per_list_blocks;
+
+	if (index >= sbi->cpus) {
+		nova_dbg("%s: Invalid blocknr %lu\n", __func__, blocknr);
+		return NULL;
+	}
+
+	strp_nr -= (index * sbi->per_list_blocks) << BLOCK_SHIFT;
+	free_list = nova_get_free_list(sb, index);
+	blockoff = free_list->csum_start << PAGE_SHIFT;
+
+	/* Range test */
+	if (((NOVA_DATA_CSUM_LEN * strp_nr) >> PAGE_SHIFT) >=
+			free_list->num_csum_blocks) {
+		nova_dbg("%s: Invalid strp number %llu\n", __func__, strp_nr);
+		return NULL;
+	}
+
+	data_csum_addr = (u8 *) nova_get_block(sb, blockoff)
+				+ NOVA_DATA_CSUM_LEN * strp_nr;
+
+	return data_csum_addr;
+}
+
 static inline void *nova_get_parity_addr(struct super_block *sb, u64 blocknr)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -1414,6 +1456,45 @@ static inline void *nova_get_parity_addr(struct super_block *sb, u64 blocknr)
 	}
 
 	return parity_addr;
+}
+
+static inline void *nova_get_parity_addr1(struct super_block *sb,
+	unsigned long blocknr)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct free_list *free_list;
+	void *data_csum_addr;
+	u64 blockoff;
+	int index;
+	int BLOCK_SHIFT = PAGE_SHIFT - NOVA_STRIPE_SHIFT;
+
+	if (data_parity == 0) {
+		nova_dbg("%s: Data parity is disabled!\n", __func__);
+		return NULL;
+	}
+
+	index = blocknr / sbi->per_list_blocks;
+
+	if (index >= sbi->cpus) {
+		nova_dbg("%s: Invalid blocknr %lu\n", __func__, blocknr);
+		return NULL;
+	}
+
+	blocknr -= index * sbi->per_list_blocks;
+	free_list = nova_get_free_list(sb, index);
+	blockoff = free_list->parity_start << PAGE_SHIFT;
+
+	/* Range test */
+	if (((blocknr - free_list->block_start) >> BLOCK_SHIFT) >=
+			free_list->num_parity_blocks) {
+		nova_dbg("%s: Invalid blocknr %lu\n", __func__, blocknr);
+		return NULL;
+	}
+
+	data_csum_addr = (u8 *) nova_get_block(sb, blockoff) +
+				((blocknr - free_list->block_start) << NOVA_STRIPE_SHIFT);
+
+	return data_csum_addr;
 }
 
 /* Function Prototypes */
