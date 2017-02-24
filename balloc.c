@@ -57,36 +57,41 @@ void nova_delete_free_lists(struct super_block *sb)
 	sbi->free_lists = NULL;
 }
 
+static void nova_init_free_list(struct super_block *sb,
+	struct free_list *free_list, int index)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	unsigned long per_list_blocks;
+
+	per_list_blocks = sbi->num_blocks / sbi->cpus;
+
+	free_list->block_start = per_list_blocks * index;
+	free_list->block_end = free_list->block_start +
+					per_list_blocks - 1;
+	if (index == 0)
+		free_list->block_start += sbi->reserved_blocks;
+}
+
 void nova_init_blockmap(struct super_block *sb, int recovery)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct rb_root *tree;
-	unsigned long num_used_block;
 	struct nova_range_node *blknode;
 	struct free_list *free_list;
-	unsigned long per_list_blocks;
 	int i;
 	int ret;
 
-	num_used_block = sbi->reserved_blocks;
-
 	/* Divide the block range among per-CPU free lists */
-	per_list_blocks = sbi->num_blocks / sbi->cpus;
-	sbi->per_list_blocks = per_list_blocks;
+	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = nova_get_free_list(sb, i);
 		tree = &(free_list->block_free_tree);
-		free_list->block_start = per_list_blocks * i;
-		free_list->block_end = free_list->block_start +
-						per_list_blocks - 1;
+		nova_init_free_list(sb, free_list, i);
 
 		/* For recovery, update these fields later */
 		if (recovery == 0) {
-			free_list->num_free_blocks = per_list_blocks;
-			if (i == 0) {
-				free_list->block_start += num_used_block;
-				free_list->num_free_blocks -= num_used_block;
-			}
+			free_list->num_free_blocks = free_list->block_end -
+						free_list->block_start + 1;
 
 			blknode = nova_alloc_blocknode(sb);
 			if (blknode == NULL)
