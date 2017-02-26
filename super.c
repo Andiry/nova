@@ -546,6 +546,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	spin_lock_init(&sbi->vma_lock);
 	sbi->vma_tree = RB_ROOT;
+	INIT_LIST_HEAD(&sbi->mmap_sih_list);
 
 	sbi->inode_maps = kzalloc(sbi->cpus * sizeof(struct inode_map),
 					GFP_KERNEL);

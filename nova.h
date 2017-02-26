@@ -478,6 +478,8 @@ struct nova_inode_info_header {
 	struct radix_tree_root tree;	/* Dir name entry tree root */
 	struct radix_tree_root cache_tree;	/* Mmap cache tree root */
 	struct rb_root vma_tree;	/* Write vmas */
+	struct list_head list;		/* SB list of mmap sih */
+	int num_vmas;
 	unsigned short i_mode;		/* Dir or file? */
 	unsigned long log_pages;	/* Num of log pages */
 	unsigned long i_size;
@@ -656,6 +658,7 @@ struct nova_sb_info {
 	/* DAX-mmap snapshot */
 	spinlock_t	vma_lock;
 	struct rb_root	vma_tree;
+	struct list_head mmap_sih_list;
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
