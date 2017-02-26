@@ -1575,7 +1575,7 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	if ((vma->vm_flags & flags) != flags)
 		return 0;
 
-	item = kmalloc(sizeof(struct vma_item), GFP_ATOMIC);
+	item = nova_alloc_vma_item(sb);
 	if (!item)
 		return -ENOMEM;
 
@@ -1672,7 +1672,7 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 		nova_dbgv("Remove vma %p, start 0x%lx, end 0x%lx\n",
 				curr->vma, curr->vma->vm_start,
 				curr->vma->vm_end);
-		kfree(curr);
+		nova_free_vma_item(sb, curr);
 	}
 
 	if (remove) {

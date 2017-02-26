@@ -470,8 +470,15 @@ struct nova_range_node_lowhigh {
 
 struct nova_range_node {
 	struct rb_node node;
+	struct vm_area_struct *vma;
 	unsigned long range_low;
 	unsigned long range_high;
+};
+
+struct vma_item {
+	/* Reuse header of nova_range_node struct */
+	struct rb_node node;
+	struct vm_area_struct *vma;
 };
 
 struct nova_inode_info_header {
@@ -518,11 +525,6 @@ struct nova_inode_rebuild {
 struct nova_inode_info {
 	struct nova_inode_info_header header;
 	struct inode vfs_inode;
-};
-
-struct vma_item {
-	struct rb_node node;
-	struct vm_area_struct *vma;
 };
 
 enum bm_type {
@@ -1456,6 +1458,7 @@ int nova_alloc_block_free_lists(struct super_block *sb);
 void nova_delete_free_lists(struct super_block *sb);
 inline struct nova_range_node *nova_alloc_blocknode(struct super_block *sb);
 inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb);
+inline struct vma_item *nova_alloc_vma_item(struct super_block *sb);
 inline struct snapshot_info *nova_alloc_snapshot_info(struct super_block *sb);
 inline void nova_free_range_node(struct nova_range_node *node);
 inline void nova_free_snapshot_info(struct snapshot_info *info);
@@ -1463,6 +1466,8 @@ inline void nova_free_blocknode(struct super_block *sb,
 	struct nova_range_node *bnode);
 inline void nova_free_inode_node(struct super_block *sb,
 	struct nova_range_node *bnode);
+inline void nova_free_vma_item(struct super_block *sb,
+	struct vma_item *item);
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
 extern int nova_free_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);

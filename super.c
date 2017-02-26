@@ -856,6 +856,12 @@ inline void nova_free_inode_node(struct super_block *sb,
 	nova_free_range_node(node);
 }
 
+inline void nova_free_vma_item(struct super_block *sb,
+	struct vma_item *item)
+{
+	nova_free_range_node((struct nova_range_node *)item);
+}
+
 inline void nova_free_snapshot_info(struct snapshot_info *info)
 {
 	kmem_cache_free(nova_snapshot_info_cachep, info);
@@ -878,6 +884,11 @@ inline struct nova_range_node *nova_alloc_blocknode(struct super_block *sb)
 inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
 {
 	return nova_alloc_range_node(sb);
+}
+
+inline struct vma_item *nova_alloc_vma_item(struct super_block *sb)
+{
+	return (struct vma_item *)nova_alloc_range_node(sb);
 }
 
 inline struct snapshot_info *nova_alloc_snapshot_info(struct super_block *sb)
