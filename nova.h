@@ -657,7 +657,6 @@ struct nova_sb_info {
 
 	/* DAX-mmap snapshot */
 	spinlock_t	vma_lock;
-	struct rb_root	vma_tree;
 	struct list_head mmap_sih_list;
 
 	/* ZEROED page for cache page initialized */

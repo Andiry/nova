@@ -336,28 +336,46 @@ out:
 	return 0;
 }
 
+static int nova_set_sih_vmas_readonly(struct nova_inode_info_header *sih)
+{
+	struct nova_inode_info *si;
+	struct inode *inode;
+	struct vma_item *item;
+	struct rb_node *temp;
+
+	si = container_of(sih, struct nova_inode_info, header);
+	inode = &(si->vfs_inode);
+
+	inode_lock(inode);
+	temp = rb_first(&sih->vma_tree);
+	while (temp) {
+		item = container_of(temp, struct vma_item, node);
+		temp = rb_next(temp);
+		nova_set_vma_read(item->vma);
+	}
+	inode_unlock(inode);
+
+	return 0;
+}
+
 int nova_set_vmas_readonly(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct vma_item *item;
-	struct rb_node *temp;
+	struct nova_inode_info_header *sih;
 
 	if (mmap_cow == 0)
 		return 0;
 
 	nova_dbgv("%s\n", __func__);
 	spin_lock(&sbi->vma_lock);
-	temp = rb_first(&sbi->vma_tree);
-	while (temp) {
-		item = container_of(temp, struct vma_item, node);
-		temp = rb_next(temp);
-		nova_set_vma_read(item->vma);
-	}
+	list_for_each_entry(sih, &sbi->mmap_sih_list, list)
+		nova_set_sih_vmas_readonly(sih);
 	spin_unlock(&sbi->vma_lock);
 
 	return 0;
 }
 
+#if 0
 int nova_destroy_vma_tree(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -380,3 +398,4 @@ int nova_destroy_vma_tree(struct super_block *sb)
 
 	return 0;
 }
+#endif

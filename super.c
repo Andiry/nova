@@ -545,7 +545,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
 	spin_lock_init(&sbi->vma_lock);
-	sbi->vma_tree = RB_ROOT;
 	INIT_LIST_HEAD(&sbi->mmap_sih_list);
 
 	sbi->inode_maps = kzalloc(sbi->cpus * sizeof(struct inode_map),
@@ -813,7 +812,6 @@ static void nova_put_super(struct super_block *sb)
 //	nova_print_free_lists(sb);
 	if (sbi->virt_addr) {
 		nova_save_snapshots(sb);
-		nova_destroy_vma_tree(sb);
 		nova_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		nova_save_blocknode_mappings_to_log(sb);

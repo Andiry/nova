@@ -1559,14 +1559,17 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct super_block *sb = inode->i_sb;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long flags = VM_SHARED | VM_WRITE;
 	struct vma_item *item, *curr;
 	struct rb_node **temp, *parent;
 	int compVal;
+	int insert = 0;
 
-	if (mmap_cow == 0)
+	if (mmap_cow == 0 && data_csum == 0 && data_parity == 0)
 		return 0;
 
 	if ((vma->vm_flags & flags) != flags)
@@ -1581,9 +1584,9 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	nova_dbgv("Insert vma %p, start 0x%lx, end 0x%lx\n",
 			vma, vma->vm_start, vma->vm_end);
 
-	spin_lock(&sbi->vma_lock);
+	inode_lock(inode);
 
-	temp = &(sbi->vma_tree.rb_node);
+	temp = &(sih->vma_tree.rb_node);
 	parent = NULL;
 
 	while (*temp) {
@@ -1604,9 +1607,20 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	}
 
 	rb_link_node(&item->node, parent, temp);
-	rb_insert_color(&item->node, &sbi->vma_tree);
+	rb_insert_color(&item->node, &sih->vma_tree);
+
+	sih->num_vmas++;
+	if (sih->num_vmas == 1)
+		insert = 1;
+
 out:
-	spin_unlock(&sbi->vma_lock);
+	inode_unlock(inode);
+
+	if (insert) {
+		spin_lock(&sbi->vma_lock);
+		list_add_tail(&sih->list, &sbi->mmap_sih_list);
+		spin_unlock(&sbi->vma_lock);
+	}
 
 	return 0;
 }
@@ -1615,20 +1629,22 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct super_block *sb = inode->i_sb;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct vma_item *curr = NULL;
 	struct rb_node *temp;
 	int compVal;
 	int found = 0;
+	int remove = 0;
 
-	if (mmap_cow == 0)
+	if (mmap_cow == 0 && data_csum == 0 && data_parity == 0)
 		return 0;
 
-	spin_lock(&sbi->vma_lock);
+	inode_lock(inode);
 
-	temp = sbi->vma_tree.rb_node;
-
+	temp = sih->vma_tree.rb_node;
 	while (temp) {
 		curr = container_of(temp, struct vma_item, node);
 		compVal = nova_rbtree_compare_vma(curr, vma);
@@ -1638,19 +1654,31 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 		} else if (compVal == 1) {
 			temp = temp->rb_right;
 		} else {
-			rb_erase(&curr->node, &sbi->vma_tree);
+			rb_erase(&curr->node, &sih->vma_tree);
 			found = 1;
 			break;
 		}
 	}
 
-	spin_unlock(&sbi->vma_lock);
+	if (found) {
+		sih->num_vmas--;
+		if (sih->num_vmas == 0)
+			remove = 1;
+	}
+
+	inode_unlock(inode);
 
 	if (found) {
 		nova_dbgv("Remove vma %p, start 0x%lx, end 0x%lx\n",
 				curr->vma, curr->vma->vm_start,
 				curr->vma->vm_end);
 		kfree(curr);
+	}
+
+	if (remove) {
+		spin_lock(&sbi->vma_lock);
+		list_del(&sih->list);
+		spin_unlock(&sbi->vma_lock);
 	}
 
 	return 0;
@@ -1686,7 +1714,7 @@ static void nova_vma_open(struct vm_area_struct *vma)
 			__LINE__, vma->vm_start, vma->vm_end,
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
 
-	if (mmap_cow)
+	if (mmap_cow || data_csum || data_parity)
 		nova_insert_write_vma(vma);
 }
 
@@ -1699,7 +1727,7 @@ static void nova_vma_close(struct vm_area_struct *vma)
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
 
 	vma->original_write = 0;
-	if (mmap_cow)
+	if (mmap_cow || data_csum || data_parity)
 		nova_remove_write_vma(vma);
 }
 
@@ -1774,10 +1802,11 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	vma->vm_ops = &nova_dax_vm_ops;
 
 	/* Check SHARED WRITE vma */
-	if (mmap_cow)
+	if (mmap_cow || data_csum || data_parity)
 		nova_insert_write_vma(vma);
 
-	nova_append_write_mmap_to_log(vma);
+	if (data_csum || data_parity)
+		nova_append_write_mmap_to_log(vma);
 
 	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "

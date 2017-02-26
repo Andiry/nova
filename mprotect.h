@@ -58,7 +58,6 @@ extern int nova_dax_mem_protect(struct super_block *sb,
 int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	unsigned long address, int num_blocks);
 int nova_set_vmas_readonly(struct super_block *sb);
-int nova_destroy_vma_tree(struct super_block *sb);
 
 static inline int nova_is_protected(struct super_block *sb)
 {
