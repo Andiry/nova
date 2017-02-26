@@ -57,6 +57,7 @@ extern int nova_dax_mem_protect(struct super_block *sb,
 				 void *vaddr, unsigned long size, int rw);
 int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	unsigned long address, int num_blocks);
+bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff);
 int nova_set_vmas_readonly(struct super_block *sb);
 
 static inline int nova_is_protected(struct super_block *sb)

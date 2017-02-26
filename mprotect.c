@@ -336,6 +336,45 @@ out:
 	return 0;
 }
 
+static inline bool pgoff_in_vma(struct vm_area_struct *vma,
+	unsigned long pgoff)
+{
+	unsigned long num_pages;
+
+	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+
+	if (pgoff >= vma->vm_pgoff && pgoff < vma->vm_pgoff + num_pages)
+		return true;
+
+	return false;
+}
+
+bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct vma_item *item;
+	struct rb_node *temp;
+	bool ret = false;
+
+	if (sih->num_vmas == 0)
+		return ret;
+
+	inode_lock(inode);
+	temp = rb_first(&sih->vma_tree);
+	while (temp) {
+		item = container_of(temp, struct vma_item, node);
+		temp = rb_next(temp);
+		if (pgoff_in_vma(item->vma, pgoff)) {
+			ret = true;
+			break;
+		}
+	}
+	inode_unlock(inode);
+
+	return ret;
+}
+
 static int nova_set_sih_vmas_readonly(struct nova_inode_info_header *sih)
 {
 	struct nova_inode_info *si;
