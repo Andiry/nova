@@ -476,6 +476,17 @@ struct nova_range_node {
 	u32	csum;		/* Protect vma, range low/high */
 };
 
+static inline int nova_update_range_node_checksum(struct nova_range_node *node)
+{
+	u32 crc = 0;
+
+	crc = crc32c(~0, (__u8 *)&node->vma,
+			(unsigned long)&node->csum - (unsigned long)&node->vma);
+
+	node->csum = crc;
+	return 0;
+}
+
 struct vma_item {
 	/* Reuse header of nova_range_node struct */
 	struct rb_node node;

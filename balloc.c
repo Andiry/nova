@@ -102,6 +102,7 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 				NOVA_ASSERT(0);
 			blknode->range_low = free_list->block_start;
 			blknode->range_high = free_list->block_end;
+			nova_update_range_node_checksum(blknode);
 			ret = nova_insert_blocktree(sbi, tree, blknode);
 			if (ret) {
 				nova_err(sb, "%s failed\n", __func__);
@@ -346,23 +347,27 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 		rb_erase(&next->node, tree);
 		free_list->num_blocknode--;
 		prev->range_high = next->range_high;
+		nova_update_range_node_checksum(prev);
 		nova_free_blocknode(sb, next);
 		goto block_found;
 	}
 	if (prev && (block_low == prev->range_high + 1)) {
 		/* Aligns left */
 		prev->range_high += num_blocks;
+		nova_update_range_node_checksum(prev);
 		goto block_found;
 	}
 	if (next && (block_high + 1 == next->range_low)) {
 		/* Aligns right */
 		next->range_low -= num_blocks;
+		nova_update_range_node_checksum(next);
 		goto block_found;
 	}
 
 	/* Aligns somewhere in the middle */
 	curr_node->range_low = block_low;
 	curr_node->range_high = block_high;
+	nova_update_range_node_checksum(curr_node);
 	new_node_used = 1;
 	ret = nova_insert_blocktree(sbi, tree, curr_node);
 	if (ret) {
@@ -490,6 +495,7 @@ static unsigned long nova_alloc_blocks_in_free_list(struct super_block *sb,
 		/* Allocate partial blocknode */
 		*new_blocknr = curr->range_low;
 		curr->range_low += num_blocks;
+		nova_update_range_node_checksum(curr);
 		found = 1;
 		break;
 	}

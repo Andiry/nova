@@ -140,17 +140,20 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 		rb_erase(&next->node, tree);
 		inode_map->num_range_node_inode--;
 		prev->range_high = next->range_high;
+		nova_update_range_node_checksum(prev);
 		nova_free_inode_node(sb, next);
 		goto finish;
 	}
 	if (prev && (internal_low == prev->range_high + 1)) {
 		/* Aligns left */
 		prev->range_high += internal_high - internal_low + 1;
+		nova_update_range_node_checksum(prev);
 		goto finish;
 	}
 	if (next && (internal_high + 1 == next->range_low)) {
 		/* Aligns right */
 		next->range_low -= internal_high - internal_low + 1;
+		nova_update_range_node_checksum(next);
 		goto finish;
 	}
 
@@ -159,6 +162,7 @@ static int nova_failure_insert_inodetree(struct super_block *sb,
 	NOVA_ASSERT(new_node);
 	new_node->range_low = internal_low;
 	new_node->range_high = internal_high;
+	nova_update_range_node_checksum(new_node);
 	ret = nova_insert_inodetree(sbi, new_node, cpu);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
@@ -250,6 +254,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 			NOVA_ASSERT(0);
 		blknode->range_low = le64_to_cpu(entry->range_low);
 		blknode->range_high = le64_to_cpu(entry->range_high);
+		nova_update_range_node_checksum(blknode);
 		cpuid = get_cpuid(sbi, blknode->range_low);
 
 		/* FIXME: Assume NR_CPUS not change */
@@ -343,6 +348,7 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 
 		range_node->range_low = entry->range_low & ~CPUID_MASK;
 		range_node->range_high = entry->range_high;
+		nova_update_range_node_checksum(range_node);
 		ret = nova_insert_inodetree(sbi, range_node, cpuid);
 		if (ret) {
 			nova_err(sb, "%s failed, %d\n", __func__, cpuid);
@@ -585,6 +591,7 @@ static int nova_insert_blocknode_map(struct super_block *sb,
 		return -ENOMEM;
 	blknode->range_low = low;
 	blknode->range_high = high;
+	nova_update_range_node_checksum(blknode);
 	ret = nova_insert_blocktree(sbi, tree, blknode);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
