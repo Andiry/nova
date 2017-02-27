@@ -385,6 +385,11 @@ static u64 nova_append_range_node_entry(struct super_block *sb,
 
 	curr_p = tail;
 
+	if (!nova_range_node_checksum_ok(curr)) {
+		nova_dbg("%s: range node checksum failure\n", __func__);
+		goto out;
+	}
+
 	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
 				next_log_page(sb, curr_p) == 0)) {
 		nova_dbg("%s: inode log reaches end?\n", __func__);

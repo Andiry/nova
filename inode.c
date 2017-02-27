@@ -589,6 +589,11 @@ static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 	inode_map = &sbi->inode_maps[cpuid];
 	i = inode_map->first_inode_range;
 	NOVA_ASSERT(i);
+	if (!nova_range_node_checksum_ok(i)) {
+		nova_dbg("%s: first node failed\n", __func__);
+		return -EIO;
+	}
+
 	temp = &i->node;
 	next = rb_next(temp);
 
@@ -597,6 +602,10 @@ static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 		next_range_low = MAX_INODE;
 	} else {
 		next_i = container_of(next, struct nova_range_node, node);
+		if (!nova_range_node_checksum_ok(next_i)) {
+			nova_dbg("%s: second node failed\n", __func__);
+			return -EIO;
+		}
 		next_range_low = next_i->range_low;
 	}
 

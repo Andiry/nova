@@ -164,6 +164,11 @@ static int nova_find_range_node(struct nova_sb_info *sbi,
 		}
 	}
 
+	if (curr && !nova_range_node_checksum_ok(curr)) {
+		nova_dbg("%s: curr failed\n", __func__);
+		return 0;
+	}
+
 	*ret_node = curr;
 	return ret;
 }
@@ -252,6 +257,7 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 {
 	struct nova_range_node *ret_node = NULL;
 	struct rb_node *temp;
+	int check_prev = 0, check_next = 0;
 	int ret;
 
 	ret = nova_find_range_node(sbi, tree, range_low, &ret_node);
@@ -266,23 +272,37 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 	} else if (ret_node->range_high < range_low) {
 		*prev = ret_node;
 		temp = rb_next(&ret_node->node);
-		if (temp)
+		if (temp) {
 			*next = container_of(temp, struct nova_range_node, node);
-		else
+			check_next = 1;
+		} else {
 			*next = NULL;
+		}
 	} else if (ret_node->range_low > range_high) {
 		*next = ret_node;
 		temp = rb_prev(&ret_node->node);
-		if (temp)
+		if (temp) {
 			*prev = container_of(temp, struct nova_range_node, node);
-		else
+			check_prev = 1;
+		} else {
 			*prev = NULL;
+		}
 	} else {
 		nova_dbg("%s ERROR: %lu - %lu overlaps with existing node "
 			"%lu - %lu\n", __func__, range_low,
 			range_high, ret_node->range_low,
 			ret_node->range_high);
 		return -EINVAL;
+	}
+
+	if (check_prev && !nova_range_node_checksum_ok(*prev)) {
+		nova_dbg("%s: prev failed\n", __func__);
+		return -EIO;
+	}
+
+	if (check_next && !nova_range_node_checksum_ok(*next)) {
+		nova_dbg("%s: next failed\n", __func__);
+		return -EIO;
 	}
 
 	return 0;
@@ -464,6 +484,12 @@ static unsigned long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	while (temp) {
 		step++;
 		curr = container_of(temp, struct nova_range_node, node);
+
+		if (!nova_range_node_checksum_ok(curr)) {
+			nova_err(sb, "%s curr failed\n", __func__);
+			temp = rb_next(temp);
+			continue;
+		}
 
 		curr_blocks = curr->range_high - curr->range_low + 1;
 

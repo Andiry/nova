@@ -476,15 +476,36 @@ struct nova_range_node {
 	u32	csum;		/* Protect vma, range low/high */
 };
 
-static inline int nova_update_range_node_checksum(struct nova_range_node *node)
+static inline u32 nova_calculate_range_node_csum(struct nova_range_node *node)
 {
-	u32 crc = 0;
+	u32 crc;
 
 	crc = crc32c(~0, (__u8 *)&node->vma,
 			(unsigned long)&node->csum - (unsigned long)&node->vma);
 
-	node->csum = crc;
+	return crc;
+}
+
+static inline int nova_update_range_node_checksum(struct nova_range_node *node)
+{
+	node->csum = nova_calculate_range_node_csum(node);
 	return 0;
+}
+
+static inline bool nova_range_node_checksum_ok(struct nova_range_node *node)
+{
+	bool ret;
+
+	ret = node->csum == nova_calculate_range_node_csum(node);
+	if (!ret) {
+		nova_dbg("%s: checksum failure, "
+				"vma %p, range low %lu, range high %lu, "
+				"csum 0x%d\n", __func__,
+				node->vma, node->range_low, node->range_high,
+				node->csum);
+	}
+
+	return ret;
 }
 
 struct vma_item {
