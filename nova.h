@@ -473,6 +473,7 @@ struct nova_range_node {
 	struct vm_area_struct *vma;
 	unsigned long range_low;
 	unsigned long range_high;
+	u32	csum;		/* Protect vma, range low/high */
 };
 
 struct vma_item {
