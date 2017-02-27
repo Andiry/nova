@@ -147,6 +147,7 @@ extern int wprotect;
 extern int mmap_cow;
 extern int data_csum;
 extern int data_parity;
+extern int dram_struct_csum;
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
@@ -488,13 +489,18 @@ static inline u32 nova_calculate_range_node_csum(struct nova_range_node *node)
 
 static inline int nova_update_range_node_checksum(struct nova_range_node *node)
 {
-	node->csum = nova_calculate_range_node_csum(node);
+	if (dram_struct_csum)
+		node->csum = nova_calculate_range_node_csum(node);
+
 	return 0;
 }
 
 static inline bool nova_range_node_checksum_ok(struct nova_range_node *node)
 {
 	bool ret;
+
+	if (dram_struct_csum == 0)
+		return true;
 
 	ret = node->csum == nova_calculate_range_node_csum(node);
 	if (!ret) {

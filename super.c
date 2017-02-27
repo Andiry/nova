@@ -46,6 +46,7 @@ int wprotect = 0;
 int mmap_cow = 0;
 int data_csum = 0;
 int data_parity = 0;
+int dram_struct_csum = 0;
 int support_clwb = 0;
 int support_pcommit = 0;
 
@@ -65,6 +66,8 @@ module_param(data_csum, int, S_IRUGO);
 MODULE_PARM_DESC(data_csum, "Data checksum");
 module_param(data_parity, int, S_IRUGO);
 MODULE_PARM_DESC(data_parity, "Data parity");
+module_param(dram_struct_csum, int, S_IRUGO);
+MODULE_PARM_DESC(data_parity, "DRAM structure checksum");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;
@@ -526,10 +529,10 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	nova_dbg("measure timing %d, replica metadata %d, "
 		"metadata checksum %d, inplace metadata update %d, "
 		"inplace update %d, wprotect %d, mmap Cow %d, "
-		"data checksum %d, data parity %d\n",
+		"data checksum %d, data parity %d, DRAM checksum %d\n",
 		measure_timing, replica_metadata, metadata_csum,
 		unsafe_metadata, inplace_data_updates, wprotect, mmap_cow,
-		data_csum, data_parity);
+		data_csum, data_parity, dram_struct_csum);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
