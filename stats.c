@@ -71,6 +71,9 @@ const char *Timingstring[TIMING_NUM] =
 	"log_thorough_gc",
 	"check_invalid_log",
 
+	"cow_csum",
+	"cow_parity",
+
 	"find_cache_page",
 	"assign_blocks",
 	"fsync",

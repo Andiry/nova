@@ -134,7 +134,9 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
 	unsigned long block, blocks;
+	timing_t cow_parity_time;
 
+	NOVA_START_TIMING(cow_parity_t, cow_parity_time);
 	bufptr   = wrbuf;
 	blocks   = ((offset + bytes - 1) >> sb->s_blocksize_bits) + 1;
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
@@ -165,6 +167,7 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	}
 
 	kfree(parbuf);
+	NOVA_END_TIMING(cow_parity_t, cow_parity_time);
 
 	return 0;
 }

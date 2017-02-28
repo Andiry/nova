@@ -76,6 +76,10 @@ enum timing_category {
 	thorough_gc_t,
 	check_invalid_t,
 
+	/* Integrity */
+	cow_csum_t,
+	cow_parity_t,
+
 	/* Others */
 	find_cache_t,
 	assign_t,

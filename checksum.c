@@ -480,7 +480,9 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	unsigned long strp_nr;
 	u32 csum;
 	size_t csummed = 0;
+	timing_t cow_csum_time;
 
+	NOVA_START_TIMING(cow_csum_t, cow_csum_time);
 	bufptr   = wrbuf;
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 	blockptr = nova_get_block(sb, blockoff);
@@ -557,6 +559,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 			csummed = bytes;
 		}
 	}
+	NOVA_END_TIMING(cow_csum_t, cow_csum_time);
 
 	return (bytes - csummed);
 }
