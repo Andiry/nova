@@ -167,7 +167,7 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 	return 0;
 }
 
-int nova_reset_csum_parity_range(struct super_block *sb,
+static int nova_reset_csum_parity_range(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long start_pgoff, unsigned long end_pgoff)
 {
@@ -254,6 +254,27 @@ out:
 
 	return ret;
 }
+
+int nova_reset_vma_csum_parity(struct super_block *sb,
+	struct vm_area_struct *vma)
+{
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned long num_pages;
+
+	if (data_csum == 0 && data_parity == 0)
+		return 0;
+
+	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+
+	nova_reset_csum_parity_range(sb, sih, NULL, vma->vm_pgoff,
+			vma->vm_pgoff + num_pages);
+
+	return 0;
+}
+
 
 static void nova_rebuild_handle_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
