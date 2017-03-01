@@ -167,13 +167,37 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 	return 0;
 }
 
+int nova_reset_csum_parity_range(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long start_pgoff, unsigned long end_pgoff)
+{
+	struct nova_file_write_entry *curr;
+	unsigned long pgoff;
+
+	for (pgoff = start_pgoff; pgoff < end_pgoff; pgoff++) {
+		if (entry) {
+			curr = nova_get_write_entry(sb, sih, pgoff);
+			if (curr != entry)
+				continue;
+		}
+
+		/* FIXME: For mmap, check dirty? */
+		if (data_csum)
+			nova_update_block_csum(sb, sih, entry, pgoff);
+		if (data_parity)
+			nova_update_pgoff_parity(sb, sih, entry, pgoff);
+	}
+
+	return 0;
+}
+
 /* Reset data csum for updating entries */
 static int nova_reset_data_csum_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry)
 {
-	struct nova_file_write_entry fake_entry, *curr;
+	struct nova_file_write_entry fake_entry;
 	size_t size = sizeof(struct nova_file_write_entry);
-	unsigned long pgoff, end_pgoff;
+	unsigned long end_pgoff;
 	int ret = 0;
 
 	if (data_csum == 0 && data_parity == 0)
@@ -189,16 +213,8 @@ static int nova_reset_data_csum_parity(struct super_block *sb,
 	}
 
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
-	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
-		curr = nova_get_write_entry(sb, sih, pgoff);
-		if (curr != entry)
-			continue;
-
-		if (data_csum)
-			nova_update_block_csum(sb, sih, &fake_entry, pgoff);
-		if (data_parity)
-			nova_update_pgoff_parity(sb, sih, &fake_entry, pgoff);
-	}
+	nova_reset_csum_parity_range(sb, sih, entry, fake_entry.pgoff,
+			end_pgoff);
 
 out:
 	if (ret == 0)
@@ -213,7 +229,7 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 {
 	struct nova_mmap_entry fake_entry;
 	size_t size = sizeof(struct nova_mmap_entry);
-	unsigned long pgoff, end_pgoff;
+	unsigned long end_pgoff;
 	int ret = 0;
 
 	if (data_csum == 0 && data_parity == 0)
@@ -229,13 +245,8 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 	}
 
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
-	for (pgoff = fake_entry.pgoff; pgoff < end_pgoff; pgoff++) {
-		/* FIXME: Check dirty? */
-		if (data_csum)
-			nova_update_block_csum(sb, sih, NULL, pgoff);
-		if (data_parity)
-			nova_update_pgoff_parity(sb, sih, NULL, pgoff);
-	}
+	nova_reset_csum_parity_range(sb, sih, NULL, fake_entry.pgoff,
+			end_pgoff);
 
 out:
 	if (ret == 0)
