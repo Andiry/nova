@@ -17,7 +17,10 @@
 
 #include "nova.h"
 
-/* Add delta (data diffs) to the parity stripe.
+#if 0
+/* This function may not be useful any more.
+ *
+ * Add delta (data diffs) to the parity stripe.
  *         delta
  *           |
  *           |bytes|
@@ -26,7 +29,7 @@
  *     |     |
  * parity  offset
  * */
-static int nova_delta_parity(void *parity, void *delta, 
+static int nova_delta_parity(void *parity, void *delta,
 	size_t offset, size_t bytes)
 {
 	unsigned int strp_size = NOVA_STRIPE_SIZE;
@@ -46,25 +49,46 @@ static int nova_delta_parity(void *parity, void *delta,
 
 	return 0;
 }
+#endif
 
 /* Compute parity for a whole block */
 static int nova_block_parity(struct super_block *sb, void *parity, void *block)
 {
-	unsigned int strp;
+	unsigned int strp, num_strps, i, j;
 	unsigned int strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned char *par_ptr  = (unsigned char *) parity;
 	unsigned char *strp_ptr = (unsigned char *) block;
+	u64 xor;
 
 	if ((parity == NULL) || (block == NULL)) {
 		nova_dbg("%s: pointer error\n", __func__);
 		return -EINVAL;
 	}
 
-	memcpy(parity, strp_ptr, strp_size);
-	strp_ptr += strp_size;
-	for (strp = 1; strp < (sb->s_blocksize >> strp_shift); strp++) {
-		nova_delta_parity(parity, strp_ptr, 0, strp_size);
-		strp_ptr += strp_size;
+	num_strps = sb->s_blocksize >> strp_shift;
+	if ( static_cpu_has(X86_FEATURE_XMM2) ) { // sse2 128b
+		for (i = 0; i < strp_size; i += 16) {
+			asm volatile("movdqa %0, %%xmm0" : : "m" (strp_ptr[i]));
+			for (strp = 1; strp < num_strps; strp++) {
+				j = (strp << strp_shift) + i;
+				asm volatile(
+					"movdqa     %0, %%xmm1\n"
+					"pxor   %%xmm1, %%xmm0\n"
+					: : "m" (strp_ptr[j])
+				);
+			}
+			asm volatile("movntdq %%xmm0, %0" : "=m" (par_ptr[i]));
+		}
+	} else { // common 64b
+		for (i = 0; i < strp_size; i += 8) {
+			xor = *((u64 *) &strp_ptr[i]);
+			for (strp = 1; strp < num_strps; strp++) {
+				j = (strp << strp_shift) + i;
+				xor ^= *((u64 *) &strp_ptr[j]);
+			}
+			*((u64 *) &par_ptr[i]) = xor;
+		}
 	}
 
 	return 0;
@@ -176,13 +200,14 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int strp_id)
 {
-	unsigned int strp;
+	unsigned int strp, num_strps, i, j;
 	unsigned int strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	size_t blockoff;
 	unsigned long bad_strp_nr;
 	unsigned char *blockptr, *bad_strp, *strp_ptr, *strp_buf, *par_addr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
+	u64 xor;
 	bool match;
 
 	blockoff = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
@@ -206,15 +231,31 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 
 	memcpy_from_pmem(strp_buf, par_addr, strp_size);
 
-	for (strp = 0; strp < strp_id; strp++) {
-		nova_delta_parity(strp_buf, strp_ptr, 0, strp_size);
-		strp_ptr += strp_size;
-	}
-
-	strp_ptr += strp_size; // skip the bad stripe
-	for (strp = strp_id + 1; strp < (sb->s_blocksize >> strp_shift); strp++) {
-		nova_delta_parity(strp_buf, strp_ptr, 0, strp_size);
-		strp_ptr += strp_size;
+	num_strps = sb->s_blocksize >> strp_shift;
+	if ( static_cpu_has(X86_FEATURE_XMM2) ) { // sse2 128b
+		for (i = 0; i < strp_size; i += 16) {
+			asm volatile("movdqa %0, %%xmm0" : : "m" (strp_buf[i]));
+			for (strp = 0; strp < num_strps; strp++) {
+				if (strp == strp_id) continue; // skip the bad
+				j = (strp << strp_shift) + i;
+				asm volatile(
+					"movdqa     %0, %%xmm1\n"
+					"pxor   %%xmm1, %%xmm0\n"
+					: : "m" (strp_ptr[j])
+				);
+			}
+			asm volatile("movntdq %%xmm0, %0" : "=m" (strp_buf[i]));
+		}
+	} else { // common 64b
+		for (i = 0; i < strp_size; i += 8) {
+			xor = *((u64 *) &strp_buf[i]);
+			for (strp = 0; strp < num_strps; strp++) {
+				if (strp == strp_id) continue; // skip the bad
+				j = (strp << strp_shift) + i;
+				xor ^= *((u64 *) &strp_ptr[j]);
+			}
+			*((u64 *) &strp_buf[i]) = xor;
+		}
 	}
 
 	csum_calc = nova_calc_data_csum(NOVA_INIT_CSUM, strp_buf, strp_size);
