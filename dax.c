@@ -112,7 +112,7 @@ memcpy:
 			nr = len - copied;
 
 		if ( (!zero) && (data_csum > 0) ) {
-			if (!nova_find_pgoff_in_vma(inode, index))
+			if (nova_find_pgoff_in_vma(inode, index))
 				goto skip_verify;
 
 			if (!nova_verify_data_csum(inode, entry, index,
