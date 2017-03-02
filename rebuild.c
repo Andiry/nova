@@ -377,6 +377,8 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	if (curr_p == 0 && sih->log_tail == 0)
 		goto out;
 
+//	nova_print_nova_log(sb, sih);
+
 	while (curr_p != sih->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
 			sih->log_pages++;
