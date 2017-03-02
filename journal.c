@@ -47,7 +47,7 @@ static inline int nova_update_journal_entry_csum(struct super_block *sb,
 {
 	u32 crc = 0;
 
-	crc = crc32c(~0, (__u8 *)entry,
+	crc = nova_crc32c(~0, (__u8 *)entry,
 			(sizeof(struct nova_lite_journal_entry) - sizeof(__le32)));
 
 	entry->csum = cpu_to_le32(crc);
@@ -60,7 +60,7 @@ static inline int nova_check_entry_integrity(struct super_block *sb,
 {
 	u32 crc = 0;
 
-	crc = crc32c(~0, (__u8 *)entry,
+	crc = nova_crc32c(~0, (__u8 *)entry,
 			(sizeof(struct nova_lite_journal_entry) - sizeof(__le32)));
 
 	if (entry->csum == cpu_to_le32(crc))

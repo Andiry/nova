@@ -258,7 +258,7 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 		}
 	}
 
-	csum_calc = nova_calc_data_csum(NOVA_INIT_CSUM, strp_buf, strp_size);
+	csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_buf, strp_size);
 	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr);
 	csum_nvmm = le32_to_cpu(*csum_addr);
 	match     = (csum_calc == csum_nvmm);

@@ -127,14 +127,13 @@ static u32 nova_calc_entry_csum(void *entry)
 			break;
 	}
 
-	/* TODO: Check if crc32c() uses accelerated instructions for CRC. */
 	if (entry_len > 0) {
 		check_len = ((u8 *) csum_addr) - ((u8 *) entry);
-		csum = crc32c(NOVA_INIT_CSUM, entry, check_len);
+		csum = nova_crc32c(NOVA_INIT_CSUM, entry, check_len);
 		check_len = entry_len - (check_len + NOVA_META_CSUM_LEN);
 		if (check_len > 0) {
 			remain = ((u8 *) csum_addr) + NOVA_META_CSUM_LEN;
-			csum = crc32c(csum, remain, check_len);
+			csum = nova_crc32c(csum, remain, check_len);
 		}
 
 		if (check_len < 0) {
@@ -433,17 +432,6 @@ out:
 	return -EIO;
 }
 
-/* Calculate the data checksum. */
-u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size)
-{
-	u32 csum;
-
-	/* TODO: Check if the function uses accelerated instructions for CRC. */
-	csum = crc32c(init, buf, size);
-
-	return csum;
-}
-
 /* Update copy-on-write data checksums.
  *
  * This function works on a sequence of contiguous data stripes that are just
@@ -502,16 +490,15 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	 */
 
 	if (strp_offset) { // partial head stripe
-		csum = nova_calc_data_csum(NOVA_INIT_CSUM,
-					strp_ptr, strp_offset);
+		csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_offset);
 		csummed = (strp_size - strp_offset) < bytes ?
 				strp_size - strp_offset : bytes;
-		csum = nova_calc_data_csum(csum, bufptr, csummed);
+		csum = nova_crc32c(csum, bufptr, csummed);
 
 		if (strp_offset + csummed < strp_size)
 			/* Now bytes are less than a stripe size.
 			 * Need to checksum the stripe's unchanged bytes. */
-			csum = nova_calc_data_csum(csum,
+			csum = nova_crc32c(csum,
 					strp_ptr + strp_offset + csummed,
 					strp_size - strp_offset - csummed);
 
@@ -528,8 +515,8 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 
 	if (csummed < bytes) {
 		while (csummed + strp_size < bytes) {
-			csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
-						bufptr, strp_size));
+			csum = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM, bufptr,
+								strp_size));
 			csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 			nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 			memcpy_to_pmem_nocache(csum_addr, &csum,
@@ -543,10 +530,9 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 		}
 
 		if (csummed < bytes) { // partial tail stripe
-			csum = nova_calc_data_csum(NOVA_INIT_CSUM, bufptr,
+			csum = nova_crc32c(NOVA_INIT_CSUM, bufptr,
 							bytes - csummed);
-			csum = nova_calc_data_csum(csum,
-						strp_ptr + bytes - csummed,
+			csum = nova_crc32c(csum, strp_ptr + bytes - csummed,
 						strp_size - (bytes - csummed));
 
 			csum      = cpu_to_le32(csum);
@@ -590,8 +576,8 @@ int nova_update_block_csum(struct super_block *sb,
 	strp_nr = blockoff >> strp_shift;
 
 	for (i = 0; i < count; i++) {
-		csum = cpu_to_le32(nova_calc_data_csum(NOVA_INIT_CSUM,
-						dax_mem, strp_size));
+		csum = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM, dax_mem,
+								strp_size));
 		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 		memcpy_to_pmem_nocache(csum_addr, &csum,
@@ -653,8 +639,7 @@ bool nova_verify_data_csum(struct inode *inode,
 
 	match = true;
 	for (strp = 0; strp < strps; strp++) {
-		csum_calc = nova_calc_data_csum(NOVA_INIT_CSUM,
-						strp_ptr, strp_size);
+		csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
 		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 		csum_nvmm = le32_to_cpu(*csum_addr);
 		match     = (csum_calc == csum_nvmm);

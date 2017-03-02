@@ -417,6 +417,49 @@ static inline __le32 nova_mask_flags(umode_t mode, __le32 flags)
 		return flags & cpu_to_le32(NOVA_OTHER_FLMASK);
 }
 
+static inline u32 nova_crc32c(u32 crc, const u8 *data, size_t len)
+{
+	u8 *ptr = (u8 *) data;
+	u64 acc = crc; // accumulator, crc32c value in lower 32b
+	u32 csum;
+
+	/* x86 instruction crc32 is part of SSE-4.2 */
+	if ( static_cpu_has(X86_FEATURE_XMM4_2) ) {
+		/* This inline assembly implementation should be equivalent
+		 * to the kernel's crc32c_intel_le_hw() function used by
+		 * crc32c(), but this performs better on test machines. */
+		while (len > 8) {
+			asm volatile( // 64b quad words
+				"crc32q (%1), %0"
+				: "=r" (acc)
+				: "r"  (ptr), "0" (acc)
+			);
+			ptr += 8;
+			len -= 8;
+		}
+
+		while (len > 0) {
+			asm volatile( // trailing bytes
+				"crc32b (%1), %0"
+				: "=r" (acc)
+				: "r"  (ptr), "0" (acc)
+			);
+			ptr++;
+			len--;
+		}
+
+		csum = (u32) acc;
+	} else {
+		/* The kernel's crc32c() function should also detect and use the
+		 * crc32 instruction of SSE-4.2. But calling in to this function
+		 * is about 3x to 5x slower than the inline assembly version on
+		 * some test machines. */
+		csum = crc32c(crc, data, len);
+	}
+
+	return csum;
+}
+
 static inline int nova_calc_sb_checksum(u8 *data, int n)
 {
 	u16 crc = 0;
@@ -439,7 +482,7 @@ static inline int nova_update_inode_checksum(struct nova_inode *pi)
 	if (replica_metadata == 0 || metadata_csum == 0)
 		return 0;
 
-	crc = crc32c(~0, (__u8 *)pi,
+	crc = nova_crc32c(~0, (__u8 *)pi,
 			(sizeof(struct nova_inode) - sizeof(__le32)));
 
 	pi->csum = crc;
@@ -454,7 +497,7 @@ static inline int nova_check_inode_checksum(struct nova_inode *pi)
 	if (metadata_csum == 0)
 		return 0;
 
-	crc = crc32c(~0, (__u8 *)pi,
+	crc = nova_crc32c(~0, (__u8 *)pi,
 			(sizeof(struct nova_inode) - sizeof(__le32)));
 
 	if (pi->csum == cpu_to_le32(crc))
@@ -490,7 +533,7 @@ static inline u32 nova_calculate_range_node_csum(struct nova_range_node *node)
 {
 	u32 crc;
 
-	crc = crc32c(~0, (__u8 *)&node->vma,
+	crc = nova_crc32c(~0, (__u8 *)&node->vma,
 			(unsigned long)&node->csum - (unsigned long)&node->vma);
 
 	return crc;
@@ -1548,7 +1591,6 @@ int nova_recovery(struct super_block *sb);
 /* checksum.c */
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
-u32 nova_calc_data_csum(u32 init, void *buf, unsigned long size);
 size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	void *wrbuf, size_t offset, size_t bytes);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
