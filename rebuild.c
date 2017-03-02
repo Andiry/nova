@@ -167,6 +167,19 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 	return 0;
 }
 
+static int nova_reset_csum_parity_page(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long pgoff)
+{
+	if (data_csum)
+		nova_update_block_csum(sb, sih, entry, pgoff);
+
+	if (data_parity)
+		nova_update_pgoff_parity(sb, sih, entry, pgoff);
+
+	return 0;
+}
+
 static int nova_reset_csum_parity_range(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long start_pgoff, unsigned long end_pgoff)
@@ -182,10 +195,7 @@ static int nova_reset_csum_parity_range(struct super_block *sb,
 		}
 
 		/* FIXME: For mmap, check dirty? */
-		if (data_csum)
-			nova_update_block_csum(sb, sih, entry, pgoff);
-		if (data_parity)
-			nova_update_pgoff_parity(sb, sih, entry, pgoff);
+		nova_reset_csum_parity_page(sb, sih, entry, pgoff);
 	}
 
 	return 0;
