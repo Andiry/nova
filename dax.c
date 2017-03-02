@@ -1558,6 +1558,51 @@ static inline int nova_rbtree_compare_vma(struct vma_item *curr,
 	return 0;
 }
 
+static int nova_append_write_mmap_to_log(struct super_block *sb,
+	struct inode *inode, struct vma_item *item)
+{
+	struct vm_area_struct *vma = item->vma;
+	struct nova_inode *pi;
+	struct nova_mmap_entry data;
+	struct nova_inode_update update;
+	unsigned long num_pages;
+	u64 trans_id;
+	int ret;
+
+	/* Only for csum and parity update */
+	if (data_csum == 0 && data_parity == 0)
+		return 0;
+
+	pi = nova_get_inode(sb, inode);
+	trans_id = nova_get_trans_id(sb);
+	update.tail = update.alter_tail = 0;
+
+	memset(&data, 0, sizeof(struct nova_mmap_entry));
+	data.entry_type = MMAP_WRITE;
+	data.trans_id = trans_id;
+	data.pgoff = cpu_to_le64(vma->vm_pgoff);
+	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	data.num_pages = cpu_to_le64(num_pages);
+	data.invalid = 0;
+
+	nova_dbgv("%s : Appending mmap log entry for inode %lu, "
+			"pgoff %llu, %llu pages\n",
+			__func__, inode->i_ino,
+			data.pgoff, data.num_pages);
+
+	ret = nova_append_mmap_entry(sb, pi, inode, &data, &update);
+	if (ret) {
+		nova_dbg("%s: append write mmap entry failure\n", __func__);
+		goto out;
+	}
+
+	nova_memunlock_inode(sb, pi);
+	nova_update_inode(sb, inode, pi, &update, 1);
+	nova_memlock_inode(sb, pi);
+out:
+	return ret;
+}
+
 static int nova_insert_write_vma(struct vm_area_struct *vma)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
@@ -1571,6 +1616,7 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	struct rb_node **temp, *parent;
 	int compVal;
 	int insert = 0;
+	int ret;
 
 	if (mmap_cow == 0 && data_csum == 0 && data_parity == 0)
 		return 0;
@@ -1588,6 +1634,11 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 			vma, vma->vm_start, vma->vm_end);
 
 	inode_lock(inode);
+
+	/* Append to log */
+	ret = nova_append_write_mmap_to_log(sb, inode, item);
+	if (ret)
+		goto out;
 
 	temp = &(sih->vma_tree.rb_node);
 	parent = NULL;
@@ -1625,7 +1676,7 @@ out:
 		spin_unlock(&sbi->vma_lock);
 	}
 
-	return 0;
+	return ret;
 }
 
 static int nova_remove_write_vma(struct vm_area_struct *vma)
@@ -1745,58 +1796,6 @@ static const struct vm_operations_struct nova_dax_vm_ops = {
 	.dax_cow = nova_restore_page_write,
 };
 
-int nova_append_write_mmap_to_log(struct vm_area_struct *vma)
-{
-	struct address_space *mapping = vma->vm_file->f_mapping;
-	struct inode *inode = mapping->host;
-	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi;
-	struct nova_mmap_entry data;
-	struct nova_inode_update update;
-	unsigned long num_pages;
-	u64 trans_id;
-	int ret;
-
-	/* Only for csum and parity update */
-	if (data_csum == 0 && data_parity == 0)
-		return 0;
-
-	if (!(vma->vm_flags & VM_WRITE))
-		return 0;
-
-	inode_lock(inode);
-	pi = nova_get_inode(sb, inode);
-	trans_id = nova_get_trans_id(sb);
-	update.tail = update.alter_tail = 0;
-
-	memset(&data, 0, sizeof(struct nova_mmap_entry));
-	data.entry_type = MMAP_WRITE;
-	data.trans_id = trans_id;
-	data.pgoff = cpu_to_le64(vma->vm_pgoff);
-	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
-	data.num_pages = cpu_to_le64(num_pages);
-	data.invalid = 0;
-
-	nova_dbgv("%s : Appending mmap log entry for inode %lu, "
-			"pgoff %llu, %llu pages\n",
-			__func__, inode->i_ino,
-			data.pgoff, data.num_pages);
-
-	ret = nova_append_mmap_entry(sb, pi, inode, &data, &update);
-	if (ret) {
-		nova_dbg("%s: append setattr entry failure\n", __func__);
-		goto out;
-	}
-
-	nova_memunlock_inode(sb, pi);
-	nova_update_inode(sb, inode, pi, &update, 1);
-	nova_memlock_inode(sb, pi);
-out:
-	inode_unlock(inode);
-
-	return 0;
-}
-
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	file_accessed(file);
@@ -1808,9 +1807,6 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	/* Check SHARED WRITE vma */
 	if (mmap_cow || data_csum || data_parity)
 		nova_insert_write_vma(vma);
-
-	if (data_csum || data_parity)
-		nova_append_write_mmap_to_log(vma);
 
 	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
