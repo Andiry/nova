@@ -46,6 +46,7 @@
 #include <asm/tlbflush.h>
 #include <linux/version.h>
 #include <linux/pfn_t.h>
+#include <linux/pagevec.h>
 
 #include "nova_def.h"
 #include "stats.h"

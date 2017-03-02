@@ -171,6 +171,8 @@ static int nova_reset_csum_parity_page(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff)
 {
+	nova_dbgv("%s: update page off %lu\n", __func__, pgoff);
+
 	if (data_csum)
 		nova_update_block_csum(sb, sih, entry, pgoff);
 
@@ -273,18 +275,41 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	unsigned long num_pages;
+	unsigned long start_index, end_index;
+	pgoff_t indices[PAGEVEC_SIZE];
+	struct pagevec pvec;
+	bool done = false;
+	int i;
 
 	if (data_csum == 0 && data_parity == 0)
 		return 0;
 
 	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	start_index = vma->vm_pgoff;
+	end_index = vma->vm_pgoff + num_pages;
 
-	nova_reset_csum_parity_range(sb, sih, NULL, vma->vm_pgoff,
-			vma->vm_pgoff + num_pages);
+	while (!done) {
+		pvec.nr = find_get_entries_tag(mapping, start_index,
+				PAGECACHE_TAG_DIRTY, PAGEVEC_SIZE,
+				pvec.pages, indices);
+
+		if (pvec.nr == 0)
+			break;
+
+		for (i = 0; i < pvec.nr; i++) {
+			if (indices[i] >= end_index) {
+				done = true;
+				break;
+			}
+
+			nova_reset_csum_parity_page(sb, sih, NULL, indices[i]);
+		}
+
+		start_index += pvec.nr;
+	}
 
 	return 0;
 }
-
 
 static void nova_rebuild_handle_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
