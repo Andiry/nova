@@ -281,42 +281,49 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {
 	nova_dbg("file write entry @ 0x%llx: trans %llu, paoff %llu, pages %u, "
-			"blocknr %llu, invalid count %u, size %llu\n",
+			"blocknr %llu, reassigned %u, invalid count %u, "
+			"size %llu\n",
 			curr, entry->trans_id, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,
-			entry->invalid_pages, entry->size);
+			entry->reassigned, entry->invalid_pages, entry->size);
 }
 
 static inline void nova_print_set_attr_entry(struct super_block *sb,
 	u64 curr, struct nova_setattr_logentry *entry)
 {
-	nova_dbg("set attr entry @ 0x%llx: trans %llu, mode %u, size %llu, "
-			"atime %u, mtime %u, ctime %u\n",
-			curr, entry->trans_id, entry->mode, entry->size,
-			entry->atime, entry->mtime, entry->ctime);
+	nova_dbg("set attr entry @ 0x%llx: trans %llu, invalid %u, mode %u, "
+			"size %llu, atime %u, mtime %u, ctime %u\n",
+			curr, entry->trans_id, entry->invalid, entry->mode,
+			entry->size, entry->atime, entry->mtime, entry->ctime);
 }
 
 static inline void nova_print_link_change_entry(struct super_block *sb,
 	u64 curr, struct nova_link_change_entry *entry)
 {
-	nova_dbg("link change entry @ 0x%llx: trans %llu, links %u, flags %u\n",
-			curr, entry->trans_id, entry->links, entry->flags);
+	nova_dbg("link change entry @ 0x%llx: trans %llu, invalid %u, "
+			"links %u, flags %u\n",
+			curr, entry->trans_id, entry->invalid, entry->links,
+			entry->flags);
 }
 
 static inline void nova_print_mmap_entry(struct super_block *sb,
 	u64 curr, struct nova_mmap_entry *entry)
 {
-	nova_dbg("mmap write entry @ 0x%llx: trans %llu, paoff %llu, "
-			"pages %llu\n", curr, entry->trans_id,
+	nova_dbg("mmap write entry @ 0x%llx: trans %llu, invalid %u, "
+			"paoff %llu, pages %llu\n",
+			curr, entry->trans_id, entry->invalid,
 			entry->pgoff, entry->num_pages);
 }
 
 static inline size_t nova_print_dentry(struct super_block *sb,
 	u64 curr, struct nova_dentry *entry)
 {
-	nova_dbg("dir logentry @ 0x%llx: trans %llu, inode %llu, "
-			"links %u, namelen %u, rec len %u, name %s\n", curr,
-			entry->trans_id, le64_to_cpu(entry->ino),
+	nova_dbg("dir logentry @ 0x%llx: trans %llu, reassigned %u, "
+			"invalid %u, inode %llu, links %u, namelen %u, "
+			"rec len %u, name %s\n",
+			curr, entry->trans_id,
+			entry->reassigned, entry->invalid,
+			le64_to_cpu(entry->ino),
 			entry->links_count, entry->name_len,
 			le16_to_cpu(entry->de_len), entry->name);
 
