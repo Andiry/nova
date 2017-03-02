@@ -806,7 +806,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_mmap_entry *data,
-	struct nova_inode_update *update)
+	struct nova_inode_update *update, struct vma_item *item)
 {
 	struct nova_log_entry_info entry_info;
 	timing_t append_time;
@@ -825,6 +825,7 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	if (ret)
 		nova_err(sb, "%s failed\n", __func__);
 
+	item->mmap_entry = entry_info.curr_p;
 	NOVA_END_TIMING(append_mmap_entry_t, append_time);
 	return ret;
 }

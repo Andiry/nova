@@ -473,9 +473,17 @@ struct nova_range_node_lowhigh {
 struct nova_range_node {
 	struct rb_node node;
 	struct vm_area_struct *vma;
+	unsigned long mmap_entry;
 	unsigned long range_low;
 	unsigned long range_high;
 	u32	csum;		/* Protect vma, range low/high */
+};
+
+struct vma_item {
+	/* Reuse header of nova_range_node struct */
+	struct rb_node node;
+	struct vm_area_struct *vma;
+	unsigned long mmap_entry;
 };
 
 static inline u32 nova_calculate_range_node_csum(struct nova_range_node *node)
@@ -514,12 +522,6 @@ static inline bool nova_range_node_checksum_ok(struct nova_range_node *node)
 
 	return ret;
 }
-
-struct vma_item {
-	/* Reuse header of nova_range_node struct */
-	struct rb_node node;
-	struct vm_area_struct *vma;
-};
 
 struct nova_inode_info_header {
 	struct radix_tree_root tree;	/* Dir name entry tree root */
@@ -1726,7 +1728,7 @@ int nova_inplace_update_write_entry(struct super_block *sb,
 	struct nova_log_entry_info *entry_info);
 int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_mmap_entry *data,
-	struct nova_inode_update *update);
+	struct nova_inode_update *update, struct vma_item *item);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update);

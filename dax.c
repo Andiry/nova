@@ -1590,7 +1590,7 @@ static int nova_append_write_mmap_to_log(struct super_block *sb,
 			__func__, inode->i_ino,
 			data.pgoff, data.num_pages);
 
-	ret = nova_append_mmap_entry(sb, pi, inode, &data, &update);
+	ret = nova_append_mmap_entry(sb, pi, inode, &data, &update, item);
 	if (ret) {
 		nova_dbg("%s: append write mmap entry failure\n", __func__);
 		goto out;
