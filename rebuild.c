@@ -268,18 +268,21 @@ out:
 }
 
 int nova_reset_vma_csum_parity(struct super_block *sb,
-	struct vm_area_struct *vma)
+	struct vma_item *item)
 {
+	struct vm_area_struct *vma = item->vma;
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	struct nova_mmap_entry *entry;
 	unsigned long num_pages;
 	unsigned long start_index, end_index;
 	pgoff_t indices[PAGEVEC_SIZE];
 	struct pagevec pvec;
 	bool done = false;
 	int i;
+	int ret = 0;
 
 	if (data_csum == 0 && data_parity == 0)
 		return 0;
@@ -308,7 +311,12 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 		start_index += pvec.nr;
 	}
 
-	return 0;
+	if (item->mmap_entry) {
+		entry = nova_get_block(sb, item->mmap_entry);
+		ret = nova_invalidate_logentry(sb, entry, MMAP_WRITE, 0);
+	}
+
+	return ret;
 }
 
 static void nova_rebuild_handle_write_entry(struct super_block *sb,

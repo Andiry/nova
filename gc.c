@@ -177,6 +177,29 @@ static int nova_gc_assign_dentry(struct super_block *sb,
 	return ret;
 }
 
+static int nova_gc_assign_mmap_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 curr_p, u64 new_curr)
+{
+	struct vma_item *item;
+	struct rb_node *temp;
+	int ret = 0;
+
+	if (sih->num_vmas == 0)
+		return ret;
+
+	temp = rb_first(&sih->vma_tree);
+	while (temp) {
+		item = container_of(temp, struct vma_item, node);
+		temp = rb_next(temp);
+		if (item->mmap_entry == curr_p) {
+			item->mmap_entry = new_curr;
+			break;
+		}
+	}
+
+	return ret;
+}
+
 static int nova_gc_assign_new_entry(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_p, u64 new_curr)
@@ -197,7 +220,8 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 			sih->last_link_change = new_curr;
 			break;
 		case MMAP_WRITE:
-			/* Do nothing right now */
+			ret = nova_gc_assign_mmap_entry(sb, sih, curr_p,
+							new_curr);
 			break;
 		case FILE_WRITE:
 			new_addr = (void *)nova_get_block(sb, new_curr);

@@ -1708,7 +1708,7 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 		} else if (compVal == 1) {
 			temp = temp->rb_right;
 		} else {
-			nova_reset_vma_csum_parity(sb, curr->vma);
+			nova_reset_vma_csum_parity(sb, curr);
 			rb_erase(&curr->node, &sih->vma_tree);
 			found = 1;
 			break;
