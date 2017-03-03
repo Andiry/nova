@@ -102,6 +102,10 @@ const char *Timingstring[TIMING_NUM] =
 	/* Rebuild */
 	"rebuild_dir",
 	"rebuild_file",
+
+	/* Snapshot */
+	"create_snapshot",
+	"delete_snapshot",
 };
 
 u64 Timingstats[TIMING_NUM];

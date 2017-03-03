@@ -102,6 +102,10 @@ enum timing_category {
 	rebuild_dir_t,
 	rebuild_file_t,
 
+	/* Snapshot */
+	create_snapshot_t,
+	delete_snapshot_t,
+
 	/* Sentinel */
 	TIMING_NUM,
 };

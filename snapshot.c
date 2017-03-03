@@ -1025,6 +1025,7 @@ int nova_create_snapshot(struct super_block *sb)
 	u64 timestamp = 0;
 	u64 trans_id;
 	int ret;
+	timing_t create_snapshot_time;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -1033,6 +1034,8 @@ int nova_create_snapshot(struct super_block *sb)
 		/* Do not create new snapshot if no new transactions */
 		return 0;
 	}
+
+	NOVA_START_TIMING(create_snapshot_t, create_snapshot_time);
 
 	/*
 	 * Mark the create_snapshot_trans_id before starting the snapshot
@@ -1051,6 +1054,7 @@ int nova_create_snapshot(struct super_block *sb)
 				__func__, ret);
 		// Reset the create_snapshot_trans_id
 		sbi->create_snapshot_trans_id = 0;
+		NOVA_END_TIMING(create_snapshot_t, create_snapshot_time);
 		return ret;
 	}
 
@@ -1089,6 +1093,7 @@ out:
 	sbi->create_snapshot_trans_id = 0;
 	mutex_unlock(&sbi->s_lock);
 
+	NOVA_END_TIMING(create_snapshot_t, create_snapshot_time);
 	return ret;
 }
 
@@ -1160,6 +1165,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	u64 trans_id;
 	int delete = 0;
 	int ret;
+	timing_t delete_snapshot_time;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -1168,6 +1174,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		return -EINVAL;
 	}
 
+	NOVA_START_TIMING(delete_snapshot_t, delete_snapshot_time);
 	mutex_lock(&sbi->s_lock);
 	trans_id = snapshot_table->entries[index].trans_id;
 	nova_dbg("Delete snapshot %d, trans ID %llu\n", index, trans_id);
@@ -1212,6 +1219,7 @@ update_snapshot_table:
 
 	nova_free_snapshot_info(info);
 
+	NOVA_END_TIMING(delete_snapshot_t, delete_snapshot_time);
 	return 0;
 }
 
