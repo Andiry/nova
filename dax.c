@@ -392,13 +392,13 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	struct nova_inode_update update;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, csummed, ret;
+	size_t count, offset, copied, csummed, left, ret;
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
 	unsigned int data_bits;
 	int allocated = 0;
-	void* kmem;
+	void *kmem, *kbuf;
 	u64 file_size;
 	size_t bytes;
 	long status = 0;
@@ -495,8 +495,30 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		if ( (copied > 0) && (data_csum > 0) ) {
+			kbuf = kmalloc(copied, GFP_KERNEL);
+			if (kbuf == NULL) {
+				nova_err(sb, "%s: buffer allocation error\n",
+								__func__);
+				ret = -ENOMEM;
+				goto out;
+			}
+			/* Function nova_update_cow_csum() will checksum data in
+			 * buf, and because that is from the user space it might
+			 * page fault, and directly reading faulted user page
+			 * panics the kernel. Thus to checksum user data a safe
+			 * approach is to first copy it to the kernel space
+			 * using copy_from_user() which handles page faults. */
+			left = copy_from_user(kbuf, buf, copied);
+			if (unlikely(left != 0)) {
+				kfree(kbuf);
+				nova_err(sb, "%s: copy_from_user error\n",
+								__func__);
+				ret = -EFAULT;
+				goto out;
+			}
 			csummed = copied - nova_update_cow_csum(inode, blocknr,
-						(void *) buf, offset, copied);
+							kbuf, offset, copied);
+			kfree(kbuf);
 			if (unlikely(csummed != copied)) {
 				nova_dbg("%s: not all data bytes are "
 					"checksummed! copied %zu, "
@@ -670,7 +692,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	struct nova_inode_update update;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, ret, csummed;
+	size_t count, offset, copied, ret, csummed, left;
 	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
@@ -679,7 +701,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	int inplace = 0;
 	bool hole_fill = false;
 	bool update_log = false;
-	void* kmem;
+	void *kmem, *kbuf;
 	u64 blk_off;
 	size_t bytes;
 	long status = 0;
@@ -784,8 +806,30 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		if ( (copied > 0) && (data_csum > 0) ) {
+			kbuf = kmalloc(copied, GFP_KERNEL);
+			if (kbuf == NULL) {
+				nova_err(sb, "%s: buffer allocation error\n",
+								__func__);
+				ret = -ENOMEM;
+				goto out;
+			}
+			/* Function nova_update_cow_csum() will checksum data in
+			 * buf, and because that is from the user space it might
+			 * page fault, and directly reading faulted user page
+			 * panics the kernel. Thus to checksum user data a safe
+			 * approach is to first copy it to the kernel space
+			 * using copy_from_user() which handles page faults. */
+			left = copy_from_user(kbuf, buf, copied);
+			if (unlikely(left != 0)) {
+				kfree(kbuf);
+				nova_err(sb, "%s: copy_from_user error\n",
+								__func__);
+				ret = -EFAULT;
+				goto out;
+			}
 			csummed = copied - nova_update_cow_csum(inode, blocknr,
-						(void *) buf, offset, copied);
+							kbuf, offset, copied);
+			kfree(kbuf);
 			if (unlikely(csummed != copied)) {
 				nova_dbg("%s: not all data bytes are "
 					"checksummed! copied %zu, "
