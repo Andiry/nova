@@ -22,12 +22,14 @@
 
 const char *Timingstring[TIMING_NUM] = 
 {
+	/* Init */
 	"init",
 	"mount",
 	"ioremap",
 	"new_init",
 	"recovery",
 
+	/* Namei operations */
 	"create",
 	"lookup",
 	"link",
@@ -42,38 +44,47 @@ const char *Timingstring[TIMING_NUM] =
 	"remove_dentry",
 	"setattr",
 
+	/* I/O operations */
 	"dax_read",
 	"cow_write",
 	"inplace_write",
 	"copy_to_nvmm",
 	"dax_get_block",
 
+	/* Memory operations */
 	"memcpy_read_nvmm",
 	"memcpy_write_nvmm",
 	"memcpy_write_back_to_nvmm",
 	"handle_partial_block",
 
+	/* Memory management */
 	"new_data_blocks",
 	"new_log_blocks",
 	"free_data_blocks",
 	"free_log_blocks",
 
+	/* Transaction */
 	"transaction_new_inode",
 	"transaction_link_change",
 	"update_tail",
 
+	/* Logging */
 	"append_dir_entry",
 	"append_file_entry",
 	"append_mmap_entry",
 	"append_link_change",
 	"append_setattr",
+
+	/* GC */
 	"log_fast_gc",
 	"log_thorough_gc",
 	"check_invalid_log",
 
+	/* Integrity */
 	"cow_csum",
 	"cow_parity",
 
+	/* Others */
 	"find_cache_page",
 	"assign_blocks",
 	"fsync",
@@ -88,6 +99,7 @@ const char *Timingstring[TIMING_NUM] =
 	"evict_inode",
 	"mmap_page_fault",
 
+	/* Rebuild */
 	"rebuild_dir",
 	"rebuild_file",
 };

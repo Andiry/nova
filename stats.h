@@ -21,6 +21,7 @@
 
 /* ======================= Timing ========================= */
 enum timing_category {
+	/* Init */
 	init_t,
 	mount_t,
 	ioremap_t,
@@ -72,6 +73,8 @@ enum timing_category {
 	append_mmap_entry_t,
 	append_link_change_t,
 	append_setattr_t,
+
+	/* GC */
 	fast_gc_t,
 	thorough_gc_t,
 	check_invalid_t,
@@ -95,6 +98,7 @@ enum timing_category {
 	evict_inode_t,
 	mmap_fault_t,
 
+	/* Rebuild */
 	rebuild_dir_t,
 	rebuild_file_t,
 
