@@ -812,7 +812,7 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	timing_t append_time;
 	int ret;
 
-	NOVA_START_TIMING(append_mmmap_entry_t, append_time);
+	NOVA_START_TIMING(append_mmap_entry_t, append_time);
 
 	nova_update_entry_csum(data);
 
