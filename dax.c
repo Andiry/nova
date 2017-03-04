@@ -977,9 +977,13 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	int locked = 0;
 	int check_next = 1;
 	int ret = 0;
+	timing_t get_block_time;
+
 
 	if (max_blocks == 0)
 		return 0;
+
+	NOVA_START_TIMING(dax_get_block_t, get_block_time);
 
 	nova_dbgv("%s: pgoff %lu, num %lu, create %d\n",
 				__func__, iblock, max_blocks, create);
@@ -1075,6 +1079,7 @@ out1:
 	if (taking_lock && locked)
 		inode_unlock(inode);
 
+	NOVA_END_TIMING(dax_get_block_t, get_block_time);
 	return num_blocks;
 }
 
@@ -1084,9 +1089,6 @@ int nova_dax_get_block_nolock(struct inode *inode, sector_t iblock,
 {
 	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
 	int ret;
-	timing_t gb_time;
-
-	NOVA_START_TIMING(dax_get_block_t, gb_time);
 
 	ret = nova_dax_get_blocks(inode, iblock, max_blocks,
 						bh, create, false);
@@ -1094,7 +1096,6 @@ int nova_dax_get_block_nolock(struct inode *inode, sector_t iblock,
 		bh->b_size = ret << inode->i_blkbits;
 		ret = 0;
 	}
-	NOVA_END_TIMING(dax_get_block_t, gb_time);
 	return ret;
 }
 
@@ -1103,9 +1104,6 @@ int nova_dax_get_block_lock(struct inode *inode, sector_t iblock,
 {
 	unsigned long max_blocks = bh->b_size >> inode->i_blkbits;
 	int ret;
-	timing_t gb_time;
-
-	NOVA_START_TIMING(dax_get_block_t, gb_time);
 
 	ret = nova_dax_get_blocks(inode, iblock, max_blocks,
 						bh, create, true);
@@ -1113,7 +1111,6 @@ int nova_dax_get_block_lock(struct inode *inode, sector_t iblock,
 		bh->b_size = ret << inode->i_blkbits;
 		ret = 0;
 	}
-	NOVA_END_TIMING(dax_get_block_t, gb_time);
 	return ret;
 }
 
