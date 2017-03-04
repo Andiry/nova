@@ -169,13 +169,14 @@ out:
 ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 			    size_t len, loff_t *ppos)
 {
+	struct inode *inode = filp->f_mapping->host;
 	ssize_t res;
 	timing_t dax_read_time;
 
 	NOVA_START_TIMING(dax_read_t, dax_read_time);
-//	rcu_read_lock();
+	inode_lock_shared(inode);
 	res = do_dax_mapping_read(filp, buf, len, ppos);
-//	rcu_read_unlock();
+	inode_unlock_shared(inode);
 	NOVA_END_TIMING(dax_read_t, dax_read_time);
 	return res;
 }
