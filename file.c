@@ -506,15 +506,18 @@ static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
 	struct inode *inode = iocb->ki_filp->f_mapping->host;
 	ssize_t ret;
+	timing_t read_iter_time;
 
 	if (!iov_iter_count(to))
 		return 0;
 
+	NOVA_START_TIMING(read_iter_t, read_iter_time);
 	inode_lock_shared(inode);
 	ret = dax_iomap_rw(iocb, to, &nova_iomap_ops_nolock);
 	inode_unlock_shared(inode);
 
 	file_accessed(iocb->ki_filp);
+	NOVA_END_TIMING(read_iter_t, read_iter_time);
 	return ret;
 }
 
@@ -523,7 +526,9 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
 	ssize_t ret;
+	timing_t write_iter_time;
 
+	NOVA_START_TIMING(write_iter_t, write_iter_time);
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
 	if (ret <= 0)
@@ -547,6 +552,7 @@ out_unlock:
 	inode_unlock(inode);
 	if (ret > 0)
 		ret = generic_write_sync(iocb, ret);
+	NOVA_END_TIMING(write_iter_t, write_iter_time);
 	return ret;
 }
 

@@ -49,6 +49,8 @@ enum timing_category {
 	inplace_write_t,
 	copy_to_nvmm_t,
 	dax_get_block_t,
+	read_iter_t,
+	write_iter_t,
 
 	/* Memory operations */
 	memcpy_r_nvmm_t,

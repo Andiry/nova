@@ -50,6 +50,8 @@ const char *Timingstring[TIMING_NUM] =
 	"inplace_write",
 	"copy_to_nvmm",
 	"dax_get_block",
+	"read_iter",
+	"write_iter",
 
 	/* Memory operations */
 	"memcpy_read_nvmm",
