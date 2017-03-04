@@ -1796,6 +1796,9 @@ int nova_data_parity_init_free_list(struct super_block *sb,
 	struct free_list *free_list);
 
 /* rebuild.c */
+int nova_reset_csum_parity_range(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long start_pgoff, unsigned long end_pgoff);
 int nova_reset_vma_csum_parity(struct super_block *sb,
 	struct vma_item *item);
 int nova_rebuild_file_inode_tree(struct super_block *sb,

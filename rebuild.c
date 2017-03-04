@@ -182,7 +182,7 @@ static int nova_reset_csum_parity_page(struct super_block *sb,
 	return 0;
 }
 
-static int nova_reset_csum_parity_range(struct super_block *sb,
+int nova_reset_csum_parity_range(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long start_pgoff, unsigned long end_pgoff)
 {

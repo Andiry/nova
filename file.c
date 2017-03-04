@@ -521,10 +521,38 @@ static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	return ret;
 }
 
+static int nova_update_iter_csum_parity(struct super_block *sb,
+	struct inode *inode, struct kiocb *iocb, struct iov_iter *iter)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned long start_pgoff, end_pgoff;
+	loff_t offset, end;
+	size_t count;
+
+	if (data_csum == 0 && data_parity == 0)
+		return 0;
+
+	count = iov_iter_count(iter);
+	offset = iocb->ki_pos;
+	end = offset + count;
+
+	start_pgoff = offset >> sb->s_blocksize_bits;
+	end_pgoff = end >> sb->s_blocksize_bits;
+	if (end & (nova_inode_blk_size(sih) - 1))
+		end_pgoff++;
+
+	nova_reset_csum_parity_range(sb, sih, NULL, start_pgoff,
+			end_pgoff);
+
+	return 0;
+}
+
 static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
+	struct super_block *sb = inode->i_sb;
 	ssize_t ret;
 	timing_t write_iter_time;
 
@@ -547,6 +575,8 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		i_size_write(inode, iocb->ki_pos);
 		mark_inode_dirty(inode);
 	}
+
+	nova_update_iter_csum_parity(sb, inode, iocb, from);
 
 out_unlock:
 	inode_unlock(inode);
