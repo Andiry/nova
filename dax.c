@@ -1661,6 +1661,7 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	int compVal;
 	int insert = 0;
 	int ret;
+	timing_t insert_vma_time;
 
 	if (mmap_cow == 0 && data_csum == 0 && data_parity == 0)
 		return 0;
@@ -1668,9 +1669,13 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	if ((vma->vm_flags & flags) != flags)
 		return 0;
 
+	NOVA_START_TIMING(insert_vma_t, insert_vma_time);
+
 	item = nova_alloc_vma_item(sb);
-	if (!item)
+	if (!item) {
+		NOVA_END_TIMING(insert_vma_t, insert_vma_time);
 		return -ENOMEM;
+	}
 
 	item->vma = vma;
 
@@ -1720,6 +1725,7 @@ out:
 		spin_unlock(&sbi->vma_lock);
 	}
 
+	NOVA_END_TIMING(insert_vma_t, insert_vma_time);
 	return ret;
 }
 
@@ -1736,10 +1742,12 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 	int compVal;
 	int found = 0;
 	int remove = 0;
+	timing_t remove_vma_time;
 
 	if (mmap_cow == 0 && data_csum == 0 && data_parity == 0)
 		return 0;
 
+	NOVA_START_TIMING(remove_vma_t, remove_vma_time);
 	inode_lock(inode);
 
 	temp = sih->vma_tree.rb_node;
@@ -1780,6 +1788,7 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 		spin_unlock(&sbi->vma_lock);
 	}
 
+	NOVA_END_TIMING(remove_vma_t, remove_vma_time);
 	return 0;
 }
 

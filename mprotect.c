@@ -159,6 +159,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	u64 trans_id;
 	u64 entry_size;
 	u32 time;
+	timing_t mmap_cow_time;
 	int ret;
 
 	start_blk = vma->vm_pgoff;
@@ -167,6 +168,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	if (start_blk >= end_blk)
 		return 0;
 
+	NOVA_START_TIMING(mmap_cow_t, mmap_cow_time);
 	inode_lock(inode);
 
 	pi = nova_get_inode(sb, inode);
@@ -305,6 +307,7 @@ out:
 						begin_tail, update.tail);
 
 	inode_unlock(inode);
+	NOVA_END_TIMING(mmap_cow_t, mmap_cow_time);
 	return ret;
 }
 
@@ -381,7 +384,9 @@ static int nova_set_sih_vmas_readonly(struct nova_inode_info_header *sih)
 	struct inode *inode;
 	struct vma_item *item;
 	struct rb_node *temp;
+	timing_t set_read_time;
 
+	NOVA_START_TIMING(set_vma_read_t, set_read_time);
 	si = container_of(sih, struct nova_inode_info, header);
 	inode = &(si->vfs_inode);
 
@@ -394,6 +399,7 @@ static int nova_set_sih_vmas_readonly(struct nova_inode_info_header *sih)
 	}
 	inode_unlock(inode);
 
+	NOVA_END_TIMING(set_vma_read_t, set_read_time);
 	return 0;
 }
 

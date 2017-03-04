@@ -97,7 +97,13 @@ const char *Timingstring[TIMING_NUM] =
 	"free_inode",
 	"free_inode_log",
 	"evict_inode",
+
+	/* Mmap */
 	"mmap_page_fault",
+	"insert_vma",
+	"remove_vma",
+	"set_vma_readonly",
+	"mmap_cow",
 
 	/* Rebuild */
 	"rebuild_dir",

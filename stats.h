@@ -96,7 +96,13 @@ enum timing_category {
 	free_inode_t,
 	free_inode_log_t,
 	evict_inode_t,
+
+	/* Mmap */
 	mmap_fault_t,
+	insert_vma_t,
+	remove_vma_t,
+	set_vma_read_t,
+	mmap_cow_t,
 
 	/* Rebuild */
 	rebuild_dir_t,
