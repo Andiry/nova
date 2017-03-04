@@ -522,19 +522,16 @@ static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 }
 
 static int nova_update_iter_csum_parity(struct super_block *sb,
-	struct inode *inode, struct kiocb *iocb, struct iov_iter *iter)
+	struct inode *inode, loff_t offset, size_t count)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	unsigned long start_pgoff, end_pgoff;
-	loff_t offset, end;
-	size_t count;
+	loff_t end;
 
 	if (data_csum == 0 && data_parity == 0)
 		return 0;
 
-	count = iov_iter_count(iter);
-	offset = iocb->ki_pos;
 	end = offset + count;
 
 	start_pgoff = offset >> sb->s_blocksize_bits;
@@ -553,6 +550,8 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
+	loff_t offset;
+	size_t count;
 	ssize_t ret;
 	timing_t write_iter_time;
 
@@ -570,13 +569,16 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (ret)
 		goto out_unlock;
 
+	count = iov_iter_count(from);
+	offset = iocb->ki_pos;
+
 	ret = dax_iomap_rw(iocb, from, &nova_iomap_ops_nolock);
 	if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
 		i_size_write(inode, iocb->ki_pos);
 		mark_inode_dirty(inode);
 	}
 
-	nova_update_iter_csum_parity(sb, inode, iocb, from);
+	nova_update_iter_csum_parity(sb, inode, offset, count);
 
 out_unlock:
 	inode_unlock(inode);
