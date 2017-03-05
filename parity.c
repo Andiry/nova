@@ -143,54 +143,55 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	return 0;
 }
 
-/* Update copy-on-write data parity.
- * TODO: Checksum the parity stripe? */
+/* Update copy-on-write data parity stripes.
+ *
+ * The function computes a parity stripe for each copy-on-write data block and
+ * writes the parity strpe to nvmm. The cow data (wrbuf) to compute parity
+ * stripes should reside in dram (more trusted), not in nvmm (less trusted).
+ * The data of wrbuf is already copied to nvmm.
+ *
+ * The parity stripe itself is not checksummed because it's only used during
+ * data recovery, and the recovered data stripe is checksum-verified to tell if
+ * the recovery was a success.
+ *
+ * blocknr:  destination nvmm block number where the wrbuf data is written to
+ *           - used to derive parity stripe addresses
+ * wrbuf:    cow data buffer, must be block-aligned and whole number of blocks
+ *           - should have both partial head-tail block data and user data
+ *           - should be in kernel memory (dram) to avoid page faults
+ * wrblocks: number of blocks that wrbuf contains
+ *
+ * return:   blocks NOT parity-coded
+ * */
 size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, size_t offset, size_t bytes)
+	void *wrbuf, int wrblocks)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info        *si  = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
-	size_t blockoff;
-	size_t blocksize = nova_inode_blk_size(sih);
 	size_t strp_size = NOVA_STRIPE_SIZE;
-	unsigned char *blockptr, *strp_ptr, *bufptr, *parbuf;
-	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	unsigned int strp_index, strp_offset;
-	unsigned long block, blocks;
+	u8 *blockptr, *parbuf;
+	unsigned long block;
 	timing_t cow_parity_time;
 
 	NOVA_START_TIMING(cow_parity_t, cow_parity_time);
-	bufptr   = wrbuf;
-	blocks   = ((offset + bytes - 1) >> sb->s_blocksize_bits) + 1;
-	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
-	blockptr = nova_get_block(sb, blockoff);
 
-	/* strp_ptr: virtual address of a stripe
-	 * strp_index: stripe index within a block
-	 * strp_offset: byte offset within a stripe */
-	strp_ptr = blockptr;
-	strp_index = offset >> strp_shift;
-	strp_offset = offset - (strp_index << strp_shift);
+	blockptr = (u8 *) wrbuf;
 
-	/* parity buffer for rolling updates */
+	/* parity stripe buffer for rolling updates */
 	parbuf = kmalloc(strp_size, GFP_KERNEL);
 	if (parbuf == NULL) {
-		nova_err(sb, "%s: parity buffer allocation error\n",
-				__func__);
-		return -ENOMEM;
+		nova_err(sb, "%s: parity buffer allocation error\n", __func__);
+		return wrblocks;
 	}
 
-	for (block = 0; block < blocks; block++) {
-		/* FIXME: Now always read from nvmm.
-		 * Also need to read the write buffer. */
+	for (block = 0; block < wrblocks; block++) {
 		nova_update_block_parity(sb, blocknr, parbuf, blockptr);
 
 		blocknr  += 1;
-		blockptr += blocksize;
+		blockptr += sb->s_blocksize;
 	}
 
 	kfree(parbuf);
+
 	NOVA_END_TIMING(cow_parity_t, cow_parity_time);
 
 	return 0;

@@ -57,6 +57,7 @@ enum timing_category {
 	memcpy_w_nvmm_t,
 	memcpy_w_wb_t,
 	partial_block_t,
+	partial_buffer_t,
 
 	/* Memory management */
 	new_data_blocks_t,

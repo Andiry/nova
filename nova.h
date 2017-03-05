@@ -1789,7 +1789,7 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff);
 size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, size_t offset, size_t bytes);
+	void *wrbuf, int wrblocks);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int strp_id);
 int nova_data_parity_init_free_list(struct super_block *sb,
