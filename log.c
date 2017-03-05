@@ -703,7 +703,7 @@ int nova_assign_write_entry(struct super_block *sb,
 	unsigned int num_free = 0;
 	unsigned long curr_pgoff;
 	int i;
-	int ret;
+	int ret = 0;
 	timing_t assign_time;
 
 	NOVA_START_TIMING(assign_t, assign_time);

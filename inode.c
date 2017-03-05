@@ -102,7 +102,7 @@ int nova_init_inode_table(struct super_block *sb)
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
 	struct nova_inode_info_header sih;
 	int num_tables;
-	int ret;
+	int ret = 0;
 	int i;
 
 	nova_memunlock_inode(sb, pi);

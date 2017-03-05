@@ -96,7 +96,7 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 	struct nova_file_write_entry *entry_data;
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
-	int ret;
+	int ret = 0;
 
 	while (curr_p && curr_p != sih->log_tail) {
 		if (is_last_entry(curr_p, entry_size))
@@ -160,7 +160,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	u64 entry_size;
 	u32 time;
 	timing_t mmap_cow_time;
-	int ret;
+	int ret = 0;
 
 	start_blk = vma->vm_pgoff;
 	start_blk += (address - vma->vm_start) >> sb->s_blocksize_bits;
