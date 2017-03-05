@@ -17,48 +17,16 @@
 
 #include "nova.h"
 
-#if 0
-/* This function may not be useful any more.
- *
- * Add delta (data diffs) to the parity stripe.
- *         delta
- *           |
- *           |bytes|
- *
- *     |.....|bytes|...|
- *     |     |
- * parity  offset
- * */
-static int nova_delta_parity(void *parity, void *delta,
-	size_t offset, size_t bytes)
-{
-	unsigned int strp_size = NOVA_STRIPE_SIZE;
-	unsigned char *par_ptr = (unsigned char *) parity;
-	unsigned char *dlt_ptr = (unsigned char *) delta;
-	unsigned int byte;
-
-	if (offset + bytes > strp_size) {
-		nova_dbg("%s: parity stripe length error\n", __func__);
-		return -EIO;
-	}
-
-	for (byte = offset; byte < bytes; byte++) {
-		/* FIXME: Make this work on wider types. */
-		par_ptr[offset + byte] ^= dlt_ptr[byte];
-	}
-
-	return 0;
-}
-#endif
-
-/* Compute parity for a whole block */
-static int nova_block_parity(struct super_block *sb, void *parity, void *block)
+/* Compute parity for a whole data block and write the parity stripe to nvmm */
+static int nova_update_block_parity(struct super_block *sb,
+	unsigned long blocknr, void *parity, void *block)
 {
 	unsigned int strp, num_strps, i, j;
-	unsigned int strp_size = NOVA_STRIPE_SIZE;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	unsigned char *par_ptr  = (unsigned char *) parity;
-	unsigned char *strp_ptr = (unsigned char *) block;
+	u8 *par_ptr  = (u8 *) parity;
+	u8 *strp_ptr = (u8 *) block;
+	void *par_addr;
 	u64 xor;
 
 	if ((parity == NULL) || (block == NULL)) {
@@ -91,21 +59,10 @@ static int nova_block_parity(struct super_block *sb, void *parity, void *block)
 		}
 	}
 
-	return 0;
-}
-
-static int nova_update_block_parity(struct super_block *sb,
-	unsigned long blocknr, void *parbuf, void *blockptr)
-{
-	unsigned char *par_addr;
-	size_t strp_size = NOVA_STRIPE_SIZE;
-
-	nova_block_parity(sb, parbuf, blockptr);
-
 	par_addr = nova_get_parity_addr(sb, blocknr);
 
 	nova_memunlock_range(sb, par_addr, strp_size);
-	memcpy_to_pmem_nocache(par_addr, parbuf, strp_size);
+	memcpy_to_pmem_nocache(par_addr, parity, strp_size);
 	nova_memlock_range(sb, par_addr, strp_size);
 
 	return 0;
@@ -115,11 +72,11 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff)
 {
-	unsigned int strp_size = NOVA_STRIPE_SIZE;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned long blocknr;
 	void *dax_mem = NULL;
+	u8 *parbuf;
 	u64 blockoff;
-	unsigned char *parbuf;
 
 	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
 	/* Truncated? */
@@ -202,11 +159,11 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int strp_id)
 {
 	unsigned int strp, num_strps, i, j;
-	unsigned int strp_size = NOVA_STRIPE_SIZE;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	size_t blockoff;
 	unsigned long bad_strp_nr;
-	unsigned char *blockptr, *bad_strp, *strp_ptr, *strp_buf, *par_addr;
+	u8 *blockptr, *bad_strp, *strp_ptr, *strp_buf, *par_addr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	u64 xor;
 	bool match;
@@ -226,6 +183,7 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 	if (par_addr == NULL) {
+		kfree(strp_buf);
 		nova_err(sb, "%s: parity address error\n", __func__);
 		return -EIO;
 	}
@@ -272,10 +230,9 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 
 	kfree(strp_buf);
 
-	if (match)
-	        return 0;
-	else
-	        return -EIO;
+	if (!match) return -EIO;
+
+	return 0;
 }
 
 int nova_data_parity_init_free_list(struct super_block *sb,
@@ -283,7 +240,7 @@ int nova_data_parity_init_free_list(struct super_block *sb,
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long blocksize, total_blocks, parity_blocks;
-	unsigned int strp_size = NOVA_STRIPE_SIZE;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 
 	/* Allocate blocks to store data block checksums.
 	 * Always reserve in case user turns it off at init mount but later
