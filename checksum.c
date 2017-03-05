@@ -641,45 +641,71 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 {
 	unsigned long src_blknr;
 	unsigned int csum_size = NOVA_DATA_CSUM_LEN;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int num_strps;
 	unsigned long src_strp_nr, dst_strp_nr;
 	size_t src_blk_off, dst_blk_off;
-	void *src_csum_ptr, *dst_csum_ptr;
+	u8 *zero_strp;
+	u32 zero_csum;
+	u32 *src_csum_ptr, *dst_csum_ptr;
 
-	src_blknr = get_nvmm(sb, sih, entry, index);
-	src_blk_off = nova_get_block_off(sb, src_blknr, sih->i_blk_type);
 	dst_blk_off = nova_get_block_off(sb, dst_blknr, sih->i_blk_type);
+
+	if (entry != NULL) {
+		src_blknr = get_nvmm(sb, sih, entry, index);
+		src_blk_off = nova_get_block_off(sb, src_blknr, sih->i_blk_type);
+	}
 
 	/* num_strps: the number of unmodified stripes, i.e. their checksums do
 	 * not change. */
 	if (is_end_blk) {
-		src_strp_nr = ((src_blk_off + offset - 1) >> strp_shift) + 1;
 		dst_strp_nr = ((dst_blk_off + offset - 1) >> strp_shift) + 1;
-		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
 		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr);
 		num_strps = (sb->s_blocksize - offset) >> strp_shift;
-	}
-	else {
-		src_strp_nr = src_blk_off >> strp_shift;
+	} else {
 		dst_strp_nr = dst_blk_off >> strp_shift;
-		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
 		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr);
 		num_strps = offset >> strp_shift;
 	}
 
-	if (num_strps > 0) {
-		if ((src_csum_ptr == NULL) || (dst_csum_ptr == NULL)) {
+	/* copy source checksums only if they exist */
+	if (entry != NULL && is_end_blk) {
+		src_strp_nr = ((src_blk_off + offset - 1) >> strp_shift) + 1;
+		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
+	} else if (entry != NULL && !is_end_blk) {
+		src_strp_nr = src_blk_off >> strp_shift;
+		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
+	} else { // entry == NULL
+		/* According to nova_handle_head_tail_blocks():
+		 * NULL-entry partial blocks are zero-ed */
+		zero_strp = kzalloc(strp_size, GFP_KERNEL);
+		if (zero_strp == NULL) {
+			nova_err(sb, "%s: buffer allocation error\n", __func__);
+			return -ENOMEM;
+		}
+		zero_csum = nova_crc32c(NOVA_INIT_CSUM, zero_strp, strp_size);
+		src_csum_ptr = &zero_csum;
+		kfree(zero_strp);
+	}
+
+	while (num_strps > 0) {
+		if (src_csum_ptr == NULL || dst_csum_ptr == NULL) {
 			nova_err(sb, "%s: invalid checksum addresses "
 			"src_csum_ptr 0x%p, dst_csum_ptr 0x%p\n", __func__);
 
-			return -EIO;
+			return -EFAULT;
 		}
 
 		/* TODO: Handle MCE: src_csum_ptr read from NVMM */
-		/* Should memunlock, if it's not already unlocked by caller. */
-		memcpy_from_pmem(dst_csum_ptr, src_csum_ptr,
-					num_strps * csum_size);
+		nova_memunlock_range(sb, dst_csum_ptr, csum_size);
+		memcpy_from_pmem(dst_csum_ptr, src_csum_ptr, csum_size);
+		nova_memlock_range(sb, dst_csum_ptr, csum_size);
+		nova_flush_buffer(dst_csum_ptr, csum_size, 0);
+
+		num_strps--;
+		dst_csum_ptr++;
+		if (entry != NULL) src_csum_ptr++;
 	}
 
 	return 0;

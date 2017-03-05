@@ -240,20 +240,18 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	if (offset != 0) {
 		entry = nova_get_write_entry(sb, sih, start_blk);
 		nova_memunlock_block(sb, kmem);
-		if (entry == NULL) {
+		if (entry == NULL)
 			/* Fill zero */
 		    	memset(kmem, 0, offset);
-		} else {
+		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
 					offset, kmem, false);
-			if (data_csum > 0) {
-				nova_copy_partial_block_csum(sb, sih, entry,
-					start_blk, offset, kmem_blknr, false);
-			}
-		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem, offset, 0);
+
+		if (data_csum > 0) nova_copy_partial_block_csum(sb, sih, entry,
+					start_blk, offset, kmem_blknr, false);
 	}
 
 	kmem = (void *)((char *)kmem +
@@ -264,23 +262,23 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 	if (eblk_offset != 0) {
 		entry = nova_get_write_entry(sb, sih, end_blk);
 		nova_memunlock_block(sb, kmem);
-		if (entry == NULL) {
+		if (entry == NULL)
 			/* Fill zero */
 		    	memset(kmem + eblk_offset, 0,
 					sb->s_blocksize - eblk_offset);
-		} else {
+		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, end_blk,
 					eblk_offset, kmem, true);
-			if (data_csum > 0) {
-				kmem_blknr += num_blocks - 1;
-				nova_copy_partial_block_csum(sb, sih, entry,
-					end_blk, eblk_offset, kmem_blknr, true);
-			}
-		}
 		nova_memlock_block(sb, kmem);
 		nova_flush_buffer(kmem + eblk_offset,
 					sb->s_blocksize - eblk_offset, 0);
+
+		if (data_csum > 0) {
+			kmem_blknr += num_blocks - 1;
+			nova_copy_partial_block_csum(sb, sih, entry,
+				end_blk, eblk_offset, kmem_blknr, true);
+		}
 	}
 
 	NOVA_END_TIMING(partial_block_t, partial_time);
@@ -571,7 +569,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		if (kbuf != NULL) {
+		if (copied > 0 && kbuf != NULL) {
 			/* merge user data in to the kernel buffer */
 			csummed = copied - copy_from_user(kbuf + offset,
 								buf, copied);
@@ -902,7 +900,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		if (kbuf != NULL) {
+		if (copied > 0 && kbuf != NULL) {
 			/* merge user data in to the kernel buffer */
 			csummed = copied - copy_from_user(kbuf + offset,
 								buf, copied);
