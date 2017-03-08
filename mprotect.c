@@ -148,7 +148,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	unsigned long avail_blocks;
 	unsigned long copy_blocks;
 	u64 from_blockoff, to_blockoff;
-	u64 latest_snapshot_trans_id;
+	u64 latest_snapshot_epoch_id;
 	size_t copied;
 	int allocated = 0;
 	void *from_kmem;
@@ -156,7 +156,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	size_t bytes;
 	timing_t memcpy_time;
 	u64 begin_tail = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	u64 entry_size;
 	u32 time;
 	timing_t mmap_cow_time;
@@ -180,12 +180,12 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
 
-	if (latest_snapshot_trans_id == 0)
-		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+	if (latest_snapshot_epoch_id == 0)
+		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	update.tail = pi->log_tail;
 	update.alter_tail = pi->alter_log_tail;
 	while (start_blk < end_blk) {
@@ -218,7 +218,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 		if (avail_blocks > end_blk - start_blk)
 			avail_blocks = end_blk - start_blk;
 
-		if (entry->trans_id > latest_snapshot_trans_id) {
+		if (entry->epoch_id > latest_snapshot_epoch_id) {
 			start_blk += avail_blocks;
 			continue;
 		}
@@ -264,7 +264,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 		entry_size = cpu_to_le64(inode->i_size);
 
 		nova_init_file_write_entry(sb, sih, &entry_data,
-					trans_id, entry_pgoff, copy_blocks,
+					epoch_id, entry_pgoff, copy_blocks,
 					blocknr, time, entry_size);
 
 		ret = nova_append_file_write_entry(sb, pi, inode,

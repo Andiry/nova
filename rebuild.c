@@ -321,7 +321,7 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 
 static void nova_rebuild_handle_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
-	struct nova_file_write_entry *entry, u64 *curr_trans_id)
+	struct nova_file_write_entry *entry, u64 *curr_epoch_id)
 {
 	if (entry->num_pages != entry->invalid_pages) {
 		/*
@@ -331,11 +331,11 @@ static void nova_rebuild_handle_write_entry(struct super_block *sb,
 		nova_assign_write_entry(sb, sih, entry, false);
 	}
 
-	if (entry->trans_id >= *curr_trans_id) {
+	if (entry->epoch_id >= *curr_epoch_id) {
 		nova_rebuild_file_time_and_size(sb, reb,
 					entry->mtime, entry->mtime,
 					entry->size);
-		*curr_trans_id = entry->trans_id;
+		*curr_epoch_id = entry->epoch_id;
 	}
 
 	if (entry->updating) {
@@ -358,7 +358,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode_rebuild rebuild, *reb;
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
-	u64 curr_trans_id = 0;
+	u64 curr_epoch_id = 0;
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
@@ -412,12 +412,12 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 				nova_apply_setattr_entry(sb, reb, sih,
 								attr_entry);
 				sih->last_setattr = curr_p;
-				if (attr_entry->trans_id >= curr_trans_id) {
+				if (attr_entry->epoch_id >= curr_epoch_id) {
 					nova_rebuild_file_time_and_size(sb, reb,
 							attr_entry->mtime,
 							attr_entry->ctime,
 							attr_entry->size);
-					curr_trans_id = attr_entry->trans_id;
+					curr_epoch_id = attr_entry->epoch_id;
 				}
 
 				/* Update sih->i_size for setattr operation */
@@ -435,7 +435,7 @@ int nova_rebuild_file_inode_tree(struct super_block *sb,
 			case FILE_WRITE:
 				entry = (struct nova_file_write_entry *)addr;
 				nova_rebuild_handle_write_entry(sb, sih, reb,
-						entry, &curr_trans_id);
+						entry, &curr_epoch_id);
 				curr_p += sizeof(struct nova_file_write_entry);
 				break;
 			case MMAP_WRITE:
@@ -487,7 +487,7 @@ static void nova_reassign_last_dentry(struct super_block *sb,
 		old_dentry = (struct nova_dentry *)nova_get_block(sb,
 							sih->last_dentry);
 		dentry = (struct nova_dentry *)nova_get_block(sb, curr_p);
-		if (dentry->trans_id >= old_dentry->trans_id)
+		if (dentry->epoch_id >= old_dentry->epoch_id)
 			sih->last_dentry = curr_p;
 	}
 }
@@ -515,7 +515,7 @@ static inline int nova_replay_remove_dentry(struct super_block *sb,
 
 static int nova_rebuild_handle_dentry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
-	struct nova_dentry *entry, u64 curr_p, u64 *curr_trans_id)
+	struct nova_dentry *entry, u64 curr_p, u64 *curr_epoch_id)
 {
 	int ret = 0;
 
@@ -539,9 +539,9 @@ static int nova_rebuild_handle_dentry(struct super_block *sb,
 		return ret;
 	}
 
-	if (entry->trans_id >= *curr_trans_id) {
+	if (entry->epoch_id >= *curr_epoch_id) {
 		nova_rebuild_dir_time_and_size(sb, reb, entry);
-		*curr_trans_id = entry->trans_id;
+		*curr_epoch_id = entry->epoch_id;
 	}
 
 	return ret;
@@ -561,7 +561,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
-	u64 curr_trans_id = 0;
+	u64 curr_epoch_id = 0;
 	u8 type;
 	int ret;
 
@@ -618,10 +618,10 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			case LINK_CHANGE:
 				lc_entry =
 					(struct nova_link_change_entry *)addr;
-				if (lc_entry->trans_id >= curr_trans_id) {
+				if (lc_entry->epoch_id >= curr_epoch_id) {
 					nova_apply_link_change_entry(sb, reb,
 								lc_entry);
-					curr_trans_id = lc_entry->trans_id;
+					curr_epoch_id = lc_entry->epoch_id;
 				}
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
@@ -629,7 +629,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			case DIR_LOG:
 				entry = (struct nova_dentry *)addr;
 				ret = nova_rebuild_handle_dentry(sb, sih, reb,
-						entry, curr_p, &curr_trans_id);
+						entry, curr_p, &curr_epoch_id);
 				if (ret)
 					goto out;
 				de_len = le16_to_cpu(entry->de_len);

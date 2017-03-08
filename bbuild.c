@@ -917,7 +917,7 @@ static void nova_traverse_dir_inode_log(struct super_block *sb,
 static unsigned int nova_check_old_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 entry_addr,
 	unsigned long pgoff, unsigned int num_free,
-	u64 trans_id, struct task_ring *ring, unsigned long base,
+	u64 epoch_id, struct task_ring *ring, unsigned long base,
 	struct scan_bitmap *bm)
 {
 	struct nova_file_write_entry *entry;
@@ -934,7 +934,7 @@ static unsigned int nova_check_old_entry(struct super_block *sb,
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
 
 	ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
-				num_free, trans_id);
+				num_free, epoch_id);
 
 	if (ret != 0)
 		return ret;
@@ -959,7 +959,7 @@ static int nova_set_ring_array(struct super_block *sb,
 	unsigned long index;
 	unsigned int num_free = 0;
 	u64 old_entry = 0;
-	u64 trans_id = entry->trans_id;
+	u64 epoch_id = entry->epoch_id;
 
 	start = entry->pgoff;
 	if (start < base)
@@ -976,7 +976,7 @@ static int nova_set_ring_array(struct super_block *sb,
 				if (old_entry)
 					nova_check_old_entry(sb, sih, old_entry,
 							old_pgoff, num_free,
-							trans_id, ring, base,
+							epoch_id, ring, base,
 							bm);
 
 				old_entry = ring->entry_array[index];
@@ -990,7 +990,7 @@ static int nova_set_ring_array(struct super_block *sb,
 
 	if (old_entry)
 		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
-					num_free, trans_id, ring, base, bm);
+					num_free, epoch_id, ring, base, bm);
 
 	for (pgoff = start; pgoff < end; pgoff++) {
 		index = pgoff - base;
@@ -1036,7 +1036,7 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 	unsigned int num_free = 0;
 	u64 old_entry = 0;
 	loff_t start, end;
-	u64 trans_id = entry->trans_id;
+	u64 epoch_id = entry->epoch_id;
 
 	if (sih->i_size <= entry->size)
 		goto out;
@@ -1067,7 +1067,7 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 				if (old_entry)
 					nova_check_old_entry(sb, sih, old_entry,
 							old_pgoff, num_free,
-							trans_id, ring, base,
+							epoch_id, ring, base,
 							bm);
 
 				old_entry = ring->entry_array[index];
@@ -1081,7 +1081,7 @@ static void nova_ring_setattr_entry(struct super_block *sb,
 
 	if (old_entry)
 		nova_check_old_entry(sb, sih, old_entry, old_pgoff,
-					num_free, trans_id, ring, base, bm);
+					num_free, epoch_id, ring, base, bm);
 
 	for (pgoff = first_blocknr; pgoff <= last_blocknr; pgoff++) {
 		index = pgoff - base;

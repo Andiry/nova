@@ -288,7 +288,7 @@ static int nova_zero_cache_tree(struct super_block *sb,
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
-	bool delete_dead, u64 trans_id)
+	bool delete_dead, u64 epoch_id)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry *old_entry = NULL;
@@ -320,7 +320,7 @@ int nova_delete_file_tree(struct super_block *sb,
 					nova_free_old_entry(sb, sih,
 							old_entry, old_pgoff,
 							num_free, delete_dead,
-							trans_id);
+							epoch_id);
 					freed += num_free;
 				}
 				old_entry = entry;
@@ -342,7 +342,7 @@ int nova_delete_file_tree(struct super_block *sb,
 
 	if (old_entry && delete_nvmm) {
 		nova_free_old_entry(sb, sih, old_entry, old_pgoff,
-					num_free, delete_dead, trans_id);
+					num_free, delete_dead, epoch_id);
 		freed += num_free;
 	}
 
@@ -379,7 +379,7 @@ static int nova_free_dram_resource(struct super_block *sb,
  * Free data blocks from inode in the range start <=> end
  */
 static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
-				    loff_t end, u64 trans_id)
+				    loff_t end, u64 epoch_id)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
@@ -404,7 +404,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 		return;
 
 	freed = nova_delete_file_tree(sb, sih, first_blocknr,
-				last_blocknr, true, false, false, trans_id);
+				last_blocknr, true, false, false, epoch_id);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -568,7 +568,7 @@ static void nova_init_inode(struct inode *inode, struct nova_inode *pi)
 	pi->alter_log_head = 0;
 	pi->alter_log_tail = 0;
 	pi->deleted = 0;
-	pi->delete_trans_id = 0;
+	pi->delete_epoch_id = 0;
 	nova_get_inode_flags(inode, pi);
 
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
@@ -1013,7 +1013,7 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
-	size_t size, dev_t rdev, const struct qstr *qstr, u64 trans_id)
+	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id)
 {
 	struct super_block *sb;
 	struct nova_sb_info *sbi;
@@ -1097,7 +1097,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->i_flags = nova_mask_flags(mode, diri->i_flags);
 	pi->nova_ino = ino;
 	pi->i_create_time = CURRENT_TIME_SEC.tv_sec;
-	pi->create_trans_id = trans_id;
+	pi->create_epoch_id = epoch_id;
 	nova_init_inode(inode, pi);
 
 	if (replica_metadata) {
@@ -1165,7 +1165,7 @@ void nova_dirty_inode(struct inode *inode, int flags)
 }
 
 static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
-	u64 trans_id)
+	u64 epoch_id)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
@@ -1197,7 +1197,7 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 //	dax_truncate_page(inode, newsize, nova_dax_get_block);
 
 	truncate_pagecache(inode, newsize);
-	nova_truncate_file_blocks(inode, newsize, oldsize, trans_id);
+	nova_truncate_file_blocks(inode, newsize, oldsize, epoch_id);
 }
 
 int nova_getattr(struct vfsmount *mnt, struct dentry *dentry,
@@ -1220,7 +1220,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	int ret;
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 	loff_t oldsize = inode->i_size;
-	u64 trans_id;
+	u64 epoch_id;
 	timing_t setattr_time;
 
 	NOVA_START_TIMING(setattr_t, setattr_time);
@@ -1234,7 +1234,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	/* Update inode with attr except for size */
 	setattr_copy(inode, attr);
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 
 	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE | ATTR_ATIME
 			| ATTR_MTIME | ATTR_CTIME;
@@ -1245,7 +1245,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		return ret;
 
 	ret = nova_handle_setattr_operation(sb, inode, pi, ia_valid,
-					attr, trans_id);
+					attr, epoch_id);
 	if (ret)
 		goto out;
 
@@ -1255,7 +1255,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 //		nova_set_blocksize_hint(sb, inode, pi, attr->ia_size);
 
 		/* now we can freely truncate the inode */
-		nova_setsize(inode, oldsize, attr->ia_size, trans_id);
+		nova_setsize(inode, oldsize, attr->ia_size, epoch_id);
 	}
 
 out:

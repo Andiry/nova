@@ -46,18 +46,18 @@ static inline bool goto_next_list_page(struct super_block *sb, u64 curr_p)
 }
 
 static inline int nova_rbtree_compare_snapshot_info(struct snapshot_info *curr,
-	u64 trans_id)
+	u64 epoch_id)
 {
-	if (trans_id < curr->trans_id)
+	if (epoch_id < curr->epoch_id)
 		return -1;
-	if (trans_id > curr->trans_id)
+	if (epoch_id > curr->epoch_id)
 		return 1;
 
 	return 0;
 }
 
 static int nova_find_target_snapshot_info(struct super_block *sb,
-	u64 trans_id, struct snapshot_info **ret_info)
+	u64 epoch_id, struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct rb_root *tree;
@@ -71,7 +71,7 @@ static int nova_find_target_snapshot_info(struct super_block *sb,
 
 	while (temp) {
 		curr = container_of(temp, struct snapshot_info, node);
-		compVal = nova_rbtree_compare_snapshot_info(curr, trans_id);
+		compVal = nova_rbtree_compare_snapshot_info(curr, epoch_id);
 
 		if (compVal == -1) {
 			temp = temp->rb_left;
@@ -86,7 +86,7 @@ static int nova_find_target_snapshot_info(struct super_block *sb,
 	if (!curr)
 		return -EINVAL;
 
-	if (curr->trans_id < trans_id) {
+	if (curr->epoch_id < epoch_id) {
 		temp = rb_next(&curr->node);
 		if (!temp) {
 			nova_dbg("%s: failed to find target snapshot info\n",
@@ -136,7 +136,7 @@ static int nova_insert_snapshot_info(struct super_block *sb,
 	while (*temp) {
 		curr = container_of(*temp, struct snapshot_info, node);
 		compVal = nova_rbtree_compare_snapshot_info(curr,
-						info->trans_id);
+						info->epoch_id);
 		parent = *temp;
 
 		if (compVal == -1) {
@@ -156,10 +156,10 @@ static int nova_insert_snapshot_info(struct super_block *sb,
 }
 
 /* Reuse the inode log page structure */
-static inline void nova_set_link_page_trans_id(struct super_block *sb,
-	struct nova_inode_log_page *curr_page, u64 trans_id)
+static inline void nova_set_link_page_epoch_id(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, u64 epoch_id)
 {
-	curr_page->page_tail.trans_id = trans_id;
+	curr_page->page_tail.epoch_id = epoch_id;
 }
 
 /* Reuse the inode log page structure */
@@ -234,9 +234,9 @@ static int nova_delete_snapshot_list_entries(struct super_block *sb,
 }
 
 static inline int nova_background_clean_inode_entry(struct super_block *sb,
-	struct snapshot_inode_entry *i_entry, u64 trans_id)
+	struct snapshot_inode_entry *i_entry, u64 epoch_id)
 {
-	if (i_entry->deleted == 0 && i_entry->delete_trans_id <= trans_id) {
+	if (i_entry->deleted == 0 && i_entry->delete_epoch_id <= epoch_id) {
 		nova_delete_dead_inode(sb, i_entry->nova_ino);
 		i_entry->deleted = 1;
 	}
@@ -246,9 +246,9 @@ static inline int nova_background_clean_inode_entry(struct super_block *sb,
 
 static inline int nova_background_clean_write_entry(struct super_block *sb,
 	struct snapshot_file_write_entry *w_entry,
-	struct nova_inode_info_header *sih, u64 trans_id)
+	struct nova_inode_info_header *sih, u64 epoch_id)
 {
-	if (w_entry->deleted == 0 && w_entry->delete_trans_id <= trans_id) {
+	if (w_entry->deleted == 0 && w_entry->delete_epoch_id <= epoch_id) {
 		nova_free_data_blocks(sb, sih, w_entry->nvmm,
 					w_entry->num_pages);
 		w_entry->deleted = 1;
@@ -258,7 +258,7 @@ static inline int nova_background_clean_write_entry(struct super_block *sb,
 }
 
 static int nova_background_clean_snapshot_list(struct super_block *sb,
-	struct snapshot_list *list, u64 trans_id)
+	struct snapshot_list *list, u64 epoch_id)
 {
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode_info_header sih;
@@ -277,14 +277,14 @@ static int nova_background_clean_snapshot_list(struct super_block *sb,
 		return 0;
 
 	curr_page = (struct nova_inode_log_page *)curr_p;
-	while (curr_page->page_tail.trans_id < trans_id &&
+	while (curr_page->page_tail.epoch_id < epoch_id &&
 					curr_p != list->tail) {
 		if (goto_next_list_page(sb, curr_p)) {
 			curr_p = next_list_page(curr_p);
 			if (curr_p == list->tail)
 				break;
 			curr_page = (struct nova_inode_log_page *)curr_p;
-			if (curr_page->page_tail.trans_id == trans_id)
+			if (curr_page->page_tail.epoch_id == epoch_id)
 				break;
 		}
 
@@ -299,12 +299,12 @@ static int nova_background_clean_snapshot_list(struct super_block *sb,
 		switch (type) {
 			case SS_INODE:
 				nova_background_clean_inode_entry(sb, addr,
-							trans_id);
+							epoch_id);
 				curr_p += sizeof(struct snapshot_inode_entry);
 				continue;
 			case SS_FILE_WRITE:
 				nova_background_clean_write_entry(sb, addr,
-							&sih, trans_id);
+							&sih, epoch_id);
 				curr_p += sizeof(struct snapshot_file_write_entry);
 				continue;
 			default:
@@ -370,7 +370,7 @@ static int nova_delete_snapshot_info(struct super_block *sb,
 }
 
 static int nova_initialize_snapshot_info_pages(struct super_block *sb,
-	struct snapshot_info *info, u64 trans_id)
+	struct snapshot_info *info, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_list *list;
@@ -388,7 +388,7 @@ static int nova_initialize_snapshot_info_pages(struct super_block *sb,
 			return -ENOMEM;
 		}
 
-		nova_set_link_page_trans_id(sb, (void *)new_page, trans_id);
+		nova_set_link_page_epoch_id(sb, (void *)new_page, epoch_id);
 		nova_set_next_link_page_address(sb, (void *)new_page, 0);
 		list->tail = list->head = new_page;
 		list->num_pages = 1;
@@ -398,7 +398,7 @@ static int nova_initialize_snapshot_info_pages(struct super_block *sb,
 }
 
 static int nova_initialize_snapshot_info(struct super_block *sb,
-	struct snapshot_info **ret_info, int init_pages, u64 trans_id)
+	struct snapshot_info **ret_info, int init_pages, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info;
@@ -424,7 +424,7 @@ static int nova_initialize_snapshot_info(struct super_block *sb,
 	}
 
 	if (init_pages) {
-		ret = nova_initialize_snapshot_info_pages(sb, info, trans_id);
+		ret = nova_initialize_snapshot_info_pages(sb, info, epoch_id);
 		if (ret)
 			goto fail;
 	}
@@ -496,8 +496,8 @@ retry:
 						__func__);
 				return -ENOMEM;
 			}
-			nova_set_link_page_trans_id(sb, (void *)new_page,
-						info->trans_id);
+			nova_set_link_page_epoch_id(sb, (void *)new_page,
+						info->epoch_id);
 			nova_set_next_link_page_address(sb,
 						(void *)new_page, 0);
 			goto retry;
@@ -521,31 +521,31 @@ retry:
  * 2) It is created and deleted during the same snapshot period.
  */
 static int nova_old_entry_deleteable(struct super_block *sb,
-	u64 create_trans_id, u64 delete_trans_id,
+	u64 create_epoch_id, u64 delete_epoch_id,
 	struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info = NULL;
 	int ret;
 
-	if (create_trans_id >= delete_trans_id) {
+	if (create_epoch_id >= delete_epoch_id) {
 		nova_dbg("%s: trans ID error: create %llu, "
 				"delete %llu\n", __func__,
-				create_trans_id,
-				delete_trans_id);
+				create_epoch_id,
+				delete_epoch_id);
 		return -EINVAL;
 	}
 
-	if (create_trans_id > sbi->latest_snapshot_trans_id)
+	if (create_epoch_id > sbi->latest_snapshot_epoch_id)
 		return 1;
 
-	ret = nova_find_target_snapshot_info(sb, create_trans_id, &info);
+	ret = nova_find_target_snapshot_info(sb, create_epoch_id, &info);
 	if (ret < 0 || !info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		return -EINVAL;
 	}
 
-	if (delete_trans_id <= info->trans_id)
+	if (delete_epoch_id <= info->epoch_id)
 		return 1;
 
 	*ret_info = info;
@@ -554,7 +554,7 @@ static int nova_old_entry_deleteable(struct super_block *sb,
 
 static int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	struct snapshot_info *info, u64 nvmm, u64 num_pages,
-	u64 delete_trans_id)
+	u64 delete_epoch_id)
 {
 	struct snapshot_table *snapshot_table;
 	struct snapshot_file_write_entry entry;
@@ -568,25 +568,25 @@ static int nova_append_snapshot_file_write_entry(struct super_block *sb,
 
 	index = info->index;
 	snapshot_table = nova_get_snapshot_table(sb);
-	if (snapshot_table->entries[index].trans_id != info->trans_id) {
+	if (snapshot_table->entries[index].epoch_id != info->epoch_id) {
 		nova_dbg("%s: Snapshot info unmatch, index %d, trans ID %llu, "
 				"snapshot table trans ID %llu\n",
-				__func__, index, info->trans_id,
-				snapshot_table->entries[index].trans_id);
+				__func__, index, info->epoch_id,
+				snapshot_table->entries[index].epoch_id);
 		return -EINVAL;
 	}
 
 	nova_dbgv("Append file write entry: block %llu, %llu pages, "
 			"delete trans ID %llu to Snapshot %d, trans ID %llu\n",
-			nvmm, num_pages, delete_trans_id,
-			info->index, info->trans_id);
+			nvmm, num_pages, delete_epoch_id,
+			info->index, info->epoch_id);
 
 	memset(&entry, 0, sizeof(struct snapshot_file_write_entry));
 	entry.type = SS_FILE_WRITE;
 	entry.deleted = 0;
 	entry.nvmm = nvmm;
 	entry.num_pages = num_pages;
-	entry.delete_trans_id = delete_trans_id;
+	entry.delete_epoch_id = delete_epoch_id;
 
 	ret = nova_append_snapshot_list_entry(sb, info, &entry,
 			sizeof(struct snapshot_file_write_entry));
@@ -596,16 +596,16 @@ static int nova_append_snapshot_file_write_entry(struct super_block *sb,
 
 int nova_append_data_to_snapshot(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
-	u64 delete_trans_id)
+	u64 delete_epoch_id)
 {
 	struct snapshot_info *info = NULL;
 	int ret;
 
-	ret = nova_old_entry_deleteable(sb, entry->trans_id,
-					delete_trans_id, &info);
+	ret = nova_old_entry_deleteable(sb, entry->epoch_id,
+					delete_epoch_id, &info);
 	if (ret == 0)
 		nova_append_snapshot_file_write_entry(sb, info, nvmm,
-					num_pages, delete_trans_id);
+					num_pages, delete_epoch_id);
 
 	return ret;
 }
@@ -625,24 +625,24 @@ static int nova_append_snapshot_inode_entry(struct super_block *sb,
 
 	index = info->index;
 	snapshot_table = nova_get_snapshot_table(sb);
-	if (snapshot_table->entries[index].trans_id != info->trans_id) {
+	if (snapshot_table->entries[index].epoch_id != info->epoch_id) {
 		nova_dbg("%s: Snapshot info unmatch, index %d, trans ID %llu, "
 				"snapshot table trans ID %llu\n",
-				__func__, index, info->trans_id,
-				snapshot_table->entries[index].trans_id);
+				__func__, index, info->epoch_id,
+				snapshot_table->entries[index].epoch_id);
 		return -EINVAL;
 	}
 
 	nova_dbgv("Append inode entry: inode %llu, delete trans ID %llu "
 			"to Snapshot %d, trans ID %llu\n",
-			pi->nova_ino, pi->delete_trans_id,
-			info->index, info->trans_id);
+			pi->nova_ino, pi->delete_epoch_id,
+			info->index, info->epoch_id);
 
 	memset(&entry, 0, sizeof(struct snapshot_inode_entry));
 	entry.type = SS_INODE;
 	entry.deleted = 0;
 	entry.nova_ino = pi->nova_ino;
-	entry.delete_trans_id = pi->delete_trans_id;
+	entry.delete_epoch_id = pi->delete_epoch_id;
 
 	ret = nova_append_snapshot_list_entry(sb, info, &entry,
 			sizeof(struct snapshot_inode_entry));
@@ -656,8 +656,8 @@ int nova_append_inode_to_snapshot(struct super_block *sb,
 	struct snapshot_info *info = NULL;
 	int ret;
 
-	ret = nova_old_entry_deleteable(sb, pi->create_trans_id,
-					pi->delete_trans_id, &info);
+	ret = nova_old_entry_deleteable(sb, pi->create_epoch_id,
+					pi->delete_epoch_id, &info);
 	if (ret == 0)
 		nova_append_snapshot_inode_entry(sb, pi, info);
 
@@ -676,22 +676,22 @@ int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 	switch (type) {
 		case SET_ATTR:
 			attr_entry = (struct nova_setattr_logentry *)addr;
-			if (pass_mount_snapshot(sb, attr_entry->trans_id))
+			if (pass_mount_snapshot(sb, attr_entry->epoch_id))
 				ret = 1;
 			break;
 		case LINK_CHANGE:
 			linkc_entry = (struct nova_link_change_entry *)addr;
-			if (pass_mount_snapshot(sb, linkc_entry->trans_id))
+			if (pass_mount_snapshot(sb, linkc_entry->epoch_id))
 				ret = 1;
 			break;
 		case DIR_LOG:
 			dentry = (struct nova_dentry *)addr;
-			if (pass_mount_snapshot(sb, dentry->trans_id))
+			if (pass_mount_snapshot(sb, dentry->epoch_id))
 				ret = 1;
 			break;
 		case FILE_WRITE:
 			fw_entry = (struct nova_file_write_entry *)addr;
-			if (pass_mount_snapshot(sb, fw_entry->trans_id))
+			if (pass_mount_snapshot(sb, fw_entry->epoch_id))
 				ret = 1;
 			break;
 		default:
@@ -745,7 +745,7 @@ static int nova_copy_snapshot_list_to_dram(struct super_block *sb,
 
 static int nova_allocate_snapshot_list_pages(struct super_block *sb,
 	struct snapshot_list *list, struct snapshot_nvmm_list *nvmm_list,
-	u64 trans_id)
+	u64 epoch_id)
 {
 	unsigned long prev_page = 0;
 	unsigned long new_page = 0;
@@ -761,7 +761,7 @@ static int nova_allocate_snapshot_list_pages(struct super_block *sb,
 			goto fail;
 		}
 
-		nova_set_link_page_trans_id(sb, (void *)new_page, trans_id);
+		nova_set_link_page_epoch_id(sb, (void *)new_page, epoch_id);
 		nova_set_next_link_page_address(sb, (void *)new_page, 0);
 
 		if (i == 0)
@@ -807,7 +807,7 @@ static int nova_restore_snapshot_info_lists(struct super_block *sb,
 		}
 
 		ret = nova_allocate_snapshot_list_pages(sb, list,
-						nvmm_list, info->trans_id);
+						nvmm_list, info->epoch_id);
 		if (ret) {
 			nova_dbg("%s failure\n", __func__);
 			return ret;
@@ -819,7 +819,7 @@ static int nova_restore_snapshot_info_lists(struct super_block *sb,
 }
 
 static int nova_restore_snapshot_info(struct super_block *sb, int index,
-	u64 trans_id, int just_init)
+	u64 epoch_id, int just_init)
 {
 	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info = NULL;
@@ -827,10 +827,10 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	nova_dbg("Restore snapshot %d, trans ID %llu\n", index, trans_id);
+	nova_dbg("Restore snapshot %d, trans ID %llu\n", index, epoch_id);
 
 	/* Allocate list pages on demand later */
-	ret = nova_initialize_snapshot_info(sb, &info, just_init, trans_id);
+	ret = nova_initialize_snapshot_info(sb, &info, just_init, epoch_id);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);
@@ -838,7 +838,7 @@ static int nova_restore_snapshot_info(struct super_block *sb, int index,
 	}
 
 	info->index = index;
-	info->trans_id = trans_id;
+	info->epoch_id = epoch_id;
 
 	if (just_init == 0) {
 		ret = nova_restore_snapshot_info_lists(sb, info, index);
@@ -858,7 +858,7 @@ int nova_mount_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
-	u64 mount_trans_id;
+	u64 mount_epoch_id;
 	int index;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -871,15 +871,15 @@ int nova_mount_snapshot(struct super_block *sb)
 		return -EINVAL;
 	}
 
-	mount_trans_id = snapshot_table->entries[index].trans_id;
-	if (mount_trans_id == 0) {
+	mount_epoch_id = snapshot_table->entries[index].epoch_id;
+	if (mount_epoch_id == 0) {
 		nova_dbg("%s: Mount invalid snapshot %d\n",
 				__func__, index);
 		sbi->mount_snapshot = 0;
 		return -EINVAL;
 	}
 
-	sbi->mount_snapshot_trans_id = mount_trans_id;
+	sbi->mount_snapshot_epoch_id = mount_epoch_id;
 	nova_dbg("Mount snapshot %d\n", index);
 	return 0;
 }
@@ -894,7 +894,7 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 	unsigned long nvmm_blocknr;
 	int i;
 
-	if (nvmm_info->trans_id == 0 || nvmm_info->nvmm_page_addr == 0)
+	if (nvmm_info->epoch_id == 0 || nvmm_info->nvmm_page_addr == 0)
 		return 0;
 
 	sih.ino = NOVA_SNAPSHOT_INO;
@@ -922,7 +922,7 @@ static int nova_clear_nvmm_info_table(struct super_block *sb,
 	struct snapshot_table *snapshot_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
 	struct snapshot_nvmm_info *nvmm_info;
-	u64 trans_id;
+	u64 epoch_id;
 	int i;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -933,9 +933,9 @@ static int nova_clear_nvmm_info_table(struct super_block *sb,
 		goto out;
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		trans_id = snapshot_table->entries[i].trans_id;
+		epoch_id = snapshot_table->entries[i].epoch_id;
 
-		if (trans_id) {
+		if (epoch_id) {
 			nvmm_info = &nvmm_info_table->infos[i];
 			nova_delete_nvmm_info(sb, nvmm_info);
 		}
@@ -955,38 +955,38 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, count = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
 	sbi->curr_snapshot = 0;
-	sbi->latest_snapshot_trans_id = 0;
+	sbi->latest_snapshot_epoch_id = 0;
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		trans_id = snapshot_table->entries[i].trans_id;
+		epoch_id = snapshot_table->entries[i].epoch_id;
 
-		if (trans_id) {
+		if (epoch_id) {
 			sbi->curr_snapshot = i;
-			ret = nova_restore_snapshot_info(sb, i, trans_id,
+			ret = nova_restore_snapshot_info(sb, i, epoch_id,
 							just_init);
 			if (ret) {
 				nova_dbg("%s: Restore snapshot %d, "
 						" trans ID %llu failed\n",
-						__func__, i, trans_id);
+						__func__, i, epoch_id);
 				goto out;
 			}
 			count++;
 		}
 
-		if (trans_id > sbi->latest_snapshot_trans_id)
-			sbi->latest_snapshot_trans_id = trans_id;
+		if (epoch_id > sbi->latest_snapshot_epoch_id)
+			sbi->latest_snapshot_epoch_id = epoch_id;
 	}
 
 	nova_dbg("Recovered %d snapshots, current snapshot index %d, "
 			"latest transaction ID %llu\n",
 			count, sbi->curr_snapshot,
-			sbi->latest_snapshot_trans_id);
+			sbi->latest_snapshot_epoch_id);
 
 out:
 	nova_clear_nvmm_info_table(sb, just_init);
@@ -1006,7 +1006,7 @@ static int get_unused_snapshot_index(struct super_block *sb)
 	/* Take current snapshot as hint */
 	index = sbi->curr_snapshot;
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		if (snapshot_table->entries[index].trans_id == 0)
+		if (snapshot_table->entries[index].epoch_id == 0)
 			return index;
 
 		index = (index + 1) % SNAPSHOT_TABLE_SIZE;
@@ -1023,14 +1023,14 @@ int nova_create_snapshot(struct super_block *sb)
 	struct snapshot_info *info = NULL;
 	int index;
 	u64 timestamp = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	int ret;
 	timing_t create_snapshot_time;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	trans_id = atomic64_read(&super->s_trans_id);
-	if (sbi->latest_snapshot_trans_id == trans_id) {
+	epoch_id = atomic64_read(&super->s_epoch_id);
+	if (sbi->latest_snapshot_epoch_id == epoch_id) {
 		/* Do not create new snapshot if no new transactions */
 		return 0;
 	}
@@ -1038,28 +1038,28 @@ int nova_create_snapshot(struct super_block *sb)
 	NOVA_START_TIMING(create_snapshot_t, create_snapshot_time);
 
 	/*
-	 * Mark the create_snapshot_trans_id before starting the snapshot
+	 * Mark the create_snapshot_epoch_id before starting the snapshot
 	 * creation. We will check this during in-place updates for metadata
 	 * and data, to prevent overwriting logs that might belong to a
 	 * snapshot that is being created.
 	 */
-	sbi->create_snapshot_trans_id = trans_id;
-	nova_dbgv("%s: trans id %llu\n", __func__, trans_id);
+	sbi->create_snapshot_epoch_id = epoch_id;
+	nova_dbgv("%s: trans id %llu\n", __func__, epoch_id);
 
 	timestamp = CURRENT_TIME_SEC.tv_sec;
 
-	ret = nova_initialize_snapshot_info(sb, &info, 1, trans_id);
+	ret = nova_initialize_snapshot_info(sb, &info, 1, epoch_id);
 	if (ret) {
 		nova_dbg("%s: initialize snapshot info failed %d\n",
 				__func__, ret);
-		// Reset the create_snapshot_trans_id
-		sbi->create_snapshot_trans_id = 0;
+		// Reset the create_snapshot_epoch_id
+		sbi->create_snapshot_epoch_id = 0;
 		NOVA_END_TIMING(create_snapshot_t, create_snapshot_time);
 		return ret;
 	}
 
 	mutex_lock(&sbi->s_lock);
-	info->trans_id = trans_id;
+	info->epoch_id = epoch_id;
 
 	if (sbi->num_snapshots >= SNAPSHOT_TABLE_SIZE) {
 		nova_dbg("%s: Snapshot table full\n", __func__);
@@ -1074,14 +1074,14 @@ int nova_create_snapshot(struct super_block *sb)
 	}
 
 	nova_memunlock_block(sb, snapshot_table);
-	snapshot_table->entries[index].trans_id = trans_id;
+	snapshot_table->entries[index].epoch_id = epoch_id;
 	snapshot_table->entries[index].timestamp = timestamp;
 	nova_memlock_block(sb, snapshot_table);
 	nova_flush_buffer(&snapshot_table->entries[index],
 				CACHELINE_SIZE, 1);
 	sbi->num_snapshots++;
 	sbi->curr_snapshot = index;
-	sbi->latest_snapshot_trans_id = trans_id;
+	sbi->latest_snapshot_epoch_id = epoch_id;
 
 	info->index = index;
 	ret = nova_insert_snapshot_info(sb, info);
@@ -1089,8 +1089,8 @@ int nova_create_snapshot(struct super_block *sb)
 	nova_set_vmas_readonly(sb);
 
 out:
-	// Reset the create_snapshot_trans_id
-	sbi->create_snapshot_trans_id = 0;
+	// Reset the create_snapshot_epoch_id
+	sbi->create_snapshot_epoch_id = 0;
 	mutex_unlock(&sbi->s_lock);
 
 	NOVA_END_TIMING(create_snapshot_t, create_snapshot_time);
@@ -1118,12 +1118,12 @@ static int nova_link_to_next_snapshot(struct super_block *sb,
 	nova_dbg("Link deleted snapshot %d to next snapshot %d, "
 			"prev trans ID %llu, next trans ID %llu\n",
 			prev_info->index, next_info->index,
-			prev_info->trans_id, next_info->trans_id);
+			prev_info->epoch_id, next_info->epoch_id);
 
-	if (prev_info->trans_id >= next_info->trans_id)
+	if (prev_info->epoch_id >= next_info->epoch_id)
 		nova_dbg("Error: prev trans ID %llu higher than "
 			"next trans ID %llu\n",
-			prev_info->trans_id, next_info->trans_id);
+			prev_info->epoch_id, next_info->epoch_id);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		prev_list = &prev_info->lists[i];
@@ -1162,7 +1162,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	struct snapshot_info *info = NULL;
 	struct snapshot_info *prev = NULL, *next = NULL;
 	struct rb_root *tree;
-	u64 trans_id;
+	u64 epoch_id;
 	int delete = 0;
 	int ret;
 	timing_t delete_snapshot_time;
@@ -1176,11 +1176,11 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 
 	NOVA_START_TIMING(delete_snapshot_t, delete_snapshot_time);
 	mutex_lock(&sbi->s_lock);
-	trans_id = snapshot_table->entries[index].trans_id;
-	nova_dbg("Delete snapshot %d, trans ID %llu\n", index, trans_id);
+	epoch_id = snapshot_table->entries[index].epoch_id;
+	nova_dbg("Delete snapshot %d, trans ID %llu\n", index, epoch_id);
 
-	ret = nova_find_target_snapshot_info(sb, trans_id, &info);
-	if (ret != 1 || info->trans_id != trans_id) {
+	ret = nova_find_target_snapshot_info(sb, epoch_id, &info);
+	if (ret != 1 || info->epoch_id != epoch_id) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		goto update_snapshot_table;
 	}
@@ -1193,9 +1193,9 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		/* Delete the last snapshot. Find the previous one. */
 		prev = nova_find_adjacent_snapshot_info(sb, info, 0);
 		if (prev)
-			sbi->latest_snapshot_trans_id = prev->trans_id;
+			sbi->latest_snapshot_epoch_id = prev->epoch_id;
 		else
-			sbi->latest_snapshot_trans_id = 0;
+			sbi->latest_snapshot_epoch_id = 0;
 
 		delete = 1;
 	}
@@ -1206,7 +1206,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 update_snapshot_table:
 
 	nova_memunlock_block(sb, snapshot_table);
-	snapshot_table->entries[index].trans_id = 0;
+	snapshot_table->entries[index].epoch_id = 0;
 	snapshot_table->entries[index].timestamp = 0;
 	nova_memlock_block(sb, snapshot_table);
 	sbi->num_snapshots--;
@@ -1311,7 +1311,7 @@ static int nova_save_snapshot_info(struct super_block *sb,
 
 	nova_memunlock_range(sb, nvmm_info, size);
 	nvmm_info->nvmm_page_addr = nvmm_page_addr;
-	nvmm_info->trans_id = info->trans_id;
+	nvmm_info->epoch_id = info->epoch_id;
 	nova_memlock_range(sb, nvmm_info, size);
 	nova_flush_buffer(nvmm_info, sizeof(struct snapshot_nvmm_info), 1);
 
@@ -1347,7 +1347,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 		local_time = timestamp - sys_tz.tz_minuteswest * 60;
 		time_to_tm(local_time, 0, &tm);
 		seq_printf(seq, "%5d\t%8llu\t%4lu-%02d-%02d\t%02d:%02d:%02d\n",
-					index, info->trans_id,
+					index, info->epoch_id,
 					tm.tm_year + 1900, tm.tm_mon + 1,
 					tm.tm_mday,
 					tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -1452,7 +1452,7 @@ static int nova_clean_snapshot(struct nova_sb_info *sbi)
 
 		mutex_lock(&list->list_mutex);
 		nova_background_clean_snapshot_list(sb, list,
-							info->trans_id);
+							info->epoch_id);
 		mutex_unlock(&list->list_mutex);
 	}
 
@@ -1507,16 +1507,16 @@ int nova_snapshot_init(struct super_block *sb)
 	return ret;
 }
 
-u64 nova_get_latest_snapshot_trans_id(struct super_block *sb)
+u64 nova_get_latest_snapshot_epoch_id(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	return sbi->latest_snapshot_trans_id;
+	return sbi->latest_snapshot_epoch_id;
 }
 
-u64 nova_get_create_snapshot_trans_id(struct super_block *sb)
+u64 nova_get_create_snapshot_epoch_id(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	return sbi->create_snapshot_trans_id;
+	return sbi->create_snapshot_epoch_id;
 }
 
 

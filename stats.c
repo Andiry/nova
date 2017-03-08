@@ -302,7 +302,7 @@ void nova_print_inode(struct nova_inode *pi)
 		pi->log_head, pi->log_tail, pi->alter_log_head,
 		pi->alter_log_tail);
 	nova_dbg("create trans id %llu, delete trans id %llu\n",
-		pi->create_trans_id, pi->delete_trans_id);
+		pi->create_epoch_id, pi->delete_epoch_id);
 }
 
 static inline void nova_print_file_write_entry(struct super_block *sb,
@@ -311,7 +311,7 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 	nova_dbg("file write entry @ 0x%llx: trans %llu, paoff %llu, pages %u, "
 			"blocknr %llu, reassigned %u, invalid count %u, "
 			"size %llu\n",
-			curr, entry->trans_id, entry->pgoff, entry->num_pages,
+			curr, entry->epoch_id, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,
 			entry->reassigned, entry->invalid_pages, entry->size);
 }
@@ -321,7 +321,7 @@ static inline void nova_print_set_attr_entry(struct super_block *sb,
 {
 	nova_dbg("set attr entry @ 0x%llx: trans %llu, invalid %u, mode %u, "
 			"size %llu, atime %u, mtime %u, ctime %u\n",
-			curr, entry->trans_id, entry->invalid, entry->mode,
+			curr, entry->epoch_id, entry->invalid, entry->mode,
 			entry->size, entry->atime, entry->mtime, entry->ctime);
 }
 
@@ -330,7 +330,7 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 {
 	nova_dbg("link change entry @ 0x%llx: trans %llu, invalid %u, "
 			"links %u, flags %u\n",
-			curr, entry->trans_id, entry->invalid, entry->links,
+			curr, entry->epoch_id, entry->invalid, entry->links,
 			entry->flags);
 }
 
@@ -339,7 +339,7 @@ static inline void nova_print_mmap_entry(struct super_block *sb,
 {
 	nova_dbg("mmap write entry @ 0x%llx: trans %llu, invalid %u, "
 			"paoff %llu, pages %llu\n",
-			curr, entry->trans_id, entry->invalid,
+			curr, entry->epoch_id, entry->invalid,
 			entry->pgoff, entry->num_pages);
 }
 
@@ -349,7 +349,7 @@ static inline size_t nova_print_dentry(struct super_block *sb,
 	nova_dbg("dir logentry @ 0x%llx: trans %llu, reassigned %u, "
 			"invalid %u, inode %llu, links %u, namelen %u, "
 			"rec len %u, name %s\n",
-			curr, entry->trans_id,
+			curr, entry->epoch_id,
 			entry->reassigned, entry->invalid,
 			le64_to_cpu(entry->ino),
 			entry->links_count, entry->name_len,

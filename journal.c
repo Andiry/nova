@@ -256,7 +256,7 @@ static u64 nova_append_inode_journal(struct super_block *sb,
 			curr_p = nova_append_entry_journal(sb, curr_p,
 						&pi->valid);
 			curr_p = nova_append_entry_journal(sb, curr_p,
-						&pi->delete_trans_id);
+						&pi->delete_epoch_id);
 		}
 	}
 

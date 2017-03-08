@@ -304,7 +304,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	u64 trans_id;
+	u64 epoch_id;
 	timing_t init_time;
 
 	NOVA_START_TIMING(new_init_t, init_time);
@@ -353,7 +353,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
-	atomic64_set(&super->s_trans_id, 0);
+	atomic64_set(&super->s_epoch_id, 0);
 
 	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	pi->nova_ino = NOVA_BLOCKNODE_INO;
@@ -377,7 +377,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 
 	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
 	nova_sync_super(super);
@@ -406,7 +406,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	nova_memlock_inode(sb, root_i);
 
 	nova_append_dir_init_entries(sb, root_i, NOVA_ROOT_INO,
-					NOVA_ROOT_INO, trans_id);
+					NOVA_ROOT_INO, epoch_id);
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
@@ -675,7 +675,7 @@ setup_sb:
 
 	clear_opt(sbi->s_mount_opt, MOUNTING);
 
-	nova_print_curr_trans_id(sb);
+	nova_print_curr_epoch_id(sb);
 
 	retval = 0;
 	NOVA_END_TIMING(mount_t, mount_time);
@@ -809,7 +809,7 @@ static void nova_put_super(struct super_block *sb)
 	struct inode_map *inode_map;
 	int i;
 
-	nova_print_curr_trans_id(sb);
+	nova_print_curr_epoch_id(sb);
 
 	/* It's unmount time, so unmap the nova memory */
 //	nova_print_free_lists(sb);

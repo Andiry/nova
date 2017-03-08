@@ -19,7 +19,7 @@
  */
 
 struct snapshot_entry {
-	__le64 trans_id;
+	__le64 epoch_id;
 	__le64 timestamp;
 };
 
@@ -38,7 +38,7 @@ struct snapshot_list {
 
 struct snapshot_info {
 	int	index;
-	u64	trans_id;
+	u64	epoch_id;
 	struct rb_node node;
 
 	/* Per-CPU snapshot list */
@@ -56,7 +56,7 @@ struct snapshot_inode_entry {
 	u8	padding[6];
 	u64	padding64;
 	u64	nova_ino;
-	u64	delete_trans_id;
+	u64	delete_epoch_id;
 } __attribute((__packed__));
 
 struct snapshot_file_write_entry {
@@ -65,7 +65,7 @@ struct snapshot_file_write_entry {
 	u8	padding[6];
 	u64	nvmm;
 	u64	num_pages;
-	u64	delete_trans_id;
+	u64	delete_epoch_id;
 } __attribute((__packed__));
 
 struct snapshot_nvmm_list {
@@ -81,7 +81,7 @@ struct snapshot_nvmm_page {
 };
 
 struct snapshot_nvmm_info {
-	__le64	trans_id;
+	__le64	epoch_id;
 	__le64 	nvmm_page_addr;
 } __attribute((__packed__));
 

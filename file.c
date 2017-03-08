@@ -331,7 +331,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	bool update_log = false;
 	timing_t fallocate_time;
 	u64 begin_tail = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	u32 time;
 
 	/* No fallocate for CoW */
@@ -374,7 +374,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	blockoff = offset & blocksize_mask;
 	num_blocks = (blockoff + len + blocksize_mask) >> sb->s_blocksize_bits;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	update.tail = sih->log_tail;
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
@@ -406,7 +406,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 		}
 
 		/* Handle hole fill write */
-		nova_init_file_write_entry(sb, sih, &entry_data, trans_id,
+		nova_init_file_write_entry(sb, sih, &entry_data, epoch_id,
 					start_blk, allocated, blocknr,
 					time, new_size);
 

@@ -111,7 +111,7 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	unsigned long pgoff, unsigned int num_free,
-	bool delete_dead, u64 trans_id)
+	bool delete_dead, u64 epoch_id)
 {
 	unsigned long old_nvmm;
 	int ret;
@@ -124,7 +124,7 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
-				num_free, trans_id);
+				num_free, epoch_id);
 		if (ret == 0)
 			goto out;
 	}
@@ -201,7 +201,7 @@ void nova_clear_last_page_tail(struct super_block *sb,
 }
 
 static void nova_update_setattr_entry(struct inode *inode,
-	struct nova_setattr_logentry *entry, struct iattr *attr, u64 trans_id)
+	struct nova_setattr_logentry *entry, struct iattr *attr, u64 epoch_id)
 {
 	unsigned int ia_valid = attr->ia_valid, attr_mask;
 
@@ -217,7 +217,7 @@ static void nova_update_setattr_entry(struct inode *inode,
 	entry->atime	= cpu_to_le32(inode->i_atime.tv_sec);
 	entry->ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
 	entry->mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
-	entry->trans_id = trans_id;
+	entry->epoch_id = epoch_id;
 	entry->invalid 	= 0;
 
 	if (ia_valid & ATTR_SIZE)
@@ -230,10 +230,10 @@ static void nova_update_setattr_entry(struct inode *inode,
 }
 
 static void nova_update_link_change_entry(struct inode *inode,
-	struct nova_link_change_entry *entry, u64 trans_id)
+	struct nova_link_change_entry *entry, u64 epoch_id)
 {
 	entry->entry_type	= LINK_CHANGE;
-	entry->trans_id		= trans_id;
+	entry->epoch_id		= epoch_id;
 	entry->invalid		= 0;
 	entry->links		= cpu_to_le16(inode->i_nlink);
 	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
@@ -244,11 +244,11 @@ static void nova_update_link_change_entry(struct inode *inode,
 }
 
 static int nova_update_write_entry(struct super_block *sb,
-	struct nova_file_write_entry *entry, u64 trans_id, u32 time,
+	struct nova_file_write_entry *entry, u64 epoch_id, u32 time,
 	u64 file_size)
 {
 	entry->updating = 0;
-	entry->trans_id = cpu_to_le64(trans_id);
+	entry->epoch_id = cpu_to_le64(epoch_id);
 	entry->mtime = cpu_to_le32(time);
 	entry->size = cpu_to_le64(file_size);
 	nova_update_entry_csum(entry);
@@ -262,7 +262,7 @@ static int nova_update_dentry(struct super_block *sb,
 	unsigned short links_count;
 	int link_change = entry_info->link_change;
 
-	dentry->trans_id = entry_info->trans_id;
+	dentry->epoch_id = entry_info->epoch_id;
 	/* Only used for remove_dentry */
 	dentry->ino = cpu_to_le64(0);
 	dentry->invalid = 1;
@@ -290,7 +290,7 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 		case FILE_WRITE:
 			if (entry_info->inplace)
 				nova_update_write_entry(sb, entry,
-					entry_info->trans_id, entry_info->time,
+					entry_info->epoch_id, entry_info->time,
 					entry_info->file_size);
 			else
 				memcpy_to_pmem_nocache(entry, entry_info->data,
@@ -301,11 +301,11 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 			break;
 		case SET_ATTR:
 			nova_update_setattr_entry(inode, entry,
-					entry_info->attr, entry_info->trans_id);
+					entry_info->attr, entry_info->epoch_id);
 			break;
 		case LINK_CHANGE:
 			nova_update_link_change_entry(inode, entry,
-					entry_info->trans_id);
+					entry_info->epoch_id);
 			break;
 		case MMAP_WRITE:
 			memcpy_to_pmem_nocache(entry, entry_info->data,
@@ -413,7 +413,7 @@ int nova_inplace_update_log_entry(struct super_block *sb,
 /* Returns new tail after append */
 static int nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
-	struct nova_inode_update *update, u64 *last_setattr, u64 trans_id)
+	struct nova_inode_update *update, u64 *last_setattr, u64 epoch_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -425,7 +425,7 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	entry_info.type = SET_ATTR;
 	entry_info.attr = attr;
 	entry_info.update = update;
-	entry_info.trans_id = trans_id;
+	entry_info.epoch_id = epoch_id;
 
 	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret) {
@@ -452,7 +452,7 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 	addr = (void *)nova_get_block(sb, last_setattr);
 	old_entry = (struct nova_setattr_logentry *)addr;
 	/* Do not invalidate setsize entries */
-	if (!old_entry_freeable(sb, old_entry->trans_id) ||
+	if (!old_entry_freeable(sb, old_entry->epoch_id) ||
 			(old_entry->attr & ATTR_SIZE))
 		return 0;
 
@@ -469,7 +469,7 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 
 #if 0
 static void setattr_copy_to_nova_inode(struct super_block *sb,
-	struct inode *inode, struct nova_inode *pi, u64 trans_id)
+	struct inode *inode, struct nova_inode *pi, u64 epoch_id)
 {
 	pi->i_mode  = cpu_to_le16(inode->i_mode);
 	pi->i_uid	= cpu_to_le32(i_uid_read(inode));
@@ -477,14 +477,14 @@ static void setattr_copy_to_nova_inode(struct super_block *sb,
 	pi->i_atime	= cpu_to_le32(inode->i_atime.tv_sec);
 	pi->i_ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
 	pi->i_mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
-	pi->create_trans_id = trans_id;
+	pi->create_epoch_id = epoch_id;
 
 	nova_update_alter_inode(sb, inode, pi);
 }
 #endif
 
 static int nova_can_inplace_update_setattr(struct super_block *sb,
-	struct nova_inode_info_header *sih, u64 latest_snapshot_trans_id)
+	struct nova_inode_info_header *sih, u64 latest_snapshot_epoch_id)
 {
 	u64 last_log = 0;
 	struct nova_setattr_logentry *entry = NULL;
@@ -496,7 +496,7 @@ static int nova_can_inplace_update_setattr(struct super_block *sb,
 		/* Do not overwrite setsize entry */
 		if (entry->attr & ATTR_SIZE)
 			return 0;
-		if (entry->trans_id > latest_snapshot_trans_id)
+		if (entry->epoch_id > latest_snapshot_epoch_id)
 			return 1;
 	}
 
@@ -505,7 +505,7 @@ static int nova_can_inplace_update_setattr(struct super_block *sb,
 
 static int nova_inplace_update_setattr_entry(struct super_block *sb,
 	struct inode *inode, struct nova_inode_info_header *sih,
-	struct iattr *attr, u64 trans_id)
+	struct iattr *attr, u64 epoch_id)
 {
 	struct nova_setattr_logentry *entry = NULL;
 	struct nova_log_entry_info entry_info;
@@ -519,7 +519,7 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 
 	entry_info.type = SET_ATTR;
 	entry_info.attr = attr;
-	entry_info.trans_id = trans_id;
+	entry_info.epoch_id = epoch_id;
 
 	return nova_inplace_update_log_entry(sb, inode, entry,
 					&entry_info);
@@ -527,13 +527,13 @@ static int nova_inplace_update_setattr_entry(struct super_block *sb,
 
 int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
-	u64 trans_id)
+	u64 epoch_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode_update update;
 	u64 last_setattr = 0;
-	u64 latest_snapshot_trans_id = 0;
+	u64 latest_snapshot_epoch_id = 0;
 	int ret;
 
 	if (ia_valid & ATTR_MODE)
@@ -543,26 +543,26 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	 * Let's try to do inplace update.
 	 * If there are currently no snapshots holding this inode,
 	 * we can update the inode in place. If a snapshot creation
-	 * is in progress, we will use the create_snapshot_trans_id
+	 * is in progress, we will use the create_snapshot_epoch_id
 	 * as the latest snapshot id.
 	*/
-	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
 
-	if (latest_snapshot_trans_id == 0)
-		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+	if (latest_snapshot_epoch_id == 0)
+		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
 	if (!(ia_valid & ATTR_SIZE) &&
 			nova_can_inplace_update_setattr(sb, sih,
-				latest_snapshot_trans_id)) {
+				latest_snapshot_epoch_id)) {
 		nova_inplace_update_setattr_entry(sb, inode, sih,
-						attr, trans_id);
+						attr, epoch_id);
 	} else {
 		/* We are holding inode lock so OK to append the log */
 		nova_dbgv("%s : Appending last log entry for inode ino = %lu\n",
 				__func__, inode->i_ino);
 		update.tail = update.alter_tail = 0;
 		ret = nova_append_setattr_entry(sb, pi, inode, attr, &update,
-				                &last_setattr, trans_id);
+				                &last_setattr, epoch_id);
 		if (ret) {
 			nova_dbg("%s: append setattr entry failure\n", __func__);
 			return ret;
@@ -593,7 +593,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 
 	addr = (void *)nova_get_block(sb, old_link_change);
 	old_entry = (struct nova_link_change_entry *)addr;
-	if (!old_entry_freeable(sb, old_entry->trans_id))
+	if (!old_entry_freeable(sb, old_entry->epoch_id))
 		return 0;
 
 	ret = nova_check_alter_entry(sb, old_link_change);
@@ -608,7 +608,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 }
 
 static int nova_can_inplace_update_lcentry(struct super_block *sb,
-	struct nova_inode_info_header *sih, u64 latest_snapshot_trans_id)
+	struct nova_inode_info_header *sih, u64 latest_snapshot_epoch_id)
 {
 	u64 last_log = 0;
 	struct nova_link_change_entry *entry = NULL;
@@ -617,7 +617,7 @@ static int nova_can_inplace_update_lcentry(struct super_block *sb,
 	if (last_log) {
 		entry = (struct nova_link_change_entry *)nova_get_block(sb,
 								last_log);
-		if (entry->trans_id > latest_snapshot_trans_id)
+		if (entry->epoch_id > latest_snapshot_epoch_id)
 			return 1;
 	}
 
@@ -626,7 +626,7 @@ static int nova_can_inplace_update_lcentry(struct super_block *sb,
 
 static int nova_inplace_update_lcentry(struct super_block *sb,
 	struct inode *inode, struct nova_inode_info_header *sih,
-	u64 trans_id)
+	u64 epoch_id)
 {
 	struct nova_link_change_entry *entry = NULL;
 	struct nova_log_entry_info entry_info;
@@ -637,7 +637,7 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 							last_log);
 
 	entry_info.type = LINK_CHANGE;
-	entry_info.trans_id = trans_id;
+	entry_info.epoch_id = epoch_id;
 
 	return nova_inplace_update_log_entry(sb, inode, entry,
 					&entry_info);
@@ -646,25 +646,25 @@ static int nova_inplace_update_lcentry(struct super_block *sb,
 /* Returns new tail after append */
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
-	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id)
+	struct nova_inode_update *update, u64 *old_linkc, u64 epoch_id)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_log_entry_info entry_info;
-	u64 latest_snapshot_trans_id = 0;
+	u64 latest_snapshot_epoch_id = 0;
 	int ret = 0;
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
 
-	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
 
-	if (latest_snapshot_trans_id == 0)
-		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+	if (latest_snapshot_epoch_id == 0)
+		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
 	if (nova_can_inplace_update_lcentry(sb, sih,
-				latest_snapshot_trans_id)) {
-		nova_inplace_update_lcentry(sb, inode, sih, trans_id);
+				latest_snapshot_epoch_id)) {
+		nova_inplace_update_lcentry(sb, inode, sih, epoch_id);
 		update->tail = sih->log_tail;
 		update->alter_tail = sih->alter_log_tail;
 
@@ -674,7 +674,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	entry_info.type = LINK_CHANGE;
 	entry_info.update = update;
-	entry_info.trans_id = trans_id;
+	entry_info.epoch_id = epoch_id;
 
 	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret) {
@@ -720,7 +720,7 @@ int nova_assign_write_entry(struct super_block *sb,
 							start_old_entry,
 							start_old_pgoff,
 							num_free, false,
-							entry->trans_id);
+							entry->epoch_id);
 				nova_reassign_write_entry(sb, start_old_entry);
 				start_old_entry = old_entry;
 				start_old_pgoff = curr_pgoff;
@@ -742,7 +742,7 @@ int nova_assign_write_entry(struct super_block *sb,
 	if (start_old_entry && free)
 		nova_free_old_entry(sb, sih, start_old_entry,
 					start_old_pgoff, num_free, false,
-					entry->trans_id);
+					entry->epoch_id);
 
 	nova_reassign_write_entry(sb, start_old_entry);
 
@@ -793,7 +793,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	entry_info.type = FILE_WRITE;
 	entry_info.update = update;
 	entry_info.data = data;
-	entry_info.trans_id = data->trans_id;
+	entry_info.epoch_id = data->epoch_id;
 	entry_info.inplace = 0;
 
 	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
@@ -819,7 +819,7 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	entry_info.type = MMAP_WRITE;
 	entry_info.update = update;
 	entry_info.data = data;
-	entry_info.trans_id = data->trans_id;
+	entry_info.epoch_id = data->epoch_id;
 
 	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
 	if (ret)

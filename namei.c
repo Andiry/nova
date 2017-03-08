@@ -119,7 +119,7 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct nova_inode *pidir, *pi;
 	struct nova_inode_update update;
 	u64 pi_addr = 0;
-	u64 ino, trans_id;
+	u64 ino, epoch_id;
 	timing_t create_time;
 
 	NOVA_START_TIMING(create_t, create_time);
@@ -128,21 +128,21 @@ static int nova_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!pidir)
 		goto out_err;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_err;
 
 	update.tail = 0;
 	update.alter_tail = 0;
-	err = nova_add_dentry(dentry, ino, 0, &update, trans_id);
+	err = nova_add_dentry(dentry, ino, 0, &update, epoch_id);
 	if (err)
 		goto out_err;
 
 	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
 	inode = nova_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
-					0, 0, &dentry->d_name, trans_id);
+					0, 0, &dentry->d_name, epoch_id);
 	if (IS_ERR(inode))
 		goto out_err;
 
@@ -170,7 +170,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct nova_inode *pidir, *pi;
 	struct nova_inode_update update;
 	u64 ino;
-	u64 trans_id;
+	u64 epoch_id;
 	timing_t mknod_time;
 
 	NOVA_START_TIMING(mknod_t, mknod_time);
@@ -179,7 +179,7 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!pidir)
 		goto out_err;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_err;
@@ -189,12 +189,12 @@ static int nova_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	update.tail = 0;
 	update.alter_tail = 0;
-	err = nova_add_dentry(dentry, ino, 0, &update, trans_id);
+	err = nova_add_dentry(dentry, ino, 0, &update, epoch_id);
 	if (err)
 		goto out_err;
 
 	inode = nova_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, ino, mode,
-					0, rdev, &dentry->d_name, trans_id);
+					0, rdev, &dentry->d_name, epoch_id);
 	if (IS_ERR(inode))
 		goto out_err;
 
@@ -229,7 +229,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	int num_logs;
 	struct nova_inode_update update;
 	u64 ino;
-	u64 trans_id;
+	u64 epoch_id;
 	timing_t symlink_time;
 
 	NOVA_START_TIMING(symlink_t, symlink_time);
@@ -240,7 +240,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	if (!pidir)
 		goto out_fail1;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out_fail1;
@@ -251,13 +251,13 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 
 	update.tail = 0;
 	update.alter_tail = 0;
-	err = nova_add_dentry(dentry, ino, 0, &update, trans_id);
+	err = nova_add_dentry(dentry, ino, 0, &update, epoch_id);
 	if (err)
 		goto out_fail1;
 
 	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino,
 					S_IFLNK|S_IRWXUGO, len, 0,
-					&dentry->d_name, trans_id);
+					&dentry->d_name, epoch_id);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out_fail1;
@@ -287,7 +287,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	}
 
 	nova_block_symlink(sb, pi, inode, log_block, name_blocknr,
-				symname, len, trans_id);
+				symname, len, epoch_id);
 
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
@@ -308,7 +308,7 @@ out_fail1:
 static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode *pidir, struct inode *inode,
 	struct inode *dir, struct nova_inode_update *update,
-	struct nova_inode_update *update_dir, int invalidate, u64 trans_id)
+	struct nova_inode_update *update_dir, int invalidate, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	u64 journal_tail;
@@ -325,7 +325,7 @@ static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 
 	if (invalidate) {
 		pi->valid = 0;
-		pi->delete_trans_id = trans_id;
+		pi->delete_epoch_id = epoch_id;
 	}
 	nova_update_inode(sb, inode, pi, update, 0);
 
@@ -357,7 +357,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	struct nova_inode_update update_dir;
 	struct nova_inode_update update;
 	u64 old_linkc = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	int err = -ENOMEM;
 	timing_t link_time;
 
@@ -374,7 +374,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	}
 
 	ihold(inode);
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 
 	nova_dbgv("%s: name %s, dest %s\n", __func__,
 			dentry->d_name.name, dest_dentry->d_name.name);
@@ -383,7 +383,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 
 	update_dir.tail = 0;
 	update_dir.alter_tail = 0;
-	err = nova_add_dentry(dentry, inode->i_ino, 0, &update_dir, trans_id);
+	err = nova_add_dentry(dentry, inode->i_ino, 0, &update_dir, epoch_id);
 	if (err) {
 		iput(inode);
 		goto out;
@@ -395,7 +395,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 	update.tail = 0;
 	update.alter_tail = 0;
 	err = nova_append_link_change_entry(sb, pi, inode, &update,
-						&old_linkc, trans_id);
+						&old_linkc, epoch_id);
 	if (err) {
 		iput(inode);
 		goto out;
@@ -403,7 +403,7 @@ static int nova_link(struct dentry *dest_dentry, struct inode *dir,
 
 	d_instantiate(dentry, inode);
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir, inode, dir,
-					&update, &update_dir, 0, trans_id);
+					&update, &update_dir, 0, epoch_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
 
@@ -422,7 +422,7 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	struct nova_inode_update update_dir;
 	struct nova_inode_update update;
 	u64 old_linkc = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	int invalidate = 0;
 	timing_t unlink_time;
 
@@ -432,14 +432,14 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	if (!pidir)
 		goto out;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	nova_dbgv("%s: %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %lu, dir %lu\n", __func__,
 				inode->i_ino, dir->i_ino);
 
 	update_dir.tail = 0;
 	update_dir.alter_tail = 0;
-	retval = nova_remove_dentry(dentry, 0, &update_dir, trans_id);
+	retval = nova_remove_dentry(dentry, 0, &update_dir, epoch_id);
 	if (retval)
 		goto out;
 
@@ -455,12 +455,12 @@ static int nova_unlink(struct inode *dir, struct dentry *dentry)
 	update.tail = 0;
 	update.alter_tail = 0;
 	retval = nova_append_link_change_entry(sb, pi, inode, &update,
-						&old_linkc, trans_id);
+						&old_linkc, epoch_id);
 	if (retval)
 		goto out;
 
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir, inode, dir,
-				&update, &update_dir, invalidate, trans_id);
+				&update, &update_dir, invalidate, epoch_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
 	nova_invalidate_dentries(sb, &update_dir);
@@ -483,7 +483,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct nova_inode_update update;
 	u64 pi_addr = 0;
 	u64 ino;
-	u64 trans_id;
+	u64 epoch_id;
 	int err = -EMLINK;
 	timing_t mkdir_time;
 
@@ -495,14 +495,14 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (ino == 0)
 		goto out_err;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	nova_dbgv("%s: name %s\n", __func__, dentry->d_name.name);
 	nova_dbgv("%s: inode %llu, dir %lu, link %d\n", __func__,
 				ino, dir->i_ino, dir->i_nlink);
 
 	update.tail = 0;
 	update.alter_tail = 0;
-	err = nova_add_dentry(dentry, ino, 1, &update, trans_id);
+	err = nova_add_dentry(dentry, ino, 1, &update, epoch_id);
 	if (err) {
 		nova_dbg("failed to add dir entry\n");
 		goto out_err;
@@ -510,7 +510,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	inode = nova_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino,
 					S_IFDIR | mode, sb->s_blocksize,
-					0, &dentry->d_name, trans_id);
+					0, &dentry->d_name, epoch_id);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out_err;
@@ -518,7 +518,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	pi = nova_get_inode(sb, inode);
 	nova_append_dir_init_entries(sb, pi, inode->i_ino, dir->i_ino,
-					trans_id);
+					epoch_id);
 
 	/* Build the dir tree */
 	si = NOVA_I(inode);
@@ -586,7 +586,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	int err = -ENOTEMPTY;
-	u64 trans_id;
+	u64 epoch_id;
 	timing_t rmdir_time;
 
 	NOVA_START_TIMING(rmdir_t, rmdir_time);
@@ -611,11 +611,11 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 		nova_dbg("empty directory %lu has nlink!=2 (%d), dir %lu",
 				inode->i_ino, inode->i_nlink, dir->i_ino);
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 
 	update_dir.tail = 0;
 	update_dir.alter_tail = 0;
-	err = nova_remove_dentry(dentry, -1, &update_dir, trans_id);
+	err = nova_remove_dentry(dentry, -1, &update_dir, epoch_id);
 	if (err)
 		goto end_rmdir;
 
@@ -631,12 +631,12 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	update.tail = 0;
 	update.alter_tail = 0;
 	err = nova_append_link_change_entry(sb, pi, inode, &update,
-						&old_linkc, trans_id);
+						&old_linkc, epoch_id);
 	if (err)
 		goto end_rmdir;
 
 	nova_lite_transaction_for_time_and_link(sb, pi, pidir, inode, dir,
-					&update, &update_dir, 1, trans_id);
+					&update, &update_dir, 1, epoch_id);
 
 	nova_invalidate_link_change_entry(sb, old_linkc);
 	nova_invalidate_dentries(sb, &update_dir);
@@ -674,7 +674,7 @@ static int nova_rename(struct inode *old_dir,
 	int cpu;
 	int change_parent = 0;
 	u64 journal_tail;
-	u64 trans_id;
+	u64 epoch_id;
 	timing_t rename_time;
 
 	nova_dbgv("%s: rename %s to %s,\n", __func__,
@@ -718,7 +718,7 @@ static int nova_rename(struct inode *old_dir,
 		}
 	}
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	new_pidir = nova_get_inode(sb, new_dir);
 	old_pidir = nova_get_inode(sb, old_dir);
 
@@ -727,7 +727,7 @@ static int nova_rename(struct inode *old_dir,
 	update_old.tail = 0;
 	update_old.alter_tail = 0;
 	err = nova_append_link_change_entry(sb, old_pi, old_inode,
-					&update_old, &old_linkc1, trans_id);
+					&update_old, &old_linkc1, epoch_id);
 	if (err)
 		goto out;
 
@@ -750,14 +750,14 @@ static int nova_rename(struct inode *old_dir,
 	if (new_inode) {
 		/* First remove the old entry in the new directory */
 		err = nova_remove_dentry(new_dentry, 0, &update_dir_new,
-					trans_id);
+					epoch_id);
 		if (err)
 			goto out;
 	}
 
 	/* link into the new directory. */
 	err = nova_add_dentry(new_dentry, old_inode->i_ino,
-				inc_link, &update_dir_new, trans_id);
+				inc_link, &update_dir_new, epoch_id);
 	if (err)
 		goto out;
 
@@ -772,7 +772,7 @@ static int nova_rename(struct inode *old_dir,
 	}
 
 	err = nova_remove_dentry(old_dentry, dec_link, &update_dir_old,
-					trans_id);
+					epoch_id);
 	if (err)
 		goto out;
 
@@ -794,7 +794,7 @@ static int nova_rename(struct inode *old_dir,
 		update_new.alter_tail = 0;
 		err = nova_append_link_change_entry(sb, new_pi, new_inode,
 						&update_new, &old_linkc2,
-						trans_id);
+						epoch_id);
 		if (err)
 			goto out;
 	}
@@ -827,7 +827,7 @@ static int nova_rename(struct inode *old_dir,
 	if (new_inode) {
 		if (invalidate_new_inode) {
 			new_pi->valid = 0;
-			new_pi->delete_trans_id = trans_id;
+			new_pi->delete_epoch_id = epoch_id;
 		}
 		nova_update_inode(sb, new_inode, new_pi, &update_new, 0);
 	}

@@ -105,8 +105,8 @@ struct nova_inode {
 	__le64	alter_log_head;	/* Alternate log head pointer */
 	__le64	alter_log_tail;	/* Alternate log tail pointer */
 
-	__le64	create_trans_id;	/* Transaction ID when create */
-	__le64	delete_trans_id;	/* Transaction ID when create */
+	__le64	create_epoch_id;	/* Transaction ID when create */
+	__le64	delete_epoch_id;	/* Transaction ID when create */
 
 	struct {
 		__le32 rdev;	/* major/minor # */
@@ -146,7 +146,7 @@ struct nova_super_block {
 	__le64		s_start_dynamic;
 
 	/* all the dynamic fields should go here */
-	atomic64_t	s_trans_id;		/* Transaction ID */
+	atomic64_t	s_epoch_id;		/* Transaction ID */
 
 	/* s_mtime and s_wtime should be together and their order should not be
 	 * changed. we use an 8 byte write to update both of them atomically */

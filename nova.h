@@ -183,7 +183,7 @@ struct nova_lite_journal_entry {
 #define	PAGE_TAIL(p)	(BLOCK_OFF(p) + LAST_ENTRY)
 
 struct nova_inode_page_tail {
-	__le64	trans_id;	/* For snapshot list page */
+	__le64	epoch_id;	/* For snapshot list page */
 	__le64	padding2;
 	__le64	alter_page;	/* Corresponding page in the other log */
 	__le64	next_page;
@@ -235,7 +235,7 @@ struct nova_file_write_entry {
 	/* For both ctime and mtime */
 	__le32	mtime;
 	__le64	size;
-	__le64	trans_id;
+	__le64	epoch_id;
 	__le32	csumpadding;
 	__le32	csum;
 } __attribute((__packed__));
@@ -255,7 +255,7 @@ struct nova_dentry {
 	__le32	csum;			/* entry checksum */
 	__le64	ino;			/* inode no pointed to by this entry */
 	__le64	size;
-	__le64	trans_id;
+	__le64	epoch_id;
 	char	name[NOVA_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
@@ -277,7 +277,7 @@ struct nova_setattr_logentry {
 	__le32	mtime;
 	__le32	ctime;
 	__le64	size;
-	__le64	trans_id;
+	__le64	epoch_id;
 	u8	invalid;
 	u8	paddings[3];
 	__le32	csum;
@@ -291,7 +291,7 @@ struct nova_link_change_entry {
 	__le32	ctime;
 	__le32	flags;
 	__le32	generation;
-	__le64	trans_id;
+	__le64	epoch_id;
 	__le32	csumpadding;
 	__le32	csum;
 } __attribute((__packed__));
@@ -300,7 +300,7 @@ struct nova_mmap_entry {
 	u8	entry_type;
 	u8	invalid;
 	u8	paddings[6];
-	__le64	trans_id;
+	__le64	epoch_id;
 	__le64	pgoff;
 	__le64	num_pages;
 	__le32	csumpadding;
@@ -313,7 +313,7 @@ struct nova_log_entry_info {
 	struct iattr *attr;
 	struct nova_inode_update *update;
 	void *data;
-	u64 trans_id;
+	u64 epoch_id;
 	u64 curr_p;	/* output */
 	u64 file_size;
 	u32 time;
@@ -401,7 +401,7 @@ static inline void nova_update_alter_tail(struct nova_inode *pi, u64 new_tail)
 /* symlink.c */
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, u64 log_block,
-	unsigned long name_blocknr, const char *symname, int len, u64 trans_id);
+	unsigned long name_blocknr, const char *symname, int len, u64 epoch_id);
 
 /* Inline functions start here */
 
@@ -731,12 +731,12 @@ struct nova_sb_info {
 	struct rb_root	snapshot_info_tree;
 	int num_snapshots;
 	int curr_snapshot;
-	u64 latest_snapshot_trans_id;
-	u64 create_snapshot_trans_id;
+	u64 latest_snapshot_epoch_id;
+	u64 create_snapshot_epoch_id;
 
 	int mount_snapshot;
 	int mount_snapshot_index;
-	u64 mount_snapshot_trans_id;
+	u64 mount_snapshot_epoch_id;
 
 	struct task_struct *snapshot_cleaner_thread;
 	wait_queue_head_t snapshot_cleaner_wait;
@@ -858,25 +858,25 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 
 #include "mprotect.h"
 
-static inline u64 nova_get_trans_id(struct super_block *sb)
+static inline u64 nova_get_epoch_id(struct super_block *sb)
 {
 	struct nova_super_block *super = nova_get_super(sb);
 	u64 ret;
 
 	nova_memunlock_super(sb, super);
-	ret = atomic64_inc_return(&super->s_trans_id);
-	nova_flush_buffer(&super->s_trans_id, CACHELINE_SIZE, 1);
+	ret = atomic64_inc_return(&super->s_epoch_id);
+	nova_flush_buffer(&super->s_epoch_id, CACHELINE_SIZE, 1);
 	nova_memlock_super(sb, super);
 
 	return ret;
 }
 
-static inline void nova_print_curr_trans_id(struct super_block *sb)
+static inline void nova_print_curr_epoch_id(struct super_block *sb)
 {
 	struct nova_super_block *super = nova_get_super(sb);
 	u64 ret;
 
-	ret = atomic64_read(&super->s_trans_id);
+	ret = atomic64_read(&super->s_epoch_id);
 	nova_dbg("Current transaction id: %llu\n", ret);
 
 	return;
@@ -939,21 +939,21 @@ struct snapshot_nvmm_info_table *nova_get_nvmm_info_table(struct super_block *sb
 }
 
 /* Old entry is freeable if it is appended after the latest snapshot */
-static inline int old_entry_freeable(struct super_block *sb, u64 trans_id)
+static inline int old_entry_freeable(struct super_block *sb, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (trans_id > sbi->latest_snapshot_trans_id)
+	if (epoch_id > sbi->latest_snapshot_epoch_id)
 		return 1;
 
 	return 0;
 }
 
-static inline int pass_mount_snapshot(struct super_block *sb, u64 trans_id)
+static inline int pass_mount_snapshot(struct super_block *sb, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (trans_id > sbi->mount_snapshot_trans_id)
+	if (epoch_id > sbi->mount_snapshot_epoch_id)
 		return 1;
 
 	return 0;
@@ -1620,7 +1620,7 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 	int allocated, u64 begin_tail, u64 end_tail);
 void nova_init_file_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size);
+	u64 epoch_id, u64 pgoff, int num_pages, u64 blocknr, u32 time, u64 size);
 int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 begin_tail);
 unsigned long nova_check_existing_entry(struct super_block *sb,
@@ -1648,11 +1648,11 @@ int nova_remove_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name, int namelen,
 	int replay, struct nova_dentry **create_dentry);
 int nova_append_dir_init_entries(struct super_block *sb,
-	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id);
+	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 epoch_id);
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	struct nova_inode_update *update, u64 trans_id);
+	struct nova_inode_update *update, u64 epoch_id);
 int nova_remove_dentry(struct dentry *dentry, int dec_link,
-	struct nova_inode_update *update, u64 trans_id);
+	struct nova_inode_update *update, u64 epoch_id);
 int nova_invalidate_dentries(struct super_block *sb,
 	struct nova_inode_update *update);
 void nova_print_dir_tree(struct super_block *sb,
@@ -1703,7 +1703,7 @@ int nova_delete_file_tree(struct super_block *sb,
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
-	size_t size, dev_t rdev, const struct qstr *qstr, u64 trans_id);
+	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id);
 
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
@@ -1740,7 +1740,7 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
 	unsigned long pgoff, unsigned int num_free,
-	bool delete_dead, u64 trans_id);
+	bool delete_dead, u64 epoch_id);
 int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih);
 int nova_update_alter_pages(struct super_block *sb, struct nova_inode *pi,
@@ -1757,12 +1757,12 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	int thorough_gc, int *extended);
 int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
-	u64 trans_id);
+	u64 epoch_id);
 int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change);
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
-	struct nova_inode_update *update, u64 *old_linkc, u64 trans_id);
+	struct nova_inode_update *update, u64 *old_linkc, u64 epoch_id);
 int nova_set_write_entry_updating(struct super_block *sb,
 	struct nova_file_write_entry *entry, int set);
 int nova_inplace_update_write_entry(struct super_block *sb,
@@ -1817,7 +1817,7 @@ int nova_mount_snapshot(struct super_block *sb);
 int nova_restore_snapshot_table(struct super_block *sb, int just_init);
 int nova_append_data_to_snapshot(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
-	u64 delete_trans_id);
+	u64 delete_epoch_id);
 int nova_append_inode_to_snapshot(struct super_block *sb,
 	struct nova_inode *pi);
 int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq);
@@ -1825,8 +1825,8 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino);
 int nova_create_snapshot(struct super_block *sb);
 int nova_delete_snapshot(struct super_block *sb, int index);
 int nova_snapshot_init(struct super_block *sb);
-u64 nova_get_latest_snapshot_trans_id(struct super_block *sb);
-u64 nova_get_create_snapshot_trans_id(struct super_block *sb);
+u64 nova_get_latest_snapshot_epoch_id(struct super_block *sb);
+u64 nova_get_create_snapshot_epoch_id(struct super_block *sb);
 
 /* super.c */
 extern struct super_block *nova_read_super(struct super_block *sb, void *data,

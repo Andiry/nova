@@ -145,7 +145,7 @@ void nova_delete_dir_tree(struct super_block *sb,
 
 static void nova_append_dentry(struct inode *dir, struct dentry *dentry,
 	struct nova_dentry *entry, u64 ino, unsigned short de_len,
-	int link_change, u64 trans_id)
+	int link_change, u64 epoch_id)
 {
 	struct super_block *sb = dir->i_sb;
 	unsigned short links_count;
@@ -153,7 +153,7 @@ static void nova_append_dentry(struct inode *dir, struct dentry *dentry,
 	nova_memunlock_range(sb, dentry, de_len);
 	memset(entry, 0, de_len);
 	entry->entry_type = DIR_LOG;
-	entry->trans_id = trans_id;
+	entry->epoch_id = epoch_id;
 	entry->ino = cpu_to_le64(ino);
 	entry->name_len = dentry->d_name.len;
 	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
@@ -191,7 +191,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	struct nova_inode *pidir, struct inode *dir,
 	u64 ino, struct dentry *dentry, unsigned short de_len,
 	struct nova_inode_update *update,
-	int link_change, u64 trans_id)
+	int link_change, u64 epoch_id)
 {
 	struct nova_inode_info *si = NOVA_I(dir);
 	struct nova_inode_info_header *sih = &si->header;
@@ -211,7 +211,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 
 	nova_append_dentry(dir, dentry, entry, ino, de_len,
-						link_change, trans_id);
+						link_change, epoch_id);
 	update->curr_entry = curr_p;
 	update->tail = update->curr_entry + de_len;
 
@@ -226,7 +226,7 @@ static int nova_append_dir_inode_entry(struct super_block *sb,
 	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
 
 	nova_append_dentry(dir, dentry, entry, ino, de_len,
-						link_change, trans_id);
+						link_change, epoch_id);
 	update->alter_entry = curr_p;
 
 	update->alter_tail = update->alter_entry + de_len;
@@ -239,7 +239,7 @@ out:
 
 static unsigned int nova_init_dentry(struct super_block *sb,
 	struct nova_dentry *de_entry, u64 self_ino, u64 parent_ino,
-	u64 trans_id)
+	u64 epoch_id)
 {
 	struct nova_dentry *start = de_entry;
 	unsigned int length;
@@ -248,7 +248,7 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	de_len = NOVA_DIR_LOG_REC_LEN(1);
 	memset(de_entry, 0, de_len);
 	de_entry->entry_type = DIR_LOG;
-	de_entry->trans_id = trans_id;
+	de_entry->epoch_id = epoch_id;
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(de_len);
@@ -264,7 +264,7 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	de_len = NOVA_DIR_LOG_REC_LEN(2);
 	memset(de_entry, 0, de_len);
 	de_entry->entry_type = DIR_LOG;
-	de_entry->trans_id = trans_id;
+	de_entry->epoch_id = epoch_id;
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(de_len);
@@ -281,7 +281,7 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 
 /* Append . and .. entries */
 int nova_append_dir_init_entries(struct super_block *sb,
-	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 trans_id)
+	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 epoch_id)
 {
 	struct nova_inode_info_header sih;
 	struct nova_inode *alter_pi;
@@ -307,7 +307,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
 
-	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, trans_id);
+	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, epoch_id);
 
 	nova_update_tail(pi, new_block + length);
 
@@ -326,7 +326,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 
 	de_entry = (struct nova_dentry *)nova_get_block(sb, new_block);
 
-	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, trans_id);
+	length = nova_init_dentry(sb, de_entry, self_ino, parent_ino, epoch_id);
 
 	nova_update_alter_tail(pi, new_block + length);
 	nova_update_alter_pages(sb, pi, pi->log_head,
@@ -355,7 +355,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
  * already been logged for consistency
  */
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
-	struct nova_inode_update *update, u64 trans_id)
+	struct nova_inode_update *update, u64 epoch_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -389,7 +389,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	loglen = NOVA_DIR_LOG_REC_LEN(namelen);
 	ret = nova_append_dir_inode_entry(sb, pidir, dir, ino,
 				dentry,	loglen, update,
-				inc_link, trans_id);
+				inc_link, epoch_id);
 
 	if (ret) {
 		nova_dbg("%s: append dir entry failure\n", __func__);
@@ -408,14 +408,14 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 static int nova_can_inplace_update_dentry(struct super_block *sb,
 	struct nova_dentry *dentry)
 {
-	u64 latest_snapshot_trans_id;
+	u64 latest_snapshot_epoch_id;
 
-	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
 
-	if (latest_snapshot_trans_id == 0)
-		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+	if (latest_snapshot_epoch_id == 0)
+		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
-	if (dentry && dentry->trans_id > latest_snapshot_trans_id)
+	if (dentry && dentry->epoch_id > latest_snapshot_epoch_id)
 		return 1;
 
 	return 0;
@@ -423,13 +423,13 @@ static int nova_can_inplace_update_dentry(struct super_block *sb,
 
 static int nova_inplace_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
-	u64 trans_id)
+	u64 epoch_id)
 {
 	struct nova_log_entry_info entry_info;
 
 	entry_info.type = DIR_LOG;
 	entry_info.link_change = link_change;
-	entry_info.trans_id = trans_id;
+	entry_info.epoch_id = epoch_id;
 
 	return nova_inplace_update_log_entry(sb, dir, dentry,
 					&entry_info);
@@ -439,7 +439,7 @@ static int nova_inplace_update_dentry(struct super_block *sb,
  * already been logged for consistency
  */
 int nova_remove_dentry(struct dentry *dentry, int dec_link,
-	struct nova_inode_update *update, u64 trans_id)
+	struct nova_inode_update *update, u64 epoch_id)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -476,7 +476,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 
 	if (nova_can_inplace_update_dentry(sb, old_dentry)) {
 		nova_inplace_update_dentry(sb, dir, old_dentry,
-						dec_link, trans_id);
+						dec_link, epoch_id);
 		curr_entry = nova_get_addr_off(sbi, old_dentry);
 
 		sih->last_dentry = curr_entry;
@@ -492,7 +492,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	loglen = NOVA_DIR_LOG_REC_LEN(entry->len);
 	ret = nova_append_dir_inode_entry(sb, pidir, dir, 0,
 				dentry, loglen, update,
-				dec_link, trans_id);
+				dec_link, epoch_id);
 
 	if (ret) {
 		nova_dbg("%s: append dir entry failure\n", __func__);
@@ -527,7 +527,7 @@ int nova_invalidate_dentries(struct super_block *sb,
 
 	nova_reassign_logentry(sb, create_dentry, DIR_LOG);
 
-	if (!old_entry_freeable(sb, create_dentry->trans_id))
+	if (!old_entry_freeable(sb, create_dentry->epoch_id))
 		return 0;
 
 	create_curr = nova_get_addr_off(sbi, create_dentry);

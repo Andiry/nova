@@ -41,7 +41,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case FS_IOC_SETFLAGS: {
 		unsigned int oldflags;
 		u64 old_linkc = 0;
-		u64 trans_id;
+		u64 epoch_id;
 
 		ret = mnt_want_write_file(filp);
 		if (ret)
@@ -72,7 +72,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (!S_ISDIR(inode->i_mode))
 			flags &= ~FS_DIRSYNC_FL;
 
-		trans_id = nova_get_trans_id(sb);
+		epoch_id = nova_get_epoch_id(sb);
 		flags = flags & FS_FL_USER_MODIFIABLE;
 		flags |= oldflags & ~FS_FL_USER_MODIFIABLE;
 		inode->i_ctime = CURRENT_TIME_SEC;
@@ -81,7 +81,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		update.tail = 0;
 		update.alter_tail = 0;
 		ret = nova_append_link_change_entry(sb, pi, inode,
-					&update, &old_linkc, trans_id);
+					&update, &old_linkc, epoch_id);
 		if (!ret) {
 			nova_memunlock_inode(sb, pi);
 			nova_update_inode(sb, inode, pi, &update, 1);
@@ -97,7 +97,7 @@ flags_out:
 		return put_user(inode->i_generation, (int __user *)arg);
 	case FS_IOC_SETVERSION: {
 		u64 old_linkc = 0;
-		u64 trans_id;
+		u64 epoch_id;
 		__u32 generation;
 
 		if (!inode_owner_or_capable(inode))
@@ -110,7 +110,7 @@ flags_out:
 			goto setversion_out;
 		}
 
-		trans_id = nova_get_trans_id(sb);
+		epoch_id = nova_get_epoch_id(sb);
 		inode_lock(inode);
 		inode->i_ctime = CURRENT_TIME_SEC;
 		inode->i_generation = generation;
@@ -118,7 +118,7 @@ flags_out:
 		update.tail = 0;
 		update.alter_tail = 0;
 		ret = nova_append_link_change_entry(sb, pi, inode,
-					&update, &old_linkc, trans_id);
+					&update, &old_linkc, epoch_id);
 		if (!ret) {
 			nova_memunlock_inode(sb, pi);
 			nova_update_inode(sb, inode, pi, &update, 1);

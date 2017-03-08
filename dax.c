@@ -422,14 +422,14 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 
 void nova_init_file_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	u64 trans_id, u64 pgoff, int num_pages, u64 blocknr, u32 time,
+	u64 epoch_id, u64 pgoff, int num_pages, u64 blocknr, u32 time,
 	u64 file_size)
 {
 	memset(entry, 0, sizeof(struct nova_file_write_entry));
 	entry->entry_type = FILE_WRITE;
 	entry->reassigned = 0;
 	entry->updating = 0;
-	entry->trans_id = trans_id;
+	entry->epoch_id = epoch_id;
 	entry->pgoff = cpu_to_le64(pgoff);
 	entry->num_pages = cpu_to_le32(num_pages);
 	entry->invalid_pages = 0;
@@ -466,7 +466,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
 	u64 begin_tail = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	u32 time;
 
 	if (len == 0)
@@ -514,7 +514,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	nova_dbgv("%s: inode %lu, offset %lld, count %lu\n",
 			__func__, inode->i_ino,	pos, count);
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	update.tail = sih->log_tail;
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
@@ -617,7 +617,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		else
 			file_size = cpu_to_le64(inode->i_size);
 
-		nova_init_file_write_entry(sb, sih, &entry_data, trans_id,
+		nova_init_file_write_entry(sb, sih, &entry_data, epoch_id,
 					start_blk, allocated, blocknr, time,
 					file_size);
 
@@ -699,14 +699,14 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
-	u64 latest_snapshot_trans_id;
+	u64 latest_snapshot_epoch_id;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
 
-	latest_snapshot_trans_id = nova_get_create_snapshot_trans_id(sb);
+	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
 
-	if (latest_snapshot_trans_id == 0)
-		latest_snapshot_trans_id = nova_get_latest_snapshot_trans_id(sb);
+	if (latest_snapshot_epoch_id == 0)
+		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
 	*ret_entry = NULL;
 	*inplace = 0;
@@ -724,7 +724,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 
 		*ret_entry = entry;
 
-		if (entry->trans_id > latest_snapshot_trans_id)
+		if (entry->epoch_id > latest_snapshot_epoch_id)
 			*inplace = 1;
 
 	} else if (check_next) {
@@ -789,7 +789,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	timing_t inplace_write_time, memcpy_time;
 	unsigned long step = 0;
 	u64 begin_tail = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	u64 file_size;
 	u32 time;
 
@@ -828,10 +828,10 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 
-	nova_dbgv("%s: trans_id %llu, inode %lu, offset %lld, count %lu\n",
-			__func__, trans_id, inode->i_ino, pos, count);
+	nova_dbgv("%s: epoch_id %llu, inode %lu, offset %lld, count %lu\n",
+			__func__, epoch_id, inode->i_ino, pos, count);
 	update.tail = sih->log_tail;
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
@@ -951,7 +951,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		/* Handle hole fill write */
 		if (hole_fill) {
 			nova_init_file_write_entry(sb, sih, &entry_data,
-						trans_id, start_blk, allocated,
+						epoch_id, start_blk, allocated,
 						blocknr, time, file_size);
 
 			ret = nova_append_file_write_entry(sb, pi, inode,
@@ -966,7 +966,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			struct nova_log_entry_info entry_info;
 
 			entry_info.type = FILE_WRITE;
-			entry_info.trans_id = trans_id;
+			entry_info.epoch_id = epoch_id;
 			entry_info.time = time;
 			entry_info.file_size = file_size;
 			entry_info.inplace = 1;
@@ -1070,7 +1070,7 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned int data_bits;
 	unsigned long nvmm = 0;
 	unsigned long blocknr = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	int num_blocks = 0;
 	int inplace = 0;
 	int allocated = 0;
@@ -1120,7 +1120,7 @@ again:
 	pi = nova_get_inode(sb, inode);
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	update.tail = sih->log_tail;
 	update.alter_tail = sih->alter_log_tail;
 
@@ -1137,7 +1137,7 @@ again:
 	num_blocks = allocated;
 	/* Do not extend file size */
 	nova_init_file_write_entry(sb, sih, &entry_data,
-					trans_id, iblock, num_blocks,
+					epoch_id, iblock, num_blocks,
 					blocknr, time, inode->i_size);
 
 	ret = nova_append_file_write_entry(sb, pi, inode,
@@ -1304,7 +1304,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	loff_t offset;
 	int status = 0;
 	u64 temp_tail = 0, begin_tail = 0;
-	u64 trans_id;
+	u64 epoch_id;
 	u32 time;
 	timing_t memcpy_time, copy_to_nvmm_time;
 
@@ -1321,7 +1321,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		__func__, inode->i_ino, pos >> sb->s_blocksize_bits,
 		(unsigned long)offset, count);
 
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	temp_tail = *end;
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(sih) - 1);
@@ -1354,7 +1354,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		memset(&entry_data, 0, sizeof(struct nova_file_write_entry));
 		entry_data.entry_type = FILE_WRITE;
 		entry_data.reassigned = 0;
-		entry_data.trans_id = trans_id;
+		entry_data.epoch_id = epoch_id;
 		entry_data.pgoff = cpu_to_le64(start_blk);
 		entry_data.num_pages = cpu_to_le32(allocated);
 		entry_data.invalid_pages = 0;
@@ -1707,7 +1707,7 @@ static int nova_append_write_mmap_to_log(struct super_block *sb,
 	struct nova_mmap_entry data;
 	struct nova_inode_update update;
 	unsigned long num_pages;
-	u64 trans_id;
+	u64 epoch_id;
 	int ret;
 
 	/* Only for csum and parity update */
@@ -1715,12 +1715,12 @@ static int nova_append_write_mmap_to_log(struct super_block *sb,
 		return 0;
 
 	pi = nova_get_inode(sb, inode);
-	trans_id = nova_get_trans_id(sb);
+	epoch_id = nova_get_epoch_id(sb);
 	update.tail = update.alter_tail = 0;
 
 	memset(&data, 0, sizeof(struct nova_mmap_entry));
 	data.entry_type = MMAP_WRITE;
-	data.trans_id = trans_id;
+	data.epoch_id = epoch_id;
 	data.pgoff = cpu_to_le64(vma->vm_pgoff);
 	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
 	data.num_pages = cpu_to_le64(num_pages);
