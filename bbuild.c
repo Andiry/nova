@@ -547,11 +547,12 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	 */
 	super = nova_get_super(sb);
 
-	nova_memunlock_range(sb, &super->s_wtime, NOVA_FAST_MOUNT_FIELD_SIZE);
+	nova_memunlock_super(sb, super);
 
 	super->s_wtime = cpu_to_le32(get_seconds());
+	super->s_epoch_id = cpu_to_le64(sbi->s_epoch_id);
 
-	nova_memlock_range(sb, &super->s_wtime, NOVA_FAST_MOUNT_FIELD_SIZE);
+	nova_memlock_super(sb, super);
 	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
 
@@ -1678,5 +1679,7 @@ out:
 
 	if (!value)
 		free_bm(sb);
+
+	sbi->s_epoch_id = le64_to_cpu(super->s_epoch_id);
 	return ret;
 }

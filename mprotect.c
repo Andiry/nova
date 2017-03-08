@@ -148,7 +148,6 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	unsigned long avail_blocks;
 	unsigned long copy_blocks;
 	u64 from_blockoff, to_blockoff;
-	u64 latest_snapshot_epoch_id;
 	size_t copied;
 	int allocated = 0;
 	void *from_kmem;
@@ -179,11 +178,6 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 			vma->vm_pgoff, address);
 
 	time = CURRENT_TIME_SEC.tv_sec;
-
-	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
-
-	if (latest_snapshot_epoch_id == 0)
-		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
 	epoch_id = nova_get_epoch_id(sb);
 	update.tail = pi->log_tail;
@@ -218,7 +212,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 		if (avail_blocks > end_blk - start_blk)
 			avail_blocks = end_blk - start_blk;
 
-		if (entry->epoch_id > latest_snapshot_epoch_id) {
+		if (entry->epoch_id == epoch_id) {
 			start_blk += avail_blocks;
 			continue;
 		}

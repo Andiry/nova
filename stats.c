@@ -67,8 +67,8 @@ const char *Timingstring[TIMING_NUM] =
 	"free_log_blocks",
 
 	/* Transaction */
-	"transaction_new_inode",
-	"transaction_link_change",
+	"epochaction_new_inode",
+	"epochaction_link_change",
 	"update_tail",
 
 	/* Logging */
@@ -301,14 +301,14 @@ void nova_print_inode(struct nova_inode *pi)
 	nova_dbg("head 0x%llx, tail 0x%llx, alter head 0x%llx, tail 0x%llx\n",
 		pi->log_head, pi->log_tail, pi->alter_log_head,
 		pi->alter_log_tail);
-	nova_dbg("create trans id %llu, delete trans id %llu\n",
+	nova_dbg("create epoch id %llu, delete epoch id %llu\n",
 		pi->create_epoch_id, pi->delete_epoch_id);
 }
 
 static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {
-	nova_dbg("file write entry @ 0x%llx: trans %llu, paoff %llu, pages %u, "
+	nova_dbg("file write entry @ 0x%llx: epoch %llu, paoff %llu, pages %u, "
 			"blocknr %llu, reassigned %u, invalid count %u, "
 			"size %llu\n",
 			curr, entry->epoch_id, entry->pgoff, entry->num_pages,
@@ -319,7 +319,7 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 static inline void nova_print_set_attr_entry(struct super_block *sb,
 	u64 curr, struct nova_setattr_logentry *entry)
 {
-	nova_dbg("set attr entry @ 0x%llx: trans %llu, invalid %u, mode %u, "
+	nova_dbg("set attr entry @ 0x%llx: epoch %llu, invalid %u, mode %u, "
 			"size %llu, atime %u, mtime %u, ctime %u\n",
 			curr, entry->epoch_id, entry->invalid, entry->mode,
 			entry->size, entry->atime, entry->mtime, entry->ctime);
@@ -328,7 +328,7 @@ static inline void nova_print_set_attr_entry(struct super_block *sb,
 static inline void nova_print_link_change_entry(struct super_block *sb,
 	u64 curr, struct nova_link_change_entry *entry)
 {
-	nova_dbg("link change entry @ 0x%llx: trans %llu, invalid %u, "
+	nova_dbg("link change entry @ 0x%llx: epoch %llu, invalid %u, "
 			"links %u, flags %u\n",
 			curr, entry->epoch_id, entry->invalid, entry->links,
 			entry->flags);
@@ -337,7 +337,7 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 static inline void nova_print_mmap_entry(struct super_block *sb,
 	u64 curr, struct nova_mmap_entry *entry)
 {
-	nova_dbg("mmap write entry @ 0x%llx: trans %llu, invalid %u, "
+	nova_dbg("mmap write entry @ 0x%llx: epoch %llu, invalid %u, "
 			"paoff %llu, pages %llu\n",
 			curr, entry->epoch_id, entry->invalid,
 			entry->pgoff, entry->num_pages);
@@ -346,7 +346,7 @@ static inline void nova_print_mmap_entry(struct super_block *sb,
 static inline size_t nova_print_dentry(struct super_block *sb,
 	u64 curr, struct nova_dentry *entry)
 {
-	nova_dbg("dir logentry @ 0x%llx: trans %llu, reassigned %u, "
+	nova_dbg("dir logentry @ 0x%llx: epoch %llu, reassigned %u, "
 			"invalid %u, inode %llu, links %u, namelen %u, "
 			"rec len %u, name %s\n",
 			curr, entry->epoch_id,

@@ -353,7 +353,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	super->s_size = cpu_to_le64(size);
 	super->s_blocksize = cpu_to_le32(blocksize);
 	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
-	atomic64_set(&super->s_epoch_id, 0);
+	super->s_epoch_id = 0;
 
 	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	pi->nova_ino = NOVA_BLOCKNODE_INO;

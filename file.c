@@ -379,7 +379,8 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
-						start_blk, &entry, 1, &inplace);
+						start_blk, &entry, 1, epoch_id,
+						&inplace);
 
 		if (entry && inplace) {
 			if (entry->size < new_size) {

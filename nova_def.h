@@ -146,7 +146,7 @@ struct nova_super_block {
 	__le64		s_start_dynamic;
 
 	/* all the dynamic fields should go here */
-	atomic64_t	s_epoch_id;		/* Transaction ID */
+	__le64		s_epoch_id;		/* Epoch ID */
 
 	/* s_mtime and s_wtime should be together and their order should not be
 	 * changed. we use an 8 byte write to update both of them atomically */

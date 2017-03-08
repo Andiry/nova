@@ -484,7 +484,7 @@ static void setattr_copy_to_nova_inode(struct super_block *sb,
 #endif
 
 static int nova_can_inplace_update_setattr(struct super_block *sb,
-	struct nova_inode_info_header *sih, u64 latest_snapshot_epoch_id)
+	struct nova_inode_info_header *sih, u64 epoch_id)
 {
 	u64 last_log = 0;
 	struct nova_setattr_logentry *entry = NULL;
@@ -496,7 +496,7 @@ static int nova_can_inplace_update_setattr(struct super_block *sb,
 		/* Do not overwrite setsize entry */
 		if (entry->attr & ATTR_SIZE)
 			return 0;
-		if (entry->epoch_id > latest_snapshot_epoch_id)
+		if (entry->epoch_id == epoch_id)
 			return 1;
 	}
 
@@ -533,7 +533,6 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode_update update;
 	u64 last_setattr = 0;
-	u64 latest_snapshot_epoch_id = 0;
 	int ret;
 
 	if (ia_valid & ATTR_MODE)
@@ -546,14 +545,8 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	 * is in progress, we will use the create_snapshot_epoch_id
 	 * as the latest snapshot id.
 	*/
-	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
-
-	if (latest_snapshot_epoch_id == 0)
-		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
-
 	if (!(ia_valid & ATTR_SIZE) &&
-			nova_can_inplace_update_setattr(sb, sih,
-				latest_snapshot_epoch_id)) {
+			nova_can_inplace_update_setattr(sb, sih, epoch_id)) {
 		nova_inplace_update_setattr_entry(sb, inode, sih,
 						attr, epoch_id);
 	} else {
@@ -608,7 +601,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 }
 
 static int nova_can_inplace_update_lcentry(struct super_block *sb,
-	struct nova_inode_info_header *sih, u64 latest_snapshot_epoch_id)
+	struct nova_inode_info_header *sih, u64 epoch_id)
 {
 	u64 last_log = 0;
 	struct nova_link_change_entry *entry = NULL;
@@ -617,7 +610,7 @@ static int nova_can_inplace_update_lcentry(struct super_block *sb,
 	if (last_log) {
 		entry = (struct nova_link_change_entry *)nova_get_block(sb,
 								last_log);
-		if (entry->epoch_id > latest_snapshot_epoch_id)
+		if (entry->epoch_id == epoch_id)
 			return 1;
 	}
 
@@ -651,19 +644,12 @@ int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_log_entry_info entry_info;
-	u64 latest_snapshot_epoch_id = 0;
 	int ret = 0;
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
 
-	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
-
-	if (latest_snapshot_epoch_id == 0)
-		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
-
-	if (nova_can_inplace_update_lcentry(sb, sih,
-				latest_snapshot_epoch_id)) {
+	if (nova_can_inplace_update_lcentry(sb, sih, epoch_id)) {
 		nova_inplace_update_lcentry(sb, inode, sih, epoch_id);
 		update->tail = sih->log_tail;
 		update->alter_tail = sih->alter_log_tail;

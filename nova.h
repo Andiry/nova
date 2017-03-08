@@ -731,8 +731,7 @@ struct nova_sb_info {
 	struct rb_root	snapshot_info_tree;
 	int num_snapshots;
 	int curr_snapshot;
-	u64 latest_snapshot_epoch_id;
-	u64 create_snapshot_epoch_id;
+	volatile u64 s_epoch_id;
 
 	int mount_snapshot;
 	int mount_snapshot_index;
@@ -860,24 +859,18 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 
 static inline u64 nova_get_epoch_id(struct super_block *sb)
 {
-	struct nova_super_block *super = nova_get_super(sb);
-	u64 ret;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	nova_memunlock_super(sb, super);
-	ret = atomic64_inc_return(&super->s_epoch_id);
-	nova_flush_buffer(&super->s_epoch_id, CACHELINE_SIZE, 1);
-	nova_memlock_super(sb, super);
-
-	return ret;
+	return sbi->s_epoch_id;
 }
 
 static inline void nova_print_curr_epoch_id(struct super_block *sb)
 {
-	struct nova_super_block *super = nova_get_super(sb);
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	u64 ret;
 
-	ret = atomic64_read(&super->s_epoch_id);
-	nova_dbg("Current transaction id: %llu\n", ret);
+	ret = sbi->s_epoch_id;
+	nova_dbg("Current epoch id: %llu\n", ret);
 
 	return;
 }
@@ -943,7 +936,7 @@ static inline int old_entry_freeable(struct super_block *sb, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (epoch_id > sbi->latest_snapshot_epoch_id)
+	if (epoch_id == sbi->s_epoch_id)
 		return 1;
 
 	return 0;
@@ -953,7 +946,7 @@ static inline int pass_mount_snapshot(struct super_block *sb, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (epoch_id > sbi->mount_snapshot_epoch_id)
+	if (epoch_id >= sbi->mount_snapshot_epoch_id)
 		return 1;
 
 	return 0;
@@ -1625,7 +1618,8 @@ int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 begin_tail);
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
-	struct nova_file_write_entry **ret_entry, int check_next, int *inplace);
+	struct nova_file_write_entry **ret_entry, int check_next, u64 epoch_id,
+	int *inplace);
 ssize_t nova_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
 ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
@@ -1825,8 +1819,6 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino);
 int nova_create_snapshot(struct super_block *sb);
 int nova_delete_snapshot(struct super_block *sb, int index);
 int nova_snapshot_init(struct super_block *sb);
-u64 nova_get_latest_snapshot_epoch_id(struct super_block *sb);
-u64 nova_get_create_snapshot_epoch_id(struct super_block *sb);
 
 /* super.c */
 extern struct super_block *nova_read_super(struct super_block *sb, void *data,

@@ -694,19 +694,14 @@ out:
  */
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
-	struct nova_file_write_entry **ret_entry, int check_next, int *inplace)
+	struct nova_file_write_entry **ret_entry, int check_next, u64 epoch_id,
+	int *inplace)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry;
-	u64 latest_snapshot_epoch_id;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
-
-	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
-
-	if (latest_snapshot_epoch_id == 0)
-		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
 
 	*ret_entry = NULL;
 	*inplace = 0;
@@ -724,7 +719,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 
 		*ret_entry = entry;
 
-		if (entry->epoch_id > latest_snapshot_epoch_id)
+		if (entry->epoch_id == epoch_id)
 			*inplace = 1;
 
 	} else if (check_next) {
@@ -840,7 +835,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		start_blk = pos >> sb->s_blocksize_bits;
 
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
-						start_blk, &entry, 1, &inplace);
+						start_blk, &entry, 1, epoch_id,
+						&inplace);
 
 		if (entry && inplace) {
 			/* We can do inplace write. Find contiguous blocks */
@@ -1088,12 +1084,15 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	nova_dbgv("%s: pgoff %lu, num %lu, create %d\n",
 				__func__, iblock, max_blocks, create);
 
+	epoch_id = nova_get_epoch_id(sb);
+
 	if (taking_lock)
 		check_next = 0;
 
 again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
-					iblock, &entry, check_next, &inplace);
+					iblock, &entry, check_next, epoch_id,
+					&inplace);
 
 	if (entry) {
 		if (create == 0 || inplace) {
@@ -1120,7 +1119,6 @@ again:
 	pi = nova_get_inode(sb, inode);
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
 	time = CURRENT_TIME_SEC.tv_sec;
-	epoch_id = nova_get_epoch_id(sb);
 	update.tail = sih->log_tail;
 	update.alter_tail = sih->alter_log_tail;
 

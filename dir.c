@@ -406,16 +406,9 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 }
 
 static int nova_can_inplace_update_dentry(struct super_block *sb,
-	struct nova_dentry *dentry)
+	struct nova_dentry *dentry, u64 epoch_id)
 {
-	u64 latest_snapshot_epoch_id;
-
-	latest_snapshot_epoch_id = nova_get_create_snapshot_epoch_id(sb);
-
-	if (latest_snapshot_epoch_id == 0)
-		latest_snapshot_epoch_id = nova_get_latest_snapshot_epoch_id(sb);
-
-	if (dentry && dentry->epoch_id > latest_snapshot_epoch_id)
+	if (dentry && dentry->epoch_id == epoch_id)
 		return 1;
 
 	return 0;
@@ -474,7 +467,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
-	if (nova_can_inplace_update_dentry(sb, old_dentry)) {
+	if (nova_can_inplace_update_dentry(sb, old_dentry, epoch_id)) {
 		nova_inplace_update_dentry(sb, dir, old_dentry,
 						dec_link, epoch_id);
 		curr_entry = nova_get_addr_off(sbi, old_dentry);
