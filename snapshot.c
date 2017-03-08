@@ -663,6 +663,7 @@ int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 	struct nova_setattr_logentry *attr_entry;
 	struct nova_link_change_entry *linkc_entry;
 	struct nova_file_write_entry *fw_entry;
+	struct nova_mmap_entry *mmap_entry;
 	int ret = 0;
 
 	switch (type) {
@@ -684,6 +685,11 @@ int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 		case FILE_WRITE:
 			fw_entry = (struct nova_file_write_entry *)addr;
 			if (pass_mount_snapshot(sb, fw_entry->epoch_id))
+				ret = 1;
+			break;
+		case MMAP_WRITE:
+			mmap_entry = (struct nova_mmap_entry *)addr;
+			if (pass_mount_snapshot(sb, mmap_entry->epoch_id))
 				ret = 1;
 			break;
 		default:
