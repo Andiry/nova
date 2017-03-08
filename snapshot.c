@@ -537,9 +537,6 @@ static int nova_old_entry_deleteable(struct super_block *sb,
 		return -EINVAL;
 	}
 
-	if (delete_epoch_id <= info->epoch_id)
-		return 1;
-
 	*ret_info = info;
 	return 0;
 }
