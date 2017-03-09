@@ -76,6 +76,7 @@ enum timing_category {
 	append_mmap_entry_t,
 	append_link_change_t,
 	append_setattr_t,
+	append_snapshot_info_t,
 
 	/* GC */
 	fast_gc_t,

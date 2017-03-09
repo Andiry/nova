@@ -44,6 +44,9 @@ static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 		case MMAP_WRITE:
 			((struct nova_mmap_entry *)entry)->invalid = 1;
 			break;
+		case SNAPSHOT_INFO:
+			((struct nova_snapshot_info_entry *)entry)->deleted = 1;
+			break;
 		default:
 			break;
 	}
@@ -310,6 +313,10 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 		case MMAP_WRITE:
 			memcpy_to_pmem_nocache(entry, entry_info->data,
 					sizeof(struct nova_mmap_entry));
+			break;
+		case SNAPSHOT_INFO:
+			memcpy_to_pmem_nocache(entry, entry_info->data,
+					sizeof(struct nova_snapshot_info_entry));
 			break;
 		default:
 			break;
@@ -816,6 +823,33 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 
 	item->mmap_entry = entry_info.curr_p;
 	NOVA_END_TIMING(append_mmap_entry_t, append_time);
+	return ret;
+}
+
+int nova_append_snapshot_info_entry(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info *si,
+	struct nova_snapshot_info_entry *data, struct nova_inode_update *update)
+{
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_log_entry_info entry_info;
+	timing_t append_time;
+	int ret;
+
+	NOVA_START_TIMING(append_snapshot_info_t, append_time);
+
+	nova_update_entry_csum(data);
+
+	entry_info.type = SNAPSHOT_INFO;
+	entry_info.update = update;
+	entry_info.data = data;
+	entry_info.epoch_id = data->epoch_id;
+	entry_info.inplace = 0;
+
+	ret = nova_append_log_entry(sb, pi, NULL, sih, &entry_info);
+	if (ret)
+		nova_err(sb, "%s failed\n", __func__);
+
+	NOVA_END_TIMING(append_snapshot_info_t, append_time);
 	return ret;
 }
 

@@ -23,6 +23,16 @@ struct snapshot_entry {
 	__le64 timestamp;
 };
 
+struct nova_snapshot_info_entry {
+	u8	type;
+	u8	deleted;
+	u8	paddings[6];
+	__le64	epoch_id;
+	__le64	timestamp;
+	__le32	csumpadding;
+	__le32	csum;
+} __attribute((__packed__));
+
 #define SNAPSHOT_TABLE_SIZE	256
 
 struct snapshot_table {

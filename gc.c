@@ -26,6 +26,7 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 	struct nova_setattr_logentry *setattr_entry;
 	struct nova_link_change_entry *linkc_entry;
 	struct nova_mmap_entry *mmap_entry;
+	struct nova_snapshot_info_entry *sn_entry;
 	void *addr;
 	u8 type;
 	bool ret = true;
@@ -64,6 +65,12 @@ static bool curr_log_entry_invalid(struct super_block *sb,
 			if (mmap_entry->invalid == 0)
 				ret = false;
 			*length = sizeof(struct nova_mmap_entry);
+			break;
+		case SNAPSHOT_INFO:
+			sn_entry = (struct nova_snapshot_info_entry *)addr;
+			if (sn_entry->deleted == 0)
+				ret = false;
+			*length = sizeof(struct nova_snapshot_info_entry);
 			break;
 		case NEXT_PAGE:
 			/* No more entries in this page */
@@ -222,6 +229,9 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 		case MMAP_WRITE:
 			ret = nova_gc_assign_mmap_entry(sb, sih, curr_p,
 							new_curr);
+			break;
+		case SNAPSHOT_INFO:
+			/* FIXME */
 			break;
 		case FILE_WRITE:
 			new_addr = (void *)nova_get_block(sb, new_curr);

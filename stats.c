@@ -77,6 +77,7 @@ const char *Timingstring[TIMING_NUM] =
 	"append_mmap_entry",
 	"append_link_change",
 	"append_setattr",
+	"append_snapshot_info",
 
 	/* GC */
 	"log_fast_gc",
@@ -343,6 +344,15 @@ static inline void nova_print_mmap_entry(struct super_block *sb,
 			entry->pgoff, entry->num_pages);
 }
 
+static inline void nova_print_snapshot_info_entry(struct super_block *sb,
+	u64 curr, struct nova_snapshot_info_entry *entry)
+{
+	nova_dbg("snapshot info entry @ 0x%llx: epoch %llu, deleted %u, "
+			"timestamp %llu\n",
+			curr, entry->epoch_id, entry->deleted,
+			entry->timestamp);
+}
+
 static inline size_t nova_print_dentry(struct super_block *sb,
 	u64 curr, struct nova_dentry *entry)
 {
@@ -378,6 +388,10 @@ u64 nova_print_log_entry(struct super_block *sb, u64 curr)
 		case MMAP_WRITE:
 			nova_print_mmap_entry(sb, curr, addr);
 			curr += sizeof(struct nova_mmap_entry);
+			break;
+		case SNAPSHOT_INFO:
+			nova_print_snapshot_info_entry(sb, curr, addr);
+			curr += sizeof(struct nova_snapshot_info_entry);
 			break;
 		case FILE_WRITE:
 			nova_print_file_write_entry(sb, curr, addr);

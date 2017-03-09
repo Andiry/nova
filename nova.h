@@ -203,6 +203,7 @@ enum nova_entry_type {
 	SET_ATTR,
 	LINK_CHANGE,
 	MMAP_WRITE,
+	SNAPSHOT_INFO,
 	NEXT_PAGE,
 };
 
@@ -341,6 +342,9 @@ static inline size_t nova_get_log_entry_size(struct super_block *sb,
 			break;
 		case MMAP_WRITE:
 			size = sizeof(struct nova_mmap_entry);
+			break;
+		case SNAPSHOT_INFO:
+			size = sizeof(struct nova_snapshot_info_entry);
 			break;
 		default:
 			break;
