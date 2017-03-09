@@ -657,24 +657,6 @@ struct free_list {
 	u64		padding[8];	/* Cache line break */
 };
 
-/*
- * The first block contains super blocks and reserved inodes;
- * The second block contains pointers to journal pages.
- * The third/fourth block contains pointers to inode tables.
- * The fifth block contains snapshot timestamps.
- * The sixth block contains snapshot infos upon umount.
- *
- * If data protection is enabled, more blocks are reserverd for checksums and
- * parities and the number is derived according to the whole storage size.
- */
-#define	RESERVED_BLOCKS		6
-
-#define	JOURNAL_START		1
-#define	INODE_TABLE0_START	2
-#define	INODE_TABLE1_START	3
-#define	SNAPSHOT_TABLE_START	4
-#define	SNAPSHOT_INFO_START	5
-
 
 struct inode_map {
 	struct mutex inode_table_mutex;

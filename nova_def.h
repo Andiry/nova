@@ -161,6 +161,34 @@ struct nova_super_block {
 /* the above fast mount fields take total 32 bytes in the super block */
 #define NOVA_FAST_MOUNT_FIELD_SIZE  (36)
 
+
+/* ======================= Reserved blocks ========================= */
+
+/*
+ * The first block contains super blocks;
+ * The second block contains reserved inodes;
+ * The third block contains replica reserved inodes;
+ * The fourth block contains pointers to journal pages.
+ * The fifth/sixth block contains pointers to inode tables.
+ * The seventh block contains snapshot timestamps.
+ * The eighth block contains snapshot infos upon umount.
+ *
+ * If data protection is enabled, more blocks are reserverd for checksums and
+ * parities and the number is derived according to the whole storage size.
+ */
+#define	RESERVED_BLOCKS		8
+
+#define	RESERVE_INODE_START	1
+#define	REPLICA_INODE_START	2
+#define	JOURNAL_START		3
+#define	INODE_TABLE0_START	4
+#define	INODE_TABLE1_START	5
+#define	SNAPSHOT_TABLE_START	6
+#define	SNAPSHOT_INFO_START	7
+
+
+/* ======================= Reserved inodes ========================= */
+
 /* The root inode follows immediately after the redundant super block */
 #define NOVA_ROOT_INO		(1)
 #define NOVA_INODETABLE_INO	(2)	/* Temporaty inode table */
@@ -174,8 +202,9 @@ struct nova_super_block {
 /* We have space for 12 reserved inodes */
 #define	NOVA_ROOT_INO_START	(NOVA_SB_SIZE * 2)
 
-/* Normal inode starts at 16 */
-#define NOVA_NORMAL_INODE_START      (16)
+/* Normal inode starts at 32 */
+#define NOVA_NORMAL_INODE_START      (32)
+
 
 /* ======================= Write ordering ========================= */
 
