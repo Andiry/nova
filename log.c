@@ -320,10 +320,9 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 
 static int nova_append_log_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
+	struct nova_inode_info_header *sih,
 	struct nova_log_entry_info *entry_info)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
 	void *entry, *alter_entry;
 	enum nova_entry_type type = entry_info->type;
 	struct nova_inode_update *update = entry_info->update;
@@ -343,7 +342,7 @@ static int nova_append_log_entry(struct super_block *sb,
 		return -ENOSPC;
 
 	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
-				__func__, inode->i_ino, curr_p);
+				__func__, sih->ino, curr_p);
 
 	entry = nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
@@ -427,7 +426,7 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	entry_info.update = update;
 	entry_info.epoch_id = epoch_id;
 
-	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
 		goto out;
@@ -662,7 +661,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	entry_info.update = update;
 	entry_info.epoch_id = epoch_id;
 
-	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
 	if (ret) {
 		nova_err(sb, "%s failed\n", __func__);
 		goto out;
@@ -768,6 +767,8 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_entry *data,
 	struct nova_inode_update *update)
 {
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_log_entry_info entry_info;
 	timing_t append_time;
 	int ret;
@@ -782,7 +783,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	entry_info.epoch_id = data->epoch_id;
 	entry_info.inplace = 0;
 
-	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
 	if (ret)
 		nova_err(sb, "%s failed\n", __func__);
 
@@ -794,6 +795,8 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_mmap_entry *data,
 	struct nova_inode_update *update, struct vma_item *item)
 {
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_log_entry_info entry_info;
 	timing_t append_time;
 	int ret;
@@ -807,7 +810,7 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 	entry_info.data = data;
 	entry_info.epoch_id = data->epoch_id;
 
-	ret = nova_append_log_entry(sb, pi, inode, &entry_info);
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
 	if (ret)
 		nova_err(sb, "%s failed\n", __func__);
 
