@@ -1459,13 +1459,15 @@ static int nova_failure_recovery_crawl(struct super_block *sb)
 	struct task_ring *ring;
 	struct nova_inode *pi, fake_pi;
 	unsigned long curr_addr;
-	u64 root_addr = NOVA_ROOT_INO_START;
+	u64 root_addr;
 	u64 curr;
 	int num_tables;
 	int version;
 	int ret = 0;
 	int count;
 	int cpuid;
+
+	root_addr = nova_get_basic_inode_addr(sb, NOVA_ROOT_INO);
 
 	num_tables = 1;
 	if (replica_metadata)

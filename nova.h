@@ -1122,16 +1122,41 @@ static inline uint32_t nova_inode_blk_size(struct nova_inode_info_header *sih)
 	return blk_type_to_size[sih->i_blk_type];
 }
 
-/*
- * ROOT_INO: Start from NOVA_SB_SIZE * 2
- */
+static inline u64 nova_get_basic_inode_addr(struct super_block *sb,
+	u64 inode_number)
+{
+	return 	(NOVA_DEF_BLOCK_SIZE_4K * RESERVE_INODE_START) +
+			inode_number * NOVA_INODE_SIZE;
+}
+
+static inline u64 nova_get_alter_basic_inode_addr(struct super_block *sb,
+	u64 inode_number)
+{
+	return 	(NOVA_DEF_BLOCK_SIZE_4K * REPLICA_INODE_START) +
+			inode_number * NOVA_INODE_SIZE;
+}
+
 static inline struct nova_inode *nova_get_basic_inode(struct super_block *sb,
 	u64 inode_number)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u64 addr;
 
-	return (struct nova_inode *)(sbi->virt_addr + NOVA_SB_SIZE * 2 +
-			 (inode_number - NOVA_ROOT_INO) * NOVA_INODE_SIZE);
+	addr = nova_get_basic_inode_addr(sb, inode_number);
+
+	return (struct nova_inode *)(sbi->virt_addr + addr);
+}
+
+static inline struct nova_inode *
+nova_get_alter_basic_inode(struct super_block *sb,
+	u64 inode_number)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u64 addr;
+
+	addr = nova_get_alter_basic_inode_addr(sb, inode_number);
+
+	return (struct nova_inode *)(sbi->virt_addr + addr);
 }
 
 /* If this is part of a read-modify-write of the inode metadata,

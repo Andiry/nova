@@ -217,9 +217,8 @@ int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
 		return 0;
 	}
 
-	if (ino == NOVA_ROOT_INO) {
-		*alter_pi_addr = NOVA_SB_SIZE * 2 +
-			 (NOVA_ALTER_ROOT_INO - NOVA_ROOT_INO) * NOVA_INODE_SIZE;
+	if (ino < NOVA_NORMAL_INODE_START) {
+		*alter_pi_addr = nova_get_alter_basic_inode_addr(sb, ino);
 	} else {
 		ret = nova_get_inode_address(sb, ino, 1, alter_pi_addr, 0, 0);
 		if (ret)
@@ -765,8 +764,8 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 
 	nova_dbgv("%s: inode %lu\n", __func__, ino);
 
-	if (ino == NOVA_ROOT_INO) {
-		pi_addr = NOVA_ROOT_INO_START;
+	if (ino < NOVA_NORMAL_INODE_START) {
+		pi_addr = nova_get_basic_inode_addr(sb, ino);
 	} else {
 		err = nova_get_inode_address(sb, ino, 0, &pi_addr, 0, 0);
 		if (err) {
@@ -942,7 +941,7 @@ int nova_delete_dead_inode(struct super_block *sb, u64 ino)
 	u64 pi_addr = 0;
 	int err;
 
-	if (ino == 0 || ino == NOVA_ROOT_INO) {
+	if (ino < NOVA_NORMAL_INODE_START) {
 		nova_dbg("%s: invalid inode %llu\n", __func__, ino);
 		return -EINVAL;
 	}
