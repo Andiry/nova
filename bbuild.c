@@ -1499,6 +1499,12 @@ int nova_failure_recovery(struct super_block *sb)
 
 		set_bm(pair->journal_head >> PAGE_SHIFT, global_bm[i], BM_4K);
 	}
+
+	i = NOVA_SNAPSHOT_INO % sbi->cpus;
+	pi = nova_get_inode_by_ino(sb, NOVA_SNAPSHOT_INO);
+	/* Set snapshot info log pages */
+	nova_traverse_dir_inode_log(sb, pi, global_bm[i]);
+
 	PERSISTENT_BARRIER();
 
 	ret = allocate_resources(sb, sbi->cpus);

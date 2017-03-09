@@ -902,21 +902,6 @@ struct inode_table *nova_get_inode_table(struct super_block *sb,
 		cpu * CACHELINE_SIZE);
 }
 
-/* Snapshot methods */
-static inline
-struct snapshot_table *nova_get_snapshot_table(struct super_block *sb)
-{
-	return (struct snapshot_table *)((char *)nova_get_block(sb,
-		NOVA_DEF_BLOCK_SIZE_4K * SNAPSHOT_TABLE_START));
-}
-
-static inline
-struct snapshot_nvmm_info_table *nova_get_nvmm_info_table(struct super_block *sb)
-{
-	return (struct snapshot_nvmm_info_table *)((char *)nova_get_block(sb,
-		NOVA_DEF_BLOCK_SIZE_4K * SNAPSHOT_INFO_START));
-}
-
 /* Old entry is freeable if it is appended after the latest snapshot */
 static inline int old_entry_freeable(struct super_block *sb, u64 epoch_id)
 {
@@ -1813,14 +1798,16 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih);
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 ino, u64 pi_addr, int rebuild_dir);
+int nova_restore_snapshot_table(struct super_block *sb, int just_init);
 
 /* snapshot.c */
 int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
 	u8 type);
 int nova_save_snapshots(struct super_block *sb);
 int nova_destroy_snapshot_infos(struct super_block *sb);
+int nova_restore_snapshot_entry(struct super_block *sb,
+	struct nova_snapshot_info_entry *entry, u64 curr_p, int just_init);
 int nova_mount_snapshot(struct super_block *sb);
-int nova_restore_snapshot_table(struct super_block *sb, int just_init);
 int nova_append_data_to_snapshot(struct super_block *sb,
 	struct nova_file_write_entry *entry, u64 nvmm, u64 num_pages,
 	u64 delete_epoch_id);

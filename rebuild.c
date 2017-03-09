@@ -707,3 +707,102 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	return 0;
 }
 
+
+/******************* Snapshot log rebuild *********************/
+
+/* For power failure recovery, just initialize the infos */
+int nova_restore_snapshot_table(struct super_block *sb, int just_init)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_snapshot_info_entry *entry = NULL;
+	struct nova_inode *pi;
+	struct nova_inode_info_header *sih;
+	struct nova_inode_rebuild rebuild, *reb;
+	unsigned int data_bits;
+	size_t size = sizeof(struct nova_snapshot_info_entry);
+	u64 ino = NOVA_SNAPSHOT_INO;
+	timing_t rebuild_time;
+	int count = 0;
+	void *addr;
+	u64 curr_p;
+	u8 type;
+	int ret;
+
+	NOVA_START_TIMING(rebuild_file_t, rebuild_time);
+	nova_dbg_verbose("Rebuild snapshot table\n");
+
+	sbi->curr_snapshot = 0;
+	pi = nova_get_basic_inode(sb, ino);
+	sih = &sbi->snapshot_si->header;
+	data_bits = blk_type_to_shift[sih->i_blk_type];
+	reb = &rebuild;
+	ret = nova_rebuild_inode_start(sb, pi, sih, reb, sih->pi_addr);
+	if (ret)
+		goto out;
+
+	curr_p = sih->log_head;
+	if (curr_p == 0 && sih->log_tail == 0)
+		goto out;
+
+//	nova_print_nova_log(sb, sih);
+
+	while (curr_p != sih->log_tail) {
+		if (goto_next_page(sb, curr_p)) {
+			sih->log_pages++;
+			curr_p = next_log_page(sb, curr_p);
+		}
+
+		if (curr_p == 0) {
+			nova_err(sb, "File inode %llu log is NULL!\n", ino);
+			BUG();
+		}
+
+		addr = (void *)nova_get_block(sb, curr_p);
+		if (!nova_verify_entry_csum(sb, addr)) {
+			nova_err(sb, "%s: entry checksum fail "
+					"inode %llu entry addr 0x%llx\n",
+					__func__, ino, (u64)addr);
+			break;
+		}
+
+		type = nova_get_entry_type(addr);
+
+		switch (type) {
+			case SNAPSHOT_INFO:
+				entry = (struct nova_snapshot_info_entry *)addr;
+				ret = nova_restore_snapshot_entry(sb, entry,
+							curr_p, just_init);
+				if (ret) {
+					nova_err(sb, "Restore entry %llu "
+						"failed\n", entry->epoch_id);
+					goto out;
+				}
+				if (entry->deleted == 0)
+					count++;
+				curr_p += size;
+				break;
+			default:
+				nova_err(sb, "unknown type %d, 0x%llx\n",
+							type, curr_p);
+				NOVA_ASSERT(0);
+				curr_p += size;
+				break;
+		}
+
+	}
+
+	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
+	sih->i_blocks = sih->log_pages + (sih->i_size >> data_bits);
+
+out:
+//	nova_print_inode_log_page(sb, inode);
+	NOVA_END_TIMING(rebuild_file_t, rebuild_time);
+
+	nova_dbg("Recovered %d snapshots, current snapshot %d, "
+			"latest epoch ID %llu\n",
+			count, sbi->curr_snapshot,
+			sbi->s_epoch_id);
+
+	return ret;
+}
+

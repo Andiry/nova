@@ -170,8 +170,7 @@ struct nova_super_block {
  * The third block contains replica reserved inodes;
  * The fourth block contains pointers to journal pages.
  * The fifth/sixth block contains pointers to inode tables.
- * The seventh block contains snapshot timestamps.
- * The eighth block contains snapshot infos upon umount.
+ * The seventh/eighth blocks are void by now.
  *
  * If data protection is enabled, more blocks are reserverd for checksums and
  * parities and the number is derived according to the whole storage size.
@@ -183,8 +182,6 @@ struct nova_super_block {
 #define	JOURNAL_START		3
 #define	INODE_TABLE0_START	4
 #define	INODE_TABLE1_START	5
-#define	SNAPSHOT_TABLE_START	6
-#define	SNAPSHOT_INFO_START	7
 
 
 /* ======================= Reserved inodes ========================= */
