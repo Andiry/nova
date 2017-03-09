@@ -300,7 +300,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 				      unsigned long size)
 {
 	unsigned long blocksize;
-	unsigned long reserved_space, reserved_blocks;
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -327,16 +326,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	if (!nova_check_size(sb, size)) {
 		nova_dbg("Specified NOVA size too small 0x%lx.\n", size);
-		return ERR_PTR(-EINVAL);
-	}
-
-	/* Reserve space for 8 special inodes */
-	reserved_space = NOVA_SB_SIZE * 4;
-	reserved_blocks = (reserved_space + blocksize - 1) / blocksize;
-	if (reserved_blocks > sbi->reserved_blocks) {
-		nova_dbg("Reserved %lu blocks, require %lu blocks. "
-			"Increase reserved blocks number.\n",
-			sbi->reserved_blocks, reserved_blocks);
 		return ERR_PTR(-EINVAL);
 	}
 
