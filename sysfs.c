@@ -120,10 +120,10 @@ ssize_t nova_seq_delete_snapshot(struct file *filp, const char __user *buf,
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
 	struct super_block *sb = PDE_DATA(inode);
-	int index;
+	u64 epoch_id;
 
-	sscanf(buf, "%d", &index);
-	nova_delete_snapshot(sb, index);
+	sscanf(buf, "%llu", &epoch_id);
+	nova_delete_snapshot(sb, epoch_id);
 	return len;
 }
 
