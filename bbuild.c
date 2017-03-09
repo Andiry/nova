@@ -825,61 +825,6 @@ static struct task_struct **threads;
 wait_queue_head_t finish_wq;
 int *finished;
 
-int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
-	u64 ino, u64 pi_addr, int rebuild_dir)
-{
-	struct nova_inode_info_header *sih = &si->header;
-	struct nova_inode *pi;
-	u64 alter_pi_addr = 0;
-	int ret;
-
-	if (replica_metadata) {
-		/* Get alternate inode address */
-		ret = nova_get_alter_inode_address(sb, ino, &alter_pi_addr);
-		if (ret)
-			return ret;
-	}
-
-	ret = nova_check_inode_integrity(sb, ino, pi_addr, alter_pi_addr);
-	if (ret)
-		return ret;
-
-	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
-
-	if (pi->deleted == 1)
-		return -EINVAL;
-
-	nova_dbgv("%s: inode %llu, addr 0x%llx, valid %d, "
-			"head 0x%llx, tail 0x%llx\n",
-			__func__, ino, pi_addr, pi->valid,
-			pi->log_head, pi->log_tail);
-
-	nova_init_header(sb, sih, __le16_to_cpu(pi->i_mode));
-	sih->ino = ino;
-	sih->alter_pi_addr = alter_pi_addr;
-
-	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
-	case S_IFLNK:
-		/* Treat symlink files as normal files */
-		/* Fall through */
-	case S_IFREG:
-		nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih);
-		break;
-	case S_IFDIR:
-		if (rebuild_dir)
-			nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
-		break;
-	default:
-		/* In case of special inode, walk the log */
-		if (pi->log_head)
-			nova_rebuild_file_inode_tree(sb, pi, pi_addr, sih);
-		sih->pi_addr = pi_addr;
-		break;
-	}
-
-	return 0;
-}
-
 static int nova_traverse_inode_log(struct super_block *sb,
 	struct nova_inode *pi, struct scan_bitmap *bm, u64 head)
 {

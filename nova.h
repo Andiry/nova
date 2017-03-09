@@ -1584,8 +1584,6 @@ int nova_find_free_slot(struct nova_sb_info *sbi,
 /* bbuild.c */
 inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 	enum bm_type type);
-int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
-	u64 ino, u64 pi_addr, int rebuild_dir);
 void nova_save_blocknode_mappings_to_log(struct super_block *sb);
 void nova_save_inode_list_to_log(struct super_block *sb);
 void nova_init_header(struct super_block *sb,
@@ -1810,12 +1808,11 @@ int nova_reset_csum_parity_range(struct super_block *sb,
 	unsigned long start_pgoff, unsigned long end_pgoff);
 int nova_reset_vma_csum_parity(struct super_block *sb,
 	struct vma_item *item);
-int nova_rebuild_file_inode_tree(struct super_block *sb,
-	struct nova_inode *pi, u64 pi_addr,
-	struct nova_inode_info_header *sih);
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
 	struct nova_inode_info_header *sih);
+int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
+	u64 ino, u64 pi_addr, int rebuild_dir);
 
 /* snapshot.c */
 int nova_encounter_mount_snapshot(struct super_block *sb, void *addr,
