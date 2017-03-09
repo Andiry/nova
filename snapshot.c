@@ -489,23 +489,11 @@ static int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	struct snapshot_info *info, u64 nvmm, u64 num_pages,
 	u64 delete_epoch_id)
 {
-	struct snapshot_table *snapshot_table;
 	struct snapshot_file_write_entry entry;
-	int epoch_id;
 	int ret;
 
 	if (!info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
-		return -EINVAL;
-	}
-
-	epoch_id = info->epoch_id;
-	snapshot_table = nova_get_snapshot_table(sb);
-	if (snapshot_table->entries[epoch_id].epoch_id != info->epoch_id) {
-		nova_dbg("%s: Snapshot info unmatch, epoch ID %llu, "
-				"snapshot table epoch ID %llu\n",
-				__func__, info->epoch_id,
-				snapshot_table->entries[epoch_id].epoch_id);
 		return -EINVAL;
 	}
 
@@ -546,23 +534,11 @@ int nova_append_data_to_snapshot(struct super_block *sb,
 static int nova_append_snapshot_inode_entry(struct super_block *sb,
 	struct nova_inode *pi, struct snapshot_info *info)
 {
-	struct snapshot_table *snapshot_table;
 	struct snapshot_inode_entry entry;
-	int epoch_id;
 	int ret;
 
 	if (!info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
-		return -EINVAL;
-	}
-
-	epoch_id = info->epoch_id;
-	snapshot_table = nova_get_snapshot_table(sb);
-	if (snapshot_table->entries[epoch_id].epoch_id != info->epoch_id) {
-		nova_dbg("%s: Snapshot info unmatch, epoch ID %llu, "
-				"snapshot table epoch ID %llu\n",
-				__func__, info->epoch_id,
-				snapshot_table->entries[epoch_id].epoch_id);
 		return -EINVAL;
 	}
 
@@ -758,13 +734,10 @@ static int nova_restore_snapshot_info_lists(struct super_block *sb,
 }
 
 static int nova_restore_snapshot_info(struct super_block *sb,
-	u64 epoch_id, int just_init)
+	u64 epoch_id, u64 timestamp, int just_init)
 {
-	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info = NULL;
 	int ret = 0;
-
-	snapshot_table = nova_get_snapshot_table(sb);
 
 	nova_dbg("Restore snapshot epoch ID %llu\n", epoch_id);
 
@@ -777,6 +750,7 @@ static int nova_restore_snapshot_info(struct super_block *sb,
 	}
 
 	info->epoch_id = epoch_id;
+	info->timestamp = timestamp;
 
 	if (just_init == 0) {
 		ret = nova_restore_snapshot_info_lists(sb, info, epoch_id);
@@ -795,11 +769,7 @@ fail:
 int nova_mount_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_table *snapshot_table;
-	u64 mount_epoch_id;
 	u64 epoch_id;
-
-	snapshot_table = nova_get_snapshot_table(sb);
 
 	epoch_id = sbi->mount_snapshot_epoch_id;
 	if (epoch_id < 0 || epoch_id >= SNAPSHOT_TABLE_SIZE) {
@@ -809,9 +779,6 @@ int nova_mount_snapshot(struct super_block *sb)
 		return -EINVAL;
 	}
 
-	mount_epoch_id = snapshot_table->entries[epoch_id].epoch_id;
-
-	sbi->mount_snapshot_epoch_id = mount_epoch_id;
 	nova_dbg("Mount snapshot %llu\n", epoch_id);
 	return 0;
 }
@@ -901,7 +868,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 		if (timestamp) {
 			sbi->curr_snapshot = i;
 			ret = nova_restore_snapshot_info(sb, epoch_id,
-							just_init);
+							timestamp, just_init);
 			if (ret) {
 				nova_dbg("%s: Restore snapshot %d, "
 						" epoch ID %llu failed\n",
@@ -1217,8 +1184,8 @@ static int nova_save_snapshot_info(struct super_block *sb,
 	return 0;
 }
 
-static int nova_print_snapshot_info(struct snapshot_table *snapshot_table,
-	struct snapshot_info *info, struct seq_file *seq)
+static int nova_print_snapshot_info(struct snapshot_info *info,
+	struct seq_file *seq)
 {
 	struct tm tm;
 	u64 epoch_id;
@@ -1226,8 +1193,8 @@ static int nova_print_snapshot_info(struct snapshot_table *snapshot_table,
 	unsigned long local_time;
 
 	epoch_id = info->epoch_id;
+	timestamp = info->timestamp;
 
-	timestamp = snapshot_table->entries[epoch_id].timestamp;
 	local_time = timestamp - sys_tz.tz_minuteswest * 60;
 	time_to_tm(local_time, 0, &tm);
 	seq_printf(seq, "%8llu\t%4lu-%02d-%02d\t%02d:%02d:%02d\n",
@@ -1238,18 +1205,15 @@ static int nova_print_snapshot_info(struct snapshot_table *snapshot_table,
 	return 0;
 }
 
-int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
+int nova_print_snapshots(struct super_block *sb, struct seq_file *seq)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info;
 	struct snapshot_info *infos[FREE_BATCH];
 	int nr_infos;
 	u64 epoch_id = 0;
 	int count = 0;
 	int i;
-
-	snapshot_table = nova_get_snapshot_table(sb);
 
 	seq_printf(seq, "========== NOVA snapshot table ==========\n");
 	seq_printf(seq, "Epoch ID\t      Date\t    Time\n");
@@ -1262,7 +1226,7 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 			info = infos[i];
 			BUG_ON(!info);
 			epoch_id = info->epoch_id;
-			nova_print_snapshot_info(snapshot_table, info, seq);
+			nova_print_snapshot_info(info, seq);
 			count++;
 		}
 		epoch_id++;
@@ -1276,7 +1240,6 @@ int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 int nova_save_snapshots(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_table *snapshot_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
 	struct snapshot_info *info;
 	struct snapshot_nvmm_info *nvmm_info;
@@ -1284,8 +1247,6 @@ int nova_save_snapshots(struct super_block *sb)
 	int nr_infos;
 	u64 epoch_id = 0;
 	int i;
-
-	snapshot_table = nova_get_snapshot_table(sb);
 
 	if (sbi->snapshot_cleaner_thread)
 		kthread_stop(sbi->snapshot_cleaner_thread);

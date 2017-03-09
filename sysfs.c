@@ -140,7 +140,7 @@ static int nova_seq_show_snapshots(struct seq_file *seq, void *v)
 {
 	struct super_block *sb = seq->private;
 
-	nova_print_snapshot_table(sb, seq);
+	nova_print_snapshots(sb, seq);
 	return 0;
 }
 

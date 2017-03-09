@@ -189,7 +189,7 @@ struct nova_super_block {
 
 /* ======================= Reserved inodes ========================= */
 
-/* The root inode follows immediately after the redundant super block */
+/* We have space for 31 reserved inodes */
 #define NOVA_ROOT_INO		(1)
 #define NOVA_INODETABLE_INO	(2)	/* Temporaty inode table */
 #define NOVA_BLOCKNODE_INO	(3)
@@ -198,7 +198,6 @@ struct nova_super_block {
 #define NOVA_INODELIST1_INO	(6)
 #define NOVA_SNAPSHOT_INO	(7)	/* Fake snapshot inode */
 
-/* We have space for 31 reserved inodes */
 
 /* Normal inode starts at 32 */
 #define NOVA_NORMAL_INODE_START      (32)
