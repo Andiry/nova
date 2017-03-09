@@ -1219,7 +1219,8 @@ int nova_print_snapshots(struct super_block *sb, struct seq_file *seq)
 	return 0;
 }
 
-int nova_save_snapshots(struct super_block *sb)
+static int nova_traverse_and_delete_snapshot_infos(struct super_block *sb,
+	int save)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_info *info;
@@ -1228,13 +1229,6 @@ int nova_save_snapshots(struct super_block *sb)
 	u64 epoch_id = 0;
 	int i;
 
-	if (sbi->snapshot_cleaner_thread)
-		kthread_stop(sbi->snapshot_cleaner_thread);
-
-	if (sbi->mount_snapshot)
-		return 0;
-
-	/* Save in increasing order */
 	do {
 		nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
 					(void **)infos, epoch_id, FREE_BATCH);
@@ -1242,7 +1236,8 @@ int nova_save_snapshots(struct super_block *sb)
 			info = infos[i];
 			BUG_ON(!info);
 			epoch_id = info->epoch_id;
-			nova_save_snapshot_info(sb, info);
+			if (save)
+				nova_save_snapshot_info(sb, info);
 			nova_delete_snapshot_info(sb, info, 0);
 			radix_tree_delete(&sbi->snapshot_info_tree, epoch_id);
 			nova_free_snapshot_info(info);
@@ -1253,30 +1248,22 @@ int nova_save_snapshots(struct super_block *sb)
 	return 0;
 }
 
-int nova_destroy_snapshot_infos(struct super_block *sb)
+int nova_save_snapshots(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_info *info;
-	struct snapshot_info *infos[FREE_BATCH];
-	int nr_infos;
-	u64 epoch_id = 0;
-	int i;
 
-	do {
-		nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
-					(void **)infos, epoch_id, FREE_BATCH);
-		for (i = 0; i < nr_infos; i++) {
-			info = infos[i];
-			BUG_ON(!info);
-			epoch_id = info->epoch_id;
-			nova_delete_snapshot_info(sb, info, 0);
-			radix_tree_delete(&sbi->snapshot_info_tree, epoch_id);
-			nova_free_snapshot_info(info);
-		}
-		epoch_id++;
-	} while (nr_infos == FREE_BATCH);
+	if (sbi->snapshot_cleaner_thread)
+		kthread_stop(sbi->snapshot_cleaner_thread);
 
-	return 0;
+	if (sbi->mount_snapshot)
+		return 0;
+
+	return nova_traverse_and_delete_snapshot_infos(sb, 1);
+}
+
+int nova_destroy_snapshot_infos(struct super_block *sb)
+{
+	return nova_traverse_and_delete_snapshot_infos(sb, 0);
 }
 
 static void snapshot_cleaner_try_sleeping(struct nova_sb_info *sbi)
