@@ -946,7 +946,7 @@ static inline int pass_mount_snapshot(struct super_block *sb, u64 epoch_id)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (epoch_id >= sbi->mount_snapshot_epoch_id)
+	if (epoch_id > sbi->mount_snapshot_epoch_id)
 		return 1;
 
 	return 0;

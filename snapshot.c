@@ -867,12 +867,6 @@ int nova_mount_snapshot(struct super_block *sb)
 	}
 
 	mount_epoch_id = snapshot_table->entries[index].epoch_id;
-	if (mount_epoch_id == 0) {
-		nova_dbg("%s: Mount invalid snapshot %d\n",
-				__func__, index);
-		sbi->mount_snapshot = 0;
-		return -EINVAL;
-	}
 
 	sbi->mount_snapshot_epoch_id = mount_epoch_id;
 	nova_dbg("Mount snapshot %d\n", index);
@@ -889,7 +883,7 @@ static int nova_delete_nvmm_info(struct super_block *sb,
 	unsigned long nvmm_blocknr;
 	int i;
 
-	if (nvmm_info->epoch_id == 0 || nvmm_info->nvmm_page_addr == 0)
+	if (nvmm_info->nvmm_page_addr == 0)
 		return 0;
 
 	sih.ino = NOVA_SNAPSHOT_INO;
@@ -917,7 +911,7 @@ static int nova_clear_nvmm_info_table(struct super_block *sb,
 	struct snapshot_table *snapshot_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
 	struct snapshot_nvmm_info *nvmm_info;
-	u64 epoch_id;
+	u64 timestamp;
 	int i;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -928,9 +922,9 @@ static int nova_clear_nvmm_info_table(struct super_block *sb,
 		goto out;
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		epoch_id = snapshot_table->entries[i].epoch_id;
+		timestamp = snapshot_table->entries[i].timestamp;
 
-		if (epoch_id) {
+		if (timestamp) {
 			nvmm_info = &nvmm_info_table->infos[i];
 			nova_delete_nvmm_info(sb, nvmm_info);
 		}
@@ -950,7 +944,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	int i, count = 0;
-	u64 epoch_id;
+	u64 epoch_id, timestamp;
 	int ret;
 
 	snapshot_table = nova_get_snapshot_table(sb);
@@ -959,8 +953,9 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
 		epoch_id = snapshot_table->entries[i].epoch_id;
+		timestamp = snapshot_table->entries[i].timestamp;
 
-		if (epoch_id) {
+		if (timestamp) {
 			sbi->curr_snapshot = i;
 			ret = nova_restore_snapshot_info(sb, i, epoch_id,
 							just_init);
@@ -1000,7 +995,7 @@ static int get_unused_snapshot_index(struct super_block *sb)
 	/* Take current snapshot as hint */
 	index = sbi->curr_snapshot;
 	for (i = 0; i < SNAPSHOT_TABLE_SIZE; i++) {
-		if (snapshot_table->entries[index].epoch_id == 0)
+		if (snapshot_table->entries[index].timestamp == 0)
 			return index;
 
 		index = (index + 1) % SNAPSHOT_TABLE_SIZE;
@@ -1023,12 +1018,12 @@ int nova_create_snapshot(struct super_block *sb)
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-
 	NOVA_START_TIMING(create_snapshot_t, create_snapshot_time);
 
 	mutex_lock(&sbi->s_lock);
 
-	epoch_id = ++sbi->s_epoch_id;
+	/* Increase the epoch id, but use the old value as snapshot id */
+	epoch_id = sbi->s_epoch_id++;
 
 	/*
 	 * Mark the create_snapshot_epoch_id before starting the snapshot
