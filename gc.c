@@ -207,6 +207,23 @@ static int nova_gc_assign_mmap_entry(struct super_block *sb,
 	return ret;
 }
 
+static int nova_gc_assign_snapshot_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_snapshot_info_entry *old_entry, u64 curr_p, u64 new_curr)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_info *info;
+	int ret = 0;
+
+	info = radix_tree_lookup(&sbi->snapshot_info_tree,
+				old_entry->epoch_id);
+
+	if (info && info->snapshot_entry == curr_p)
+		info->snapshot_entry = new_curr;
+
+	return ret;
+}
+
 static int nova_gc_assign_new_entry(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_p, u64 new_curr)
@@ -231,7 +248,8 @@ static int nova_gc_assign_new_entry(struct super_block *sb,
 							new_curr);
 			break;
 		case SNAPSHOT_INFO:
-			/* FIXME */
+			ret = nova_gc_assign_snapshot_entry(sb, sih, addr,
+							curr_p, new_curr);
 			break;
 		case FILE_WRITE:
 			new_addr = (void *)nova_get_block(sb, new_curr);

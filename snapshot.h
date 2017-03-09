@@ -49,6 +49,7 @@ struct snapshot_list {
 struct snapshot_info {
 	u64	epoch_id;
 	u64	timestamp;
+	unsigned long snapshot_entry;
 
 	/* Per-CPU snapshot list */
 	struct snapshot_list *lists;

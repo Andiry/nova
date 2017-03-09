@@ -850,6 +850,7 @@ int nova_append_snapshot_info_entry(struct super_block *sb,
 	if (ret)
 		nova_err(sb, "%s failed\n", __func__);
 
+	info->snapshot_entry = entry_info.curr_p;
 	NOVA_END_TIMING(append_snapshot_info_t, append_time);
 	return ret;
 }

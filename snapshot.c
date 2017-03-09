@@ -923,6 +923,17 @@ static int nova_append_snapshot_info_log(struct super_block *sb,
 	return 0;
 }
 
+static int nova_invalidate_snapshot_entry(struct super_block *sb,
+	struct snapshot_info *info)
+{
+	struct nova_snapshot_info_entry *entry;
+	int ret;
+
+	entry = nova_get_block(sb, info->snapshot_entry);
+	ret = nova_invalidate_logentry(sb, entry, SNAPSHOT_INFO, 0);
+	return ret;
+}
+
 int nova_create_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
