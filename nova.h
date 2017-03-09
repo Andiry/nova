@@ -731,10 +731,9 @@ struct nova_sb_info {
 	struct radix_tree_root	snapshot_info_tree;
 	int num_snapshots;
 	int curr_snapshot;
-	volatile u64 s_epoch_id;
+	volatile u64 s_epoch_id;	/* Current epoch */
 
 	int mount_snapshot;
-	int mount_snapshot_index;
 	u64 mount_snapshot_epoch_id;
 
 	struct task_struct *snapshot_cleaner_thread;

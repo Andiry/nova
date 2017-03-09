@@ -802,7 +802,7 @@ int nova_mount_snapshot(struct super_block *sb)
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
-	index = sbi->mount_snapshot_index;
+	index = sbi->mount_snapshot_epoch_id;
 	if (index < 0 || index >= SNAPSHOT_TABLE_SIZE) {
 		nova_dbg("%s: Mount invalid snapshot %d\n",
 				__func__, index);

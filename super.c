@@ -227,7 +227,7 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 			if (match_int(&args[0], &option))
 				goto bad_val;
 			sbi->mount_snapshot = 1;
-			sbi->mount_snapshot_index = option;
+			sbi->mount_snapshot_epoch_id = option;
 			break;
 		case Opt_err_panic:
 			clear_opt(sbi->s_mount_opt, ERRORS_CONT);
