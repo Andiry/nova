@@ -1377,7 +1377,16 @@ static int nova_snapshot_cleaner_init(struct nova_sb_info *sbi)
 int nova_snapshot_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode_info_header *sih;
+	u64 ino = NOVA_SNAPSHOT_INO;
 	int ret;
+
+	sih = &sbi->snapshot_si->header;
+	nova_init_header(sb, sih, 0);
+	sih->pi_addr = nova_get_basic_inode_addr(sb, ino);
+	sih->alter_pi_addr = nova_get_alter_basic_inode_addr(sb, ino);
+	sih->ino = ino;
+	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 
 	INIT_RADIX_TREE(&sbi->snapshot_info_tree, GFP_ATOMIC);
 	ret = nova_snapshot_cleaner_init(sbi);

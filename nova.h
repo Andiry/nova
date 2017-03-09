@@ -714,6 +714,7 @@ struct nova_sb_info {
 	struct proc_dir_entry *s_proc;
 
 	/* Snapshot related */
+	struct nova_inode_info	*snapshot_si;
 	struct radix_tree_root	snapshot_info_tree;
 	int num_snapshots;
 	int curr_snapshot;

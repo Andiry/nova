@@ -562,6 +562,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	sbi->snapshot_si = kmem_cache_alloc(nova_inode_cachep, GFP_NOFS);
 	nova_snapshot_init(sb);
 
 	if (nova_parse_options(data, sbi, 0))
@@ -804,6 +805,7 @@ static void nova_put_super(struct super_block *sb)
 //	nova_print_free_lists(sb);
 	if (sbi->virt_addr) {
 		nova_save_snapshots(sb);
+		kmem_cache_free(nova_inode_cachep, sbi->snapshot_si);
 		nova_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
 		nova_save_blocknode_mappings_to_log(sb);
