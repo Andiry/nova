@@ -965,6 +965,7 @@ int nova_create_snapshot(struct super_block *sb)
 	}
 
 	info->epoch_id = epoch_id;
+	info->timestamp = timestamp;
 
 	if (sbi->num_snapshots >= SNAPSHOT_TABLE_SIZE) {
 		nova_dbg("%s: Snapshot table full\n", __func__);
