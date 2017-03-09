@@ -1267,7 +1267,7 @@ int nova_save_snapshots(struct super_block *sb)
 			info = infos[i];
 			BUG_ON(!info);
 			epoch_id = info->epoch_id;
-			nvmm_info = &nvmm_info_table->infos[info->epoch_id];
+			nvmm_info = &nvmm_info_table->infos[epoch_id];
 			nova_save_snapshot_info(sb, info, nvmm_info);
 			nova_delete_snapshot_info(sb, info, 0);
 			radix_tree_delete(&sbi->snapshot_info_tree, epoch_id);

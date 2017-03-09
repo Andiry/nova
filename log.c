@@ -443,7 +443,7 @@ out:
 
 /* Invalidate old link change entry */
 static int nova_invalidate_setattr_entry(struct super_block *sb,
-	struct inode *inode, u64 last_setattr)
+	u64 last_setattr)
 {
 	struct nova_setattr_logentry *old_entry;
 	void *addr;
@@ -568,7 +568,7 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 
 	/* Invalidate old setattr entry */
 	if (last_setattr)
-		nova_invalidate_setattr_entry(sb, inode, last_setattr);
+		nova_invalidate_setattr_entry(sb, last_setattr);
 
 	return 0;
 }
