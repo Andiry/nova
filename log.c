@@ -828,7 +828,8 @@ int nova_append_mmap_entry(struct super_block *sb, struct nova_inode *pi,
 
 int nova_append_snapshot_info_entry(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info *si,
-	struct nova_snapshot_info_entry *data, struct nova_inode_update *update)
+	struct snapshot_info *info, struct nova_snapshot_info_entry *data,
+	struct nova_inode_update *update)
 {
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_log_entry_info entry_info;

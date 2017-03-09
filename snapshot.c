@@ -893,6 +893,36 @@ out:
 	return ret;
 }
 
+static int nova_append_snapshot_info_log(struct super_block *sb,
+	struct snapshot_info *info, u64 epoch_id, u64 timestamp)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode_info *si = sbi->snapshot_si;
+	struct nova_inode *pi = nova_get_basic_inode(sb, NOVA_SNAPSHOT_INO);
+	struct nova_inode_update update;
+	struct nova_snapshot_info_entry entry_info;
+	int ret;
+
+	entry_info.type = SNAPSHOT_INFO;
+	entry_info.deleted = 0;
+	entry_info.epoch_id = epoch_id;
+	entry_info.timestamp = timestamp;
+
+	update.tail = update.alter_tail = 0;
+	ret = nova_append_snapshot_info_entry(sb, pi, si, info,
+					&entry_info, &update);
+	if (ret) {
+		nova_dbg("%s: append snapshot info entry failure\n", __func__);
+		return ret;
+	}
+
+	nova_memunlock_inode(sb, pi);
+	nova_update_inode(sb, &si->vfs_inode, pi, &update, 1);
+	nova_memlock_inode(sb, pi);
+
+	return 0;
+}
+
 int nova_create_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
