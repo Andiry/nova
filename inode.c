@@ -1151,7 +1151,11 @@ int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
 void nova_dirty_inode(struct inode *inode, int flags)
 {
 	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi = nova_get_inode(sb, inode);
+
+	if (sbi->mount_snapshot)
+		return;
 
 	/* only i_atime should have changed if at all.
 	 * we can do in-place atomic update */
