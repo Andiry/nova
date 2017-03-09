@@ -45,78 +45,38 @@ static inline bool goto_next_list_page(struct super_block *sb, u64 curr_p)
 	return false;
 }
 
-static inline int nova_rbtree_compare_snapshot_info(struct snapshot_info *curr,
-	u64 epoch_id)
-{
-	if (epoch_id < curr->epoch_id)
-		return -1;
-	if (epoch_id > curr->epoch_id)
-		return 1;
-
-	return 0;
-}
-
 static int nova_find_target_snapshot_info(struct super_block *sb,
 	u64 epoch_id, struct snapshot_info **ret_info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct rb_root *tree;
-	struct snapshot_info *curr = NULL;
-	struct rb_node *temp;
-	int compVal;
+	struct snapshot_info *infos[1];
+	int nr_infos;
 	int ret = 0;
 
-	tree = &sbi->snapshot_info_tree;
-	temp = tree->rb_node;
-
-	while (temp) {
-		curr = container_of(temp, struct snapshot_info, node);
-		compVal = nova_rbtree_compare_snapshot_info(curr, epoch_id);
-
-		if (compVal == -1) {
-			temp = temp->rb_left;
-		} else if (compVal == 1) {
-			temp = temp->rb_right;
-		} else {
-			ret = 1;
-			break;
-		}
+	nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
+					(void **)infos, epoch_id, 1);
+	if (nr_infos == 1) {
+		*ret_info = infos[0];
+		ret = 1;
 	}
 
-	if (!curr)
-		return -EINVAL;
-
-	if (curr->epoch_id < epoch_id) {
-		temp = rb_next(&curr->node);
-		if (!temp) {
-			nova_dbg("%s: failed to find target snapshot info\n",
-					__func__);
-			BUG();
-			return -EINVAL;
-		}
-		curr = container_of(temp, struct snapshot_info, node);
-	}
-
-	*ret_info = curr;
 	return ret;
 }
 
 static struct snapshot_info *
-nova_find_adjacent_snapshot_info(struct super_block *sb,
-	struct snapshot_info *info, int next)
+nova_find_next_snapshot_info(struct super_block *sb, struct snapshot_info *info)
 {
 	struct snapshot_info *ret_info = NULL;
-	struct rb_node *temp;
+	int ret;
 
-	if (next)
-		temp = rb_next(&info->node);
-	else
-		temp = rb_prev(&info->node);
+	ret = nova_find_target_snapshot_info(sb, info->epoch_id + 1, &ret_info);
 
-	if (!temp)
-		return ret_info;
+	if (ret == 1 && ret_info->epoch_id <= info->epoch_id) {
+		nova_err(sb, "info epoch id %llu, next epoch id %llu\n",
+				info->epoch_id, ret_info->epoch_id);
+		ret_info = NULL;
+	}
 
-	ret_info = container_of(temp, struct snapshot_info, node);
 	return ret_info;
 }
 
@@ -124,35 +84,13 @@ static int nova_insert_snapshot_info(struct super_block *sb,
 	struct snapshot_info *info)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct rb_root *tree;
-	struct snapshot_info *curr;
-	struct rb_node **temp, *parent;
-	int compVal;
+	int ret;
 
-	tree = &sbi->snapshot_info_tree;
-	temp = &(tree->rb_node);
-	parent = NULL;
+	ret = radix_tree_insert(&sbi->snapshot_info_tree, info->epoch_id, info);
+	if (ret)
+		nova_dbg("%s ERROR %d\n", __func__, ret);
 
-	while (*temp) {
-		curr = container_of(*temp, struct snapshot_info, node);
-		compVal = nova_rbtree_compare_snapshot_info(curr,
-						info->epoch_id);
-		parent = *temp;
-
-		if (compVal == -1) {
-			temp = &((*temp)->rb_left);
-		} else if (compVal == 1) {
-			temp = &((*temp)->rb_right);
-		} else {
-			/* Do not insert snapshot with same trans ID */
-			return -EEXIST;
-		}
-	}
-
-	rb_link_node(&info->node, parent, temp);
-	rb_insert_color(&info->node, tree);
-
-	return 0;
+	return ret;
 }
 
 /* Reuse the inode log page structure */
@@ -528,13 +466,19 @@ static int nova_old_entry_deleteable(struct super_block *sb,
 	int ret;
 
 	if (create_epoch_id == delete_epoch_id) {
+		/* Create and delete in the same epoch */
 		return 1;
 	}
 
 	ret = nova_find_target_snapshot_info(sb, create_epoch_id, &info);
-	if (ret < 0 || !info) {
-		nova_dbg("%s: Snapshot info not found\n", __func__);
-		return -EINVAL;
+	if (ret == 0) {
+		/* Old entry does not belong to any snapshot */
+		return 1;
+	}
+
+	if (info->epoch_id >= delete_epoch_id) {
+		/* Create and delete in different epoch but same snapshot */
+		return 1;
 	}
 
 	*ret_info = info;
@@ -1149,7 +1093,6 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info = NULL;
 	struct snapshot_info *next = NULL;
-	struct rb_root *tree;
 	u64 epoch_id;
 	int delete = 0;
 	int ret;
@@ -1173,7 +1116,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		goto update_snapshot_table;
 	}
 
-	next = nova_find_adjacent_snapshot_info(sb, info, 1);
+	next = nova_find_next_snapshot_info(sb, info);
 
 	if (next) {
 		nova_link_to_next_snapshot(sb, info, next);
@@ -1182,8 +1125,7 @@ int nova_delete_snapshot(struct super_block *sb, int index)
 		delete = 1;
 	}
 
-	tree = &sbi->snapshot_info_tree;
-	rb_erase(&info->node, tree);
+	radix_tree_delete(&sbi->snapshot_info_tree, epoch_id);
 
 update_snapshot_table:
 
@@ -1300,43 +1242,56 @@ static int nova_save_snapshot_info(struct super_block *sb,
 	return 0;
 }
 
+static int nova_print_snapshot_info(struct snapshot_table *snapshot_table,
+	struct snapshot_info *info, struct seq_file *seq)
+{
+	struct tm tm;
+	int index = 0;
+	u64 timestamp;
+	unsigned long local_time;
+
+	index = info->index;
+
+	timestamp = snapshot_table->entries[index].timestamp;
+	local_time = timestamp - sys_tz.tz_minuteswest * 60;
+	time_to_tm(local_time, 0, &tm);
+	seq_printf(seq, "%5d\t%8llu\t%4lu-%02d-%02d\t%02d:%02d:%02d\n",
+					index, info->epoch_id,
+					tm.tm_year + 1900, tm.tm_mon + 1,
+					tm.tm_mday,
+					tm.tm_hour, tm.tm_min, tm.tm_sec);
+	return 0;
+}
+
 int nova_print_snapshot_table(struct super_block *sb, struct seq_file *seq)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	struct snapshot_info *info;
-	struct rb_root *tree;
-	struct rb_node *temp;
-	struct tm tm;
-	int index = 0, count = 0;
-	u64 timestamp;
-	unsigned long local_time;
+	struct snapshot_info *infos[FREE_BATCH];
+	int nr_infos;
+	u64 epoch_id = 0;
+	int count = 0;
+	int i;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
 	seq_printf(seq, "========== NOVA snapshot table ==========\n");
-	seq_printf(seq, "Index\tTrans ID\t      Date\t    Time\n");
+	seq_printf(seq, "Index\tEpoch ID\t      Date\t    Time\n");
 
-	tree = &sbi->snapshot_info_tree;
-
-	/* Print in trans ID increasing order */
-	temp = rb_first(tree);
-	while (temp) {
-		info = container_of(temp, struct snapshot_info, node);
-		index = info->index;
-
-		timestamp = snapshot_table->entries[index].timestamp;
-		local_time = timestamp - sys_tz.tz_minuteswest * 60;
-		time_to_tm(local_time, 0, &tm);
-		seq_printf(seq, "%5d\t%8llu\t%4lu-%02d-%02d\t%02d:%02d:%02d\n",
-					index, info->epoch_id,
-					tm.tm_year + 1900, tm.tm_mon + 1,
-					tm.tm_mday,
-					tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-		temp = rb_next(temp);
-		count++;
-	}
+	/* Print in epoch ID increasing order */
+	do {
+		nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
+					(void **)infos, epoch_id, FREE_BATCH);
+		for (i = 0; i < nr_infos; i++) {
+			info = infos[i];
+			BUG_ON(!info);
+			epoch_id = info->epoch_id;
+			nova_print_snapshot_info(snapshot_table, info, seq);
+			count++;
+		}
+		epoch_id++;
+	} while (nr_infos == FREE_BATCH);
 
 	seq_printf(seq, "=========== Total %d snapshots ===========\n", count);
 	return 0;
@@ -1348,10 +1303,12 @@ int nova_save_snapshots(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct snapshot_table *snapshot_table;
 	struct snapshot_nvmm_info_table *nvmm_info_table;
-	struct rb_root *tree;
 	struct snapshot_info *info;
 	struct snapshot_nvmm_info *nvmm_info;
-	struct rb_node *temp;
+	struct snapshot_info *infos[FREE_BATCH];
+	int nr_infos;
+	u64 epoch_id = 0;
+	int i;
 
 	snapshot_table = nova_get_snapshot_table(sb);
 
@@ -1361,24 +1318,27 @@ int nova_save_snapshots(struct super_block *sb)
 	if (sbi->mount_snapshot)
 		return 0;
 
-	tree = &sbi->snapshot_info_tree;
 	nvmm_info_table = nova_get_nvmm_info_table(sb);
 	nova_memunlock_block(sb, nvmm_info_table);
 	memset(nvmm_info_table, '0', PAGE_SIZE);
 	nova_memlock_block(sb, nvmm_info_table);
 
 	/* Save in increasing order */
-	temp = rb_first(tree);
-	while (temp) {
-		info = container_of(temp, struct snapshot_info, node);
-		nvmm_info = &nvmm_info_table->infos[info->index];
-		nova_save_snapshot_info(sb, info, nvmm_info);
-		nova_delete_snapshot_info(sb, info, 0);
-
-		temp = rb_next(temp);
-		rb_erase(&info->node, tree);
-		nova_free_snapshot_info(info);
-	}
+	do {
+		nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
+					(void **)infos, epoch_id, FREE_BATCH);
+		for (i = 0; i < nr_infos; i++) {
+			info = infos[i];
+			BUG_ON(!info);
+			epoch_id = info->epoch_id;
+			nvmm_info = &nvmm_info_table->infos[info->index];
+			nova_save_snapshot_info(sb, info, nvmm_info);
+			nova_delete_snapshot_info(sb, info, 0);
+			radix_tree_delete(&sbi->snapshot_info_tree, epoch_id);
+			nova_free_snapshot_info(info);
+		}
+		epoch_id++;
+	} while (nr_infos == FREE_BATCH);
 
 	return 0;
 }
@@ -1386,25 +1346,25 @@ int nova_save_snapshots(struct super_block *sb)
 int nova_destroy_snapshot_infos(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct snapshot_table *snapshot_table;
-	struct rb_root *tree;
 	struct snapshot_info *info;
-	struct rb_node *temp;
+	struct snapshot_info *infos[FREE_BATCH];
+	int nr_infos;
+	u64 epoch_id = 0;
+	int i;
 
-	snapshot_table = nova_get_snapshot_table(sb);
-
-	tree = &sbi->snapshot_info_tree;
-
-	/* Save in increasing order */
-	temp = rb_first(tree);
-	while (temp) {
-		info = container_of(temp, struct snapshot_info, node);
-		nova_delete_snapshot_info(sb, info, 0);
-
-		temp = rb_next(temp);
-		rb_erase(&info->node, tree);
-		nova_free_snapshot_info(info);
-	}
+	do {
+		nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
+					(void **)infos, epoch_id, FREE_BATCH);
+		for (i = 0; i < nr_infos; i++) {
+			info = infos[i];
+			BUG_ON(!info);
+			epoch_id = info->epoch_id;
+			nova_delete_snapshot_info(sb, info, 0);
+			radix_tree_delete(&sbi->snapshot_info_tree, epoch_id);
+			nova_free_snapshot_info(info);
+		}
+		epoch_id++;
+	} while (nr_infos == FREE_BATCH);
 
 	return 0;
 }
@@ -1483,7 +1443,7 @@ int nova_snapshot_init(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	int ret;
 
-	sbi->snapshot_info_tree = RB_ROOT;
+	INIT_RADIX_TREE(&sbi->snapshot_info_tree, GFP_ATOMIC);
 	ret = nova_snapshot_cleaner_init(sbi);
 
 	return ret;

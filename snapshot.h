@@ -39,7 +39,6 @@ struct snapshot_list {
 struct snapshot_info {
 	int	index;
 	u64	epoch_id;
-	struct rb_node node;
 
 	/* Per-CPU snapshot list */
 	struct snapshot_list *lists;
