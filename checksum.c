@@ -622,9 +622,11 @@ bool nova_verify_data_csum(struct inode *inode,
 
 		if (!match) {
 			nova_dbg("%s: nova data stripe checksum fail! "
-				"inode %lu block offset %lu stripe nr %lu "
-				"csum calc 0x%08x csum nvmm 0x%08x\n",
-				__func__, inode->i_ino, blockoff, strp_nr,
+				"inode %lu, strp %lu of %lu, "
+				"block offset %lu, stripe nr %lu, "
+				"csum calc 0x%08x, csum nvmm 0x%08x\n",
+				__func__, inode->i_ino, strp, strps,
+				blockoff, strp_nr,
 				csum_calc, csum_nvmm);
 
 			if (data_parity > 0)
