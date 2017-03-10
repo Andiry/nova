@@ -119,9 +119,11 @@ memcpy:
 						offset, nr)) {
 				nova_err(sb, "%s: nova data checksum and "
 					"recovery fail! "
-					"inode %lu entry pgoff %lu "
-					"index %lu\n", __func__,
-					inode->i_ino, entry->pgoff, index);
+					"inode %lu, offset %lu, "
+					"entry pgoff %lu, %lu pages, "
+					"pgoff %lu\n", __func__,
+					inode->i_ino, offset, entry->pgoff,
+					entry->num_pages, index);
 				error = -EIO;
 				goto out;
 			}
