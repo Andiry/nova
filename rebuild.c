@@ -269,21 +269,50 @@ out:
 	return ret;
 }
 
+int nova_reset_mapping_csum_parity(struct super_block *sb,
+	struct inode *inode, struct address_space *mapping,
+	unsigned long start_pgoff, unsigned long end_pgoff)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	pgoff_t indices[PAGEVEC_SIZE];
+	struct pagevec pvec;
+	bool done = false;
+	int i;
+
+	while (!done) {
+		pvec.nr = find_get_entries_tag(mapping, start_pgoff,
+				PAGECACHE_TAG_DIRTY, PAGEVEC_SIZE,
+				pvec.pages, indices);
+
+		if (pvec.nr == 0)
+			break;
+
+		for (i = 0; i < pvec.nr; i++) {
+			if (indices[i] >= end_pgoff) {
+				done = true;
+				break;
+			}
+
+			nova_reset_csum_parity_page(sb, sih, NULL,
+						indices[i], 0);
+		}
+
+		start_pgoff += pvec.nr;
+	}
+
+	return 0;
+}
+
 int nova_reset_vma_csum_parity(struct super_block *sb,
 	struct vma_item *item)
 {
 	struct vm_area_struct *vma = item->vma;
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
 	struct nova_mmap_entry *entry;
 	unsigned long num_pages;
 	unsigned long start_index, end_index;
-	pgoff_t indices[PAGEVEC_SIZE];
-	struct pagevec pvec;
-	bool done = false;
-	int i;
 	int ret = 0;
 
 	if (data_csum == 0 && data_parity == 0)
@@ -293,26 +322,8 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 	start_index = vma->vm_pgoff;
 	end_index = vma->vm_pgoff + num_pages;
 
-	while (!done) {
-		pvec.nr = find_get_entries_tag(mapping, start_index,
-				PAGECACHE_TAG_DIRTY, PAGEVEC_SIZE,
-				pvec.pages, indices);
-
-		if (pvec.nr == 0)
-			break;
-
-		for (i = 0; i < pvec.nr; i++) {
-			if (indices[i] >= end_index) {
-				done = true;
-				break;
-			}
-
-			nova_reset_csum_parity_page(sb, sih, NULL,
-						indices[i], 0);
-		}
-
-		start_index += pvec.nr;
-	}
+	ret = nova_reset_mapping_csum_parity(sb, inode, mapping,
+					start_index, end_index);
 
 	if (item->mmap_entry) {
 		entry = nova_get_block(sb, item->mmap_entry);
