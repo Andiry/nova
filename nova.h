@@ -734,6 +734,10 @@ struct nova_sb_info {
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
+	/* Checksum and parity for zero block */
+	u32 csum;
+	void *parity;
+
 	/* Per-CPU journal lock */
 	spinlock_t *journal_locks;
 

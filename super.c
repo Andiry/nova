@@ -486,6 +486,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	struct inode *root_i = NULL;
 	struct inode_map *inode_map;
 	unsigned long blocksize;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 	u32 random = 0;
 	int retval = -EINVAL;
 	int i;
@@ -561,6 +562,8 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		retval = -ENOMEM;
 		goto out;
 	}
+
+	sbi->csum = nova_crc32c(NOVA_INIT_CSUM, sbi->zeroed_page, strp_size);
 
 	sbi->snapshot_si = kmem_cache_alloc(nova_inode_cachep, GFP_NOFS);
 	nova_snapshot_init(sb);
