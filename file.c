@@ -421,7 +421,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 
 		entry = nova_get_block(sb, update.curr_entry);
 		nova_reset_csum_parity_range(sb, sih, entry, start_blk,
-					start_blk + allocated, 1);
+					start_blk + allocated, 1, 0);
 
 		update_log = true;
 		if (begin_tail == 0)
@@ -532,7 +532,7 @@ static int nova_update_iter_csum_parity(struct super_block *sb,
 		end_pgoff++;
 
 	nova_reset_csum_parity_range(sb, sih, NULL, start_pgoff,
-			end_pgoff, 0);
+			end_pgoff, 0, 0);
 
 	return 0;
 }

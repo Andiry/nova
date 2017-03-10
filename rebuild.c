@@ -184,13 +184,14 @@ static int nova_reset_csum_parity_page(struct super_block *sb,
 
 int nova_reset_csum_parity_range(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long start_pgoff, unsigned long end_pgoff, int zero)
+	unsigned long start_pgoff, unsigned long end_pgoff, int zero,
+	int check_entry)
 {
 	struct nova_file_write_entry *curr;
 	unsigned long pgoff;
 
 	for (pgoff = start_pgoff; pgoff < end_pgoff; pgoff++) {
-		if (entry && zero == 0) {
+		if (entry && check_entry && zero == 0) {
 			curr = nova_get_write_entry(sb, sih, pgoff);
 			if (curr != entry)
 				continue;
@@ -227,7 +228,7 @@ static int nova_reset_data_csum_parity(struct super_block *sb,
 
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
 	nova_reset_csum_parity_range(sb, sih, entry, fake_entry.pgoff,
-			end_pgoff, 0);
+			end_pgoff, 0, 1);
 
 out:
 	if (ret == 0)
@@ -259,7 +260,7 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
 	nova_reset_csum_parity_range(sb, sih, NULL, fake_entry.pgoff,
-			end_pgoff, 0);
+			end_pgoff, 0, 0);
 
 out:
 	if (ret == 0)
