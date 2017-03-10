@@ -120,7 +120,7 @@ memcpy:
 				nova_err(sb, "%s: nova data checksum and "
 					"recovery fail! "
 					"inode %lu, offset %lu, "
-					"entry pgoff %lu, %lu pages, "
+					"entry pgoff %lu, %u pages, "
 					"pgoff %lu\n", __func__,
 					inode->i_ino, offset, entry->pgoff,
 					entry->num_pages, index);
