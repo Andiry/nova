@@ -419,18 +419,9 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 			goto out;
 		}
 
-#if 0
-		if (data_csum) {
-			csummed = copied - nova_update_cow_csum(inode, blocknr,
-						(void *) buf, offset, copied);
-			if (unlikely(csummed != copied)) {
-				nova_dbg("%s: not all data bytes are "
-					"checksummed! copied %zu, "
-					"csummed %zu\n", __func__,
-					copied, csummed);
-			}
-		}
-#endif
+		entry = nova_get_block(sb, update.curr_entry);
+		nova_reset_csum_parity_range(sb, sih, entry, start_blk,
+					start_blk + allocated, 1);
 
 		update_log = true;
 		if (begin_tail == 0)
@@ -541,7 +532,7 @@ static int nova_update_iter_csum_parity(struct super_block *sb,
 		end_pgoff++;
 
 	nova_reset_csum_parity_range(sb, sih, NULL, start_pgoff,
-			end_pgoff);
+			end_pgoff, 0);
 
 	return 0;
 }
