@@ -278,7 +278,11 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 	pgoff_t indices[PAGEVEC_SIZE];
 	struct pagevec pvec;
 	bool done = false;
+	int count = 0;
 	int i;
+
+	nova_dbgv("%s: pgoff %lu to %lu\n",
+			__func__, start_pgoff, end_pgoff);
 
 	while (!done) {
 		pvec.nr = find_get_entries_tag(mapping, start_pgoff,
@@ -298,9 +302,11 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 						indices[i], 0);
 		}
 
+		count += pvec.nr;
 		start_pgoff += pvec.nr;
 	}
 
+	nova_dbgv("%s: reset %d pages\n", __func__, count);
 	return 0;
 }
 

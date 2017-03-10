@@ -291,6 +291,9 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	start_pgoff = start >> PAGE_SHIFT;
 	end_pgoff = (end + 1) >> PAGE_SHIFT;
+	nova_dbgv("%s: msync pgoff range %lu to %lu\n",
+			__func__, start_pgoff, end_pgoff);
+
 	nova_reset_mapping_csum_parity(sb, inode, mapping,
 					start_pgoff, end_pgoff);
 
