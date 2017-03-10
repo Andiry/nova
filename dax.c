@@ -440,6 +440,58 @@ void nova_init_file_write_entry(struct super_block *sb,
 	entry->size = file_size;
 }
 
+static int nova_post_memcpy_operation(struct inode *inode,
+	const char __user *buf,	void *kbuf, unsigned long blocknr,
+	int allocated, size_t offset, size_t copied)
+{
+	struct super_block *sb = inode->i_sb;
+	size_t csummed, coded;
+	int ret = 0;
+
+	if (copied > 0 && kbuf != NULL) {
+		/* merge user data in to the kernel buffer */
+		csummed = copied - copy_from_user(kbuf + offset,
+							buf, copied);
+		if (unlikely(csummed != copied)) {
+			if (kbuf != NULL) kfree(kbuf);
+			nova_err(sb, "%s: not all user data is copied! "
+			"expect to copy %zu bytes, actually "
+					"copied %zu bytes\n", __func__,
+				copied, csummed);
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+	if (copied > 0 && data_csum > 0) {
+	csummed = copied - nova_update_cow_csum(inode, blocknr,
+						kbuf, offset, copied);
+		if (unlikely(csummed != copied)) {
+			if (kbuf != NULL) kfree(kbuf);
+			nova_err(sb, "%s: not all data bytes are "
+				"checksummed! copied %zu, "
+				"csummed %zu\n", __func__,
+				copied, csummed);
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+	if (copied > 0 && data_parity > 0) {
+		coded = allocated - nova_update_cow_parity(inode,
+					blocknr, kbuf, allocated);
+		if (unlikely(coded != allocated)) {
+			if (kbuf != NULL) kfree(kbuf);
+			nova_err(sb, "%s: not all data blocks are "
+				"parity coded! allocated %zu, "
+				"coded %zu\n", __func__,
+				allocated, coded);
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+out:
+	return ret;
+}
+
 static ssize_t nova_cow_file_write(struct file *filp,
 	const char __user *buf,	size_t len, loff_t *ppos, bool need_lock)
 {
@@ -453,7 +505,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	struct nova_inode_update update;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, csummed, coded, ret;
+	size_t count, offset, copied;
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
@@ -465,6 +517,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
+	ssize_t ret;
 	u64 begin_tail = 0;
 	u64 epoch_id;
 	u32 time;
@@ -569,46 +622,10 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		if (copied > 0 && kbuf != NULL) {
-			/* merge user data in to the kernel buffer */
-			csummed = copied - copy_from_user(kbuf + offset,
-								buf, copied);
-			if (unlikely(csummed != copied)) {
-				if (kbuf != NULL) kfree(kbuf);
-				nova_err(sb, "%s: not all user data is copied! "
-					"expect to copy %zu bytes, actually "
-					"copied %zu bytes\n", __func__,
-					copied, csummed);
-				ret = -EFAULT;
-				goto out;
-			}
-		}
-		if (copied > 0 && data_csum > 0) {
-			csummed = copied - nova_update_cow_csum(inode, blocknr,
-							kbuf, offset, copied);
-			if (unlikely(csummed != copied)) {
-				if (kbuf != NULL) kfree(kbuf);
-				nova_err(sb, "%s: not all data bytes are "
-					"checksummed! copied %zu, "
-					"csummed %zu\n", __func__,
-					copied, csummed);
-				ret = -EFAULT;
-				goto out;
-			}
-		}
-		if (copied > 0 && data_parity > 0) {
-			coded = allocated - nova_update_cow_parity(inode,
-						blocknr, kbuf, allocated);
-			if (unlikely(coded != allocated)) {
-				if (kbuf != NULL) kfree(kbuf);
-				nova_err(sb, "%s: not all data blocks are "
-					"parity coded! allocated %zu, "
-					"coded %zu\n", __func__,
-					allocated, coded);
-				ret = -EFAULT;
-				goto out;
-			}
-		}
+		ret = nova_post_memcpy_operation(inode, buf, kbuf, blocknr,
+					allocated, offset, copied);
+		if (ret)
+			goto out;
 
 		if (kbuf != NULL) kfree(kbuf);
 
@@ -768,7 +785,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	struct nova_inode_update update;
 	ssize_t     written = 0;
 	loff_t pos;
-	size_t count, offset, copied, csummed, coded, ret;
+	size_t count, offset, copied;
 	unsigned long start_blk, num_blocks, ent_blks = 0;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
@@ -787,6 +804,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	u64 epoch_id;
 	u64 file_size;
 	u32 time;
+	ssize_t ret;
 
 	if (len == 0)
 		return 0;
@@ -896,46 +914,10 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		nova_memlock_range(sb, kmem + offset, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-		if (copied > 0 && kbuf != NULL) {
-			/* merge user data in to the kernel buffer */
-			csummed = copied - copy_from_user(kbuf + offset,
-								buf, copied);
-			if (unlikely(csummed != copied)) {
-				if (kbuf != NULL) kfree(kbuf);
-				nova_err(sb, "%s: not all user data is copied! "
-					"expect to copy %zu bytes, actually "
-					"copied %zu bytes\n", __func__,
-					copied, csummed);
-				ret = -EFAULT;
-				goto out;
-			}
-		}
-		if (copied > 0 && data_csum > 0) {
-			csummed = copied - nova_update_cow_csum(inode, blocknr,
-							kbuf, offset, copied);
-			if (unlikely(csummed != copied)) {
-				if (kbuf != NULL) kfree(kbuf);
-				nova_err(sb, "%s: not all data bytes are "
-					"checksummed! copied %zu, "
-					"csummed %zu\n", __func__,
-					copied, csummed);
-				ret = -EFAULT;
-				goto out;
-			}
-		}
-		if (copied > 0 && data_parity > 0) {
-			coded = allocated - nova_update_cow_parity(inode,
-						blocknr, kbuf, allocated);
-			if (unlikely(coded != allocated)) {
-				if (kbuf != NULL) kfree(kbuf);
-				nova_err(sb, "%s: not all data blocks are "
-					"parity coded! allocated %zu, "
-					"coded %zu\n", __func__,
-					allocated, coded);
-				ret = -EFAULT;
-				goto out;
-			}
-		}
+		ret = nova_post_memcpy_operation(inode, buf, kbuf, blocknr,
+					allocated, offset, copied);
+		if (ret)
+			goto out;
 
 		if (kbuf != NULL) kfree(kbuf);
 
