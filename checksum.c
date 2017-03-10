@@ -524,8 +524,9 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long pgoff)
+	unsigned long pgoff, int zero)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *dax_mem = NULL, *csum_addr;
 	u64 blockoff;
 	size_t strp_size = NOVA_STRIPE_SIZE;
@@ -548,8 +549,11 @@ int nova_update_block_csum(struct super_block *sb,
 	strp_nr = blockoff >> strp_shift;
 
 	for (i = 0; i < count; i++) {
-		csum = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM, dax_mem,
-								strp_size));
+		if (unlikely(zero))
+			csum = sbi->csum;
+		else
+			csum = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+							dax_mem, strp_size));
 		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
 		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 		memcpy_to_pmem_nocache(csum_addr, &csum,

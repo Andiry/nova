@@ -1590,7 +1590,7 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 	u64 pi_addr, u64 alter_pi_addr);
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long pgoff);
+	unsigned long pgoff, int zero);
 bool nova_verify_data_csum(struct inode *inode,
 	struct nova_file_write_entry *entry, pgoff_t index,
 	size_t offset, size_t bytes);
@@ -1785,7 +1785,7 @@ int nova_calculate_block_parity(struct super_block *sb,
 	void *parity, void *block);
 int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long pgoff);
+	unsigned long pgoff, int zero);
 size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	void *wrbuf, int wrblocks);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,

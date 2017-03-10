@@ -57,8 +57,9 @@ int nova_calculate_block_parity(struct super_block *sb,
 
 /* Compute parity for a whole data block and write the parity stripe to nvmm */
 static int nova_update_block_parity(struct super_block *sb,
-	unsigned long blocknr, void *parity, void *block)
+	unsigned long blocknr, void *parity, void *block, int zero)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	void *par_addr;
 
@@ -67,7 +68,10 @@ static int nova_update_block_parity(struct super_block *sb,
 		return -EINVAL;
 	}
 
-	nova_calculate_block_parity(sb, parity, block);
+	if (unlikely(zero))
+		parity = sbi->parity;
+	else
+		nova_calculate_block_parity(sb, parity, block);
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 
@@ -80,7 +84,7 @@ static int nova_update_block_parity(struct super_block *sb,
 
 int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long pgoff)
+	unsigned long pgoff, int zero)
 {
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned long blocknr;
@@ -104,7 +108,7 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	dax_mem = nova_get_block(sb, blockoff);
 
 	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
-	nova_update_block_parity(sb, blocknr, parbuf, dax_mem);
+	nova_update_block_parity(sb, blocknr, parbuf, dax_mem, zero);
 
 	kfree(parbuf);
 	return 0;
@@ -151,7 +155,7 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	}
 
 	for (block = 0; block < wrblocks; block++) {
-		nova_update_block_parity(sb, blocknr, parbuf, blockptr);
+		nova_update_block_parity(sb, blocknr, parbuf, blockptr, 0);
 
 		blocknr  += 1;
 		blockptr += sb->s_blocksize;
