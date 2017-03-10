@@ -189,6 +189,11 @@ void nova_clear_last_page_tail(struct super_block *sb,
 	nova_flush_buffer(nvmm_addr + offset, length, 0);
 	nova_memlock_range(sb, nvmm_addr + offset, length);
 
+	if (data_csum > 0)
+		nova_update_truncated_block_csum(sb, inode, newsize);
+	if (data_parity > 0)
+		nova_update_truncated_block_parity(sb, inode, newsize);
+
 	/* Clear mmap page */
 	if (sih->mmap_pages && pgoff <= sih->high_dirty &&
 			pgoff >= sih->low_dirty) {
@@ -199,6 +204,13 @@ void nova_clear_last_page_tail(struct super_block *sb,
 			nova_memunlock_range(sb, nvmm_addr + offset, length);
 			memset(nvmm_addr + offset, 0, length);
 			nova_memlock_range(sb, nvmm_addr + offset, length);
+
+			if (data_csum > 0)
+				nova_update_truncated_block_csum(sb, inode,
+								newsize);
+			if (data_parity > 0)
+				nova_update_truncated_block_parity(sb, inode,
+								newsize);
 		}
 	}
 }

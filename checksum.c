@@ -737,6 +737,73 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	return 0;
 }
 
+int nova_update_truncated_block_csum(struct super_block *sb,
+	struct inode *inode, loff_t newsize) {
+
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned long offset = newsize & (sb->s_blocksize - 1);
+	unsigned long pgoff, length;
+	u64 nvmm;
+	u32 csum;
+	char *nvmm_addr, *csum_addr, *strp_addr, *tail_strp = NULL;
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned int strp_index, strp_offset;
+	unsigned long strps, strp_nr;
+
+	length = sb->s_blocksize - offset;
+	pgoff = newsize >> sb->s_blocksize_bits;
+
+	nvmm = nova_find_nvmm_block(sb, sih, NULL, pgoff);
+	if (nvmm == 0)
+		return -EFAULT;
+
+	nvmm_addr = (char *)nova_get_block(sb, nvmm);
+
+	strp_index = offset >> strp_shift;
+	strp_offset = offset - (strp_index << strp_shift);
+
+	strps = ((strp_offset + length - 1) >> strp_shift) + 1;
+	strp_nr = (nvmm + offset) >> strp_shift;
+	strp_addr = nvmm_addr + (strp_index << strp_shift);
+
+	/* Copy to DRAM to catch MCE.
+	if (strp_offset > 0) {
+		tail_strp = kzalloc(strp_size, GFP_KERNEL);
+		if (tail_strp == NULL) {
+			nova_err(sb, "%s: buffer allocation error\n", __func__);
+			return -ENOMEM;
+		}
+	}
+	*/
+
+	do {
+		if (strp_offset > 0) {
+		//	memcpy_from_pmem(tail_strp, strp_addr, strp_offset);
+			tail_strp = strp_addr;
+
+			csum = nova_crc32c(NOVA_INIT_CSUM, tail_strp, strp_size);
+			strp_offset = 0;
+		} else {
+			csum = sbi->csum;
+		}
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+
+		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
+		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+
+		strps--;
+		strp_nr++;
+	} while (strps > 0);
+
+//	if (tail_strp != NULL) kfree(tail_strp);
+
+	return 0;
+}
+
 int nova_data_csum_init_free_list(struct super_block *sb,
 	struct free_list *free_list)
 {

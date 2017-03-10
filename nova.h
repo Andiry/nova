@@ -1598,6 +1598,8 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long index, size_t offset, unsigned long dst_blknr,
 	bool is_end_blk);
+int nova_update_truncated_block_csum(struct super_block *sb,
+	struct inode *inode, loff_t newsize);
 int nova_data_csum_init_free_list(struct super_block *sb,
 	struct free_list *free_list);
 
@@ -1790,6 +1792,8 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	void *wrbuf, int wrblocks);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int strp_id);
+int nova_update_truncated_block_parity(struct super_block *sb,
+	struct inode *inode, loff_t newsize);
 int nova_data_parity_init_free_list(struct super_block *sb,
 	struct free_list *free_list);
 

@@ -249,6 +249,51 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	return 0;
 }
 
+int nova_update_truncated_block_parity(struct super_block *sb,
+	struct inode *inode, loff_t newsize)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned long pgoff, blocknr;
+	u64 nvmm;
+	char *nvmm_addr, *blkbuf, *parbuf;
+	u8 btype = sih->i_blk_type;
+	size_t strp_size = NOVA_STRIPE_SIZE;
+
+	pgoff = newsize >> sb->s_blocksize_bits;
+
+	nvmm = nova_find_nvmm_block(sb, sih, NULL, pgoff);
+	if (nvmm == 0)
+		return -EFAULT;
+
+	nvmm_addr = (char *)nova_get_block(sb, nvmm);
+
+	blocknr = nova_get_blocknr(sb, nvmm, btype);
+	parbuf = kmalloc(strp_size, GFP_KERNEL);
+	if (parbuf == NULL) {
+		nova_err(sb, "%s: buffer allocation error\n", __func__);
+		return -ENOMEM;
+	}
+
+	/* Copy to DRAM to catch MCE.
+	blkbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (blkbuf == NULL) {
+		nova_err(sb, "%s: buffer allocation error\n", __func__);
+		return -ENOMEM;
+	}
+	*/
+
+//	memcpy_from_pmem(blkbuf, nvmm_addr, PAGE_SIZE);
+	blkbuf = nvmm_addr;
+
+	nova_update_block_parity(sb, blocknr, parbuf, blkbuf, 0);
+
+	kfree(parbuf);
+//	kfree(blkbuf);
+
+	return 0;
+}
+
 int nova_data_parity_init_free_list(struct super_block *sb,
 	struct free_list *free_list)
 {
