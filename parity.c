@@ -17,7 +17,7 @@
 
 #include "nova.h"
 
-static int nova_calculate_block_parity(struct super_block *sb,
+int nova_calculate_block_parity(struct super_block *sb,
 	void *parity, void *block)
 {
 	unsigned int strp, num_strps, i, j;
