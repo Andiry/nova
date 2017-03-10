@@ -17,22 +17,15 @@
 
 #include "nova.h"
 
-/* Compute parity for a whole data block and write the parity stripe to nvmm */
-static int nova_update_block_parity(struct super_block *sb,
-	unsigned long blocknr, void *parity, void *block)
+static int nova_calculate_block_parity(struct super_block *sb,
+	void *parity, void *block)
 {
 	unsigned int strp, num_strps, i, j;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	u8 *par_ptr  = (u8 *) parity;
 	u8 *strp_ptr = (u8 *) block;
-	void *par_addr;
 	u64 xor;
-
-	if ((parity == NULL) || (block == NULL)) {
-		nova_dbg("%s: pointer error\n", __func__);
-		return -EINVAL;
-	}
 
 	num_strps = sb->s_blocksize >> strp_shift;
 	if ( static_cpu_has(X86_FEATURE_XMM2) ) { // sse2 128b
@@ -58,6 +51,23 @@ static int nova_update_block_parity(struct super_block *sb,
 			*((u64 *) &par_ptr[i]) = xor;
 		}
 	}
+
+	return 0;
+}
+
+/* Compute parity for a whole data block and write the parity stripe to nvmm */
+static int nova_update_block_parity(struct super_block *sb,
+	unsigned long blocknr, void *parity, void *block)
+{
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	void *par_addr;
+
+	if ((parity == NULL) || (block == NULL)) {
+		nova_dbg("%s: pointer error\n", __func__);
+		return -EINVAL;
+	}
+
+	nova_calculate_block_parity(sb, parity, block);
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 
