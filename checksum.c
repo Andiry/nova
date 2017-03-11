@@ -474,8 +474,8 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
 		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 
-		strp_nr  += 1;
-		strp_ptr += strp_size;
+		strp_nr += 1;
+		if (!zero) strp_ptr += strp_size;
 	}
 
 	return 0;
@@ -737,15 +737,12 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 int nova_update_truncated_block_csum(struct super_block *sb,
 	struct inode *inode, loff_t newsize) {
 
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	unsigned long offset = newsize & (sb->s_blocksize - 1);
 	unsigned long pgoff, length;
 	u64 nvmm;
-	u32 csum;
-	char *nvmm_addr, *csum_addr, *strp_addr, *tail_strp = NULL;
-	size_t strp_size = NOVA_STRIPE_SIZE;
+	char *nvmm_addr, *strp_addr, *tail_strp = NULL;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
 	unsigned long strps, strp_nr;
@@ -766,35 +763,23 @@ int nova_update_truncated_block_csum(struct super_block *sb,
 	strp_nr = (nvmm + offset) >> strp_shift;
 	strp_addr = nvmm_addr + (strp_index << strp_shift);
 
-	/* Copy to DRAM to catch MCE.
 	if (strp_offset > 0) {
+		/* Copy to DRAM to catch MCE.
 		tail_strp = kzalloc(strp_size, GFP_KERNEL);
 		if (tail_strp == NULL) {
 			nova_err(sb, "%s: buffer allocation error\n", __func__);
 			return -ENOMEM;
 		}
-	}
-	*/
-
-	do {
-		if (strp_offset > 0) {
-		//	memcpy_from_pmem(tail_strp, strp_addr, strp_offset);
-			tail_strp = strp_addr;
-
-			csum = nova_crc32c(NOVA_INIT_CSUM, tail_strp, strp_size);
-			strp_offset = 0;
-		} else {
-			csum = sbi->csum;
-		}
-		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
-
-		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
-		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
-		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+		memcpy_from_pmem(tail_strp, strp_addr, strp_offset);
+		*/
+		tail_strp = strp_addr;
+		nova_update_stripe_csum(sb, 1, strp_nr, tail_strp, 0);
 
 		strps--;
 		strp_nr++;
-	} while (strps > 0);
+	}
+
+	if (strps > 0) nova_update_stripe_csum(sb, strps, strp_nr, NULL, 1);
 
 //	if (tail_strp != NULL) kfree(tail_strp);
 
