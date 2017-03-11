@@ -452,6 +452,35 @@ out:
 	return -EIO;
 }
 
+static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
+	unsigned long strp_nr, u8 *strp_ptr, int zero)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	unsigned long strp;
+	u32 csum;
+	void *csum_addr;
+
+	for (strp = 0; strp < strps; strp++) {
+		if (zero)
+			csum = sbi->csum;
+		else
+			csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
+
+		csum = cpu_to_le32(csum);
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+
+		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
+		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+
+		strp_nr  += 1;
+		strp_ptr += strp_size;
+	}
+
+	return 0;
+}
+
 /* Update copy-on-write data stripe checksums.
  *
  * This function checksums a sequence of contiguous copy-on-write data stripes
@@ -478,13 +507,10 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	struct nova_inode_info        *si  = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	u8 *strp_ptr;
-	u32 csum;
-	void *csum_addr;
 	size_t blockoff;
-	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
-	unsigned long strp, strps, strp_nr;
+	unsigned long strps, strp_nr;
 	timing_t cow_csum_time;
 
 	NOVA_START_TIMING(cow_csum_t, cow_csum_time);
@@ -503,19 +529,7 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	strp_nr = (blockoff + offset) >> strp_shift;
 	strp_ptr = (u8 *) wrbuf + (strp_index << strp_shift);
 
-	for (strp = 0; strp < strps; strp++) {
-		csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
-		csum = cpu_to_le32(csum);
-
-		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
-
-		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
-		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
-		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
-
-		strp_nr  += 1;
-		strp_ptr += strp_size;
-	}
+	nova_update_stripe_csum(sb, strps, strp_nr, strp_ptr, 0);
 
 	NOVA_END_TIMING(cow_csum_t, cow_csum_time);
 
@@ -526,14 +540,11 @@ int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	void *dax_mem = NULL, *csum_addr;
+	void *dax_mem = NULL;
 	u64 blockoff;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned long strp_nr;
-	u32 csum;
-	int i;
 	int count;
 
 	count = blk_type_to_size[sih->i_blk_type] / strp_size;
@@ -548,21 +559,7 @@ int nova_update_block_csum(struct super_block *sb,
 
 	strp_nr = blockoff >> strp_shift;
 
-	for (i = 0; i < count; i++) {
-		if (unlikely(zero))
-			csum = sbi->csum;
-		else
-			csum = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
-							dax_mem, strp_size));
-		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
-		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
-		memcpy_to_pmem_nocache(csum_addr, &csum,
-					NOVA_DATA_CSUM_LEN);
-		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
-
-		strp_nr  += 1;
-		dax_mem  += strp_size;
-	}
+	nova_update_stripe_csum(sb, count, strp_nr, dax_mem, zero);
 
 	return 0;
 }
