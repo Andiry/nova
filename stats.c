@@ -67,8 +67,8 @@ const char *Timingstring[TIMING_NUM] =
 	"free_log_blocks",
 
 	/* Transaction */
-	"epochaction_new_inode",
-	"epochaction_link_change",
+	"transaction_new_inode",
+	"transaction_link_change",
 	"update_tail",
 
 	/* Logging */
