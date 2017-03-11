@@ -17,21 +17,30 @@
 
 #include "nova.h"
 
-int nova_calculate_block_parity(struct super_block *sb,
-	void *parity, void *block)
+int nova_calculate_block_parity(struct super_block *sb, void *parity,
+	void *block, int strp_skip)
 {
 	unsigned int strp, num_strps, i, j;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	u8 *init_ptr;
 	u8 *par_ptr  = (u8 *) parity;
 	u8 *strp_ptr = (u8 *) block;
 	u64 xor;
 
+	if (strp_skip < 0) { // compute whole block parity
+		init_ptr = (u8 *) block;
+		strp_skip = 0; // skip the first stripe
+	} else { // data recovery
+		init_ptr = (u8 *) parity;
+	}
+
 	num_strps = sb->s_blocksize >> strp_shift;
 	if ( static_cpu_has(X86_FEATURE_XMM2) ) { // sse2 128b
 		for (i = 0; i < strp_size; i += 16) {
-			asm volatile("movdqa %0, %%xmm0" : : "m" (strp_ptr[i]));
-			for (strp = 1; strp < num_strps; strp++) {
+			asm volatile("movdqa %0, %%xmm0" : : "m" (init_ptr[i]));
+			for (strp = 0; strp < num_strps; strp++) {
+				if (strp == strp_skip) continue;
 				j = (strp << strp_shift) + i;
 				asm volatile(
 					"movdqa     %0, %%xmm1\n"
@@ -43,8 +52,9 @@ int nova_calculate_block_parity(struct super_block *sb,
 		}
 	} else { // common 64b
 		for (i = 0; i < strp_size; i += 8) {
-			xor = *((u64 *) &strp_ptr[i]);
-			for (strp = 1; strp < num_strps; strp++) {
+			xor = *((u64 *) &init_ptr[i]);
+			for (strp = 0; strp < num_strps; strp++) {
+				if (strp == strp_skip) continue;
 				j = (strp << strp_shift) + i;
 				xor ^= *((u64 *) &strp_ptr[j]);
 			}
@@ -71,7 +81,7 @@ static int nova_update_block_parity(struct super_block *sb,
 	if (unlikely(zero))
 		parity = sbi->parity;
 	else
-		nova_calculate_block_parity(sb, parity, block);
+		nova_calculate_block_parity(sb, parity, block, -1);
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 
@@ -170,23 +180,20 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 
 /* Restore a stripe of data. */
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
-        unsigned int strp_id)
+        unsigned int bad_strp_id)
 {
-	unsigned int strp, num_strps, i, j;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	size_t blockoff;
 	unsigned long bad_strp_nr;
-	u8 *blockptr, *bad_strp, *strp_ptr, *strp_buf, *par_addr;
+	u8 *blockptr, *bad_strp, *strp_buf, *par_addr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
-	u64 xor;
 	bool match;
 
 	blockoff = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
 	blockptr = nova_get_block(sb, blockoff);
-	strp_ptr = blockptr;
-	bad_strp = blockptr + strp_id * strp_size;
-	bad_strp_nr = (blockoff + strp_id * strp_size) >> strp_shift;
+	bad_strp = blockptr + bad_strp_id * strp_size;
+	bad_strp_nr = (blockoff + bad_strp_id * strp_size) >> strp_shift;
 
 	strp_buf = kmalloc(strp_size, GFP_KERNEL);
 	if (strp_buf == NULL) {
@@ -202,34 +209,10 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 		return -EIO;
 	}
 
+	/* TODO: Handle MCE: par_addr read from NVMM */
 	memcpy_from_pmem(strp_buf, par_addr, strp_size);
 
-	num_strps = sb->s_blocksize >> strp_shift;
-	if ( static_cpu_has(X86_FEATURE_XMM2) ) { // sse2 128b
-		for (i = 0; i < strp_size; i += 16) {
-			asm volatile("movdqa %0, %%xmm0" : : "m" (strp_buf[i]));
-			for (strp = 0; strp < num_strps; strp++) {
-				if (strp == strp_id) continue; // skip the bad
-				j = (strp << strp_shift) + i;
-				asm volatile(
-					"movdqa     %0, %%xmm1\n"
-					"pxor   %%xmm1, %%xmm0\n"
-					: : "m" (strp_ptr[j])
-				);
-			}
-			asm volatile("movntdq %%xmm0, %0" : "=m" (strp_buf[i]));
-		}
-	} else { // common 64b
-		for (i = 0; i < strp_size; i += 8) {
-			xor = *((u64 *) &strp_buf[i]);
-			for (strp = 0; strp < num_strps; strp++) {
-				if (strp == strp_id) continue; // skip the bad
-				j = (strp << strp_shift) + i;
-				xor ^= *((u64 *) &strp_ptr[j]);
-			}
-			*((u64 *) &strp_buf[i]) = xor;
-		}
-	}
+	nova_calculate_block_parity(sb, strp_buf, blockptr, bad_strp_id);
 
 	csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_buf, strp_size);
 	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr);
