@@ -738,6 +738,9 @@ struct nova_sb_info {
 	u32 csum;
 	void *parity;
 
+	/* Re-usable buffer to compute block parities */
+	void *parbuf;
+
 	/* Per-CPU journal lock */
 	spinlock_t *journal_locks;
 

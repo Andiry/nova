@@ -86,10 +86,9 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero)
 {
-	size_t strp_size = NOVA_STRIPE_SIZE;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long blocknr;
 	void *dax_mem = NULL;
-	u8 *parbuf;
 	u64 blockoff;
 
 	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
@@ -97,20 +96,11 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	if (blockoff == 0)
 		return 0;
 
-	/* parity buffer for rolling updates */
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (!parbuf) {
-		nova_err(sb, "%s: parity buffer allocation error\n",
-				__func__);
-		return -ENOMEM;
-	}
-
 	dax_mem = nova_get_block(sb, blockoff);
 
 	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
-	nova_update_block_parity(sb, blocknr, parbuf, dax_mem, zero);
+	nova_update_block_parity(sb, blocknr, sbi->parbuf, dax_mem, zero);
 
-	kfree(parbuf);
 	return 0;
 }
 
@@ -138,8 +128,8 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 	void *wrbuf, int wrblocks)
 {
 	struct super_block *sb = inode->i_sb;
-	size_t strp_size = NOVA_STRIPE_SIZE;
-	u8 *blockptr, *parbuf;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u8 *blockptr;
 	unsigned long block;
 	timing_t cow_parity_time;
 
@@ -147,21 +137,12 @@ size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
 
 	blockptr = (u8 *) wrbuf;
 
-	/* parity stripe buffer for rolling updates */
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (parbuf == NULL) {
-		nova_err(sb, "%s: parity buffer allocation error\n", __func__);
-		return wrblocks;
-	}
-
 	for (block = 0; block < wrblocks; block++) {
-		nova_update_block_parity(sb, blocknr, parbuf, blockptr, 0);
+		nova_update_block_parity(sb, blocknr, sbi->parbuf, blockptr, 0);
 
 		blocknr  += 1;
 		blockptr += sb->s_blocksize;
 	}
-
-	kfree(parbuf);
 
 	NOVA_END_TIMING(cow_parity_t, cow_parity_time);
 
@@ -252,13 +233,13 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 int nova_update_truncated_block_parity(struct super_block *sb,
 	struct inode *inode, loff_t newsize)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	unsigned long pgoff, blocknr;
 	u64 nvmm;
-	char *nvmm_addr, *blkbuf, *parbuf;
+	char *nvmm_addr, *blkbuf;
 	u8 btype = sih->i_blk_type;
-	size_t strp_size = NOVA_STRIPE_SIZE;
 
 	pgoff = newsize >> sb->s_blocksize_bits;
 
@@ -269,11 +250,6 @@ int nova_update_truncated_block_parity(struct super_block *sb,
 	nvmm_addr = (char *)nova_get_block(sb, nvmm);
 
 	blocknr = nova_get_blocknr(sb, nvmm, btype);
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (parbuf == NULL) {
-		nova_err(sb, "%s: buffer allocation error\n", __func__);
-		return -ENOMEM;
-	}
 
 	/* Copy to DRAM to catch MCE.
 	blkbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);
@@ -286,9 +262,8 @@ int nova_update_truncated_block_parity(struct super_block *sb,
 //	memcpy_from_pmem(blkbuf, nvmm_addr, PAGE_SIZE);
 	blkbuf = nvmm_addr;
 
-	nova_update_block_parity(sb, blocknr, parbuf, blkbuf, 0);
+	nova_update_block_parity(sb, blocknr, sbi->parbuf, blkbuf, 0);
 
-	kfree(parbuf);
 //	kfree(blkbuf);
 
 	return 0;
