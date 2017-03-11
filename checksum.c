@@ -742,7 +742,7 @@ int nova_update_truncated_block_csum(struct super_block *sb,
 	unsigned long offset = newsize & (sb->s_blocksize - 1);
 	unsigned long pgoff, length;
 	u64 nvmm;
-	char *nvmm_addr, *strp_addr, *tail_strp;
+	char *nvmm_addr, *strp_addr, *tail_strp = NULL;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
 	unsigned long strps, strp_nr;
@@ -765,9 +765,12 @@ int nova_update_truncated_block_csum(struct super_block *sb,
 
 	if (strp_offset > 0) {
 		/* Copy to DRAM to catch MCE.
-		memcpy_from_pmem(sbi->parbuf, strp_addr, strp_offset);
-		memset(sbi->parbuf + strp_offset, 0, strp_size - strp_offset);
-		tail_strp = sbi->parbuf;
+		tail_strp = kzalloc(strp_size, GFP_KERNEL);
+		if (tail_strp == NULL) {
+			nova_err(sb, "%s: buffer allocation error\n", __func__);
+			return -ENOMEM;
+		}
+		memcpy_from_pmem(tail_strp, strp_addr, strp_offset);
 		*/
 		tail_strp = strp_addr;
 		nova_update_stripe_csum(sb, 1, strp_nr, tail_strp, 0);
@@ -777,6 +780,8 @@ int nova_update_truncated_block_csum(struct super_block *sb,
 	}
 
 	if (strps > 0) nova_update_stripe_csum(sb, strps, strp_nr, NULL, 1);
+
+//	if (tail_strp != NULL) kfree(tail_strp);
 
 	return 0;
 }

@@ -571,12 +571,6 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	}
 	nova_calculate_block_parity(sb, sbi->parity, sbi->zeroed_page);
 
-	sbi->parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (!sbi->parbuf) {
-		retval = -ENOMEM;
-		goto out;
-	}
-
 	sbi->snapshot_si = kmem_cache_alloc(nova_inode_cachep, GFP_NOFS);
 	nova_snapshot_init(sb);
 
@@ -694,11 +688,6 @@ out:
 	if (sbi->parity) {
 		kfree(sbi->parity);
 		sbi->parity = NULL;
-	}
-
-	if (sbi->parbuf) {
-		kfree(sbi->parbuf);
-		sbi->parbuf = NULL;
 	}
 
 	if (sbi->free_lists) {
@@ -841,7 +830,6 @@ static void nova_put_super(struct super_block *sb)
 
 	kfree(sbi->zeroed_page);
 	kfree(sbi->parity);
-	kfree(sbi->parbuf);
 	nova_dbgmask = 0;
 	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
