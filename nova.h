@@ -1591,8 +1591,8 @@ int nova_check_inode_integrity(struct super_block *sb, u64 ino,
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero);
-bool nova_verify_data_csum(struct inode *inode,
-	struct nova_file_write_entry *entry, pgoff_t index,
+bool nova_verify_data_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr,
 	size_t offset, size_t bytes);
 int nova_copy_partial_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,

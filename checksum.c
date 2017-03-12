@@ -572,32 +572,24 @@ int nova_update_block_csum(struct super_block *sb,
 	return 0;
 }
 
-/* Verify checksums of requested data bytes of a file write entry.
- *
- * This function works on an existing file write 'entry' with its data in NVMM.
+/* Verify checksums of requested data bytes starting from offset of blocknr.
  *
  * Only a whole stripe can be checksum verified.
  *
- * index:  start block index of the file where data will be verified
- * offset: byte offset within the start block
- * bytes:  number of bytes to be checked starting from offset
+ * blocknr: container blocknr for the first stripe to be verified
+ * offset:  byte offset within the block associated with blocknr
+ * bytes:   number of contiguous bytes to be verified starting from offset
  *
  * return: true or false
- *
  * */
-bool nova_verify_data_csum(struct inode *inode,
-		struct nova_file_write_entry *entry, pgoff_t index,
-		size_t offset, size_t bytes)
+bool nova_verify_data_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr,
+	size_t offset, size_t bytes)
 {
-	struct super_block            *sb  = inode->i_sb;
-	struct nova_inode_info        *si  = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
 	void *blockptr, *strp_ptr;
-	size_t blockoff;
-	size_t blocksize = nova_inode_blk_size(sih);
+	size_t blockoff, blocksize = nova_inode_blk_size(sih);
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	unsigned long blocknr;
 	unsigned int strp_index;
 	unsigned long strp, strps, strp_nr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
@@ -607,7 +599,6 @@ bool nova_verify_data_csum(struct inode *inode,
 	 * strps: # of stripes to be checked since offset. */
 	strps = ((offset + bytes - 1) >> strp_shift) - (offset >> strp_shift) + 1;
 
-	blocknr  = get_nvmm(sb, sih, entry, index);
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 	blockptr = nova_get_block(sb, blockoff);
 
@@ -630,7 +621,7 @@ bool nova_verify_data_csum(struct inode *inode,
 				"inode %lu, strp %lu of %lu, "
 				"block offset %lu, stripe nr %lu, "
 				"csum calc 0x%08x, csum nvmm 0x%08x\n",
-				__func__, inode->i_ino, strp, strps,
+				__func__, sih->ino, strp, strps,
 				blockoff, strp_nr,
 				csum_calc, csum_nvmm);
 

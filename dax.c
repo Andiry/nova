@@ -115,8 +115,7 @@ memcpy:
 			if (nova_find_pgoff_in_vma(inode, index))
 				goto skip_verify;
 
-			if (!nova_verify_data_csum(inode, entry, index,
-						offset, nr)) {
+			if (!nova_verify_data_csum(sb, sih, nvmm, offset, nr)) {
 				nova_err(sb, "%s: nova data checksum and "
 					"recovery fail! "
 					"inode %lu, offset %lu, "
