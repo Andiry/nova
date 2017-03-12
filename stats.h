@@ -123,6 +123,7 @@ enum timing_category {
 	rebuild_title_t,
 	rebuild_dir_t,
 	rebuild_file_t,
+	rebuild_snapshot_t,
 
 	/* Snapshot */
 	snapshot_title_t,

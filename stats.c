@@ -124,6 +124,7 @@ const char *Timingstring[TIMING_NUM] =
 	"=================== Rebuild ====================",
 	"rebuild_dir",
 	"rebuild_file",
+	"rebuild_snapshot_table",
 
 	/* Snapshot */
 	"=================== Snapshot ===================",

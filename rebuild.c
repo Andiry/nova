@@ -748,7 +748,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 	u8 type;
 	int ret;
 
-	NOVA_START_TIMING(rebuild_file_t, rebuild_time);
+	NOVA_START_TIMING(rebuild_snapshot_t, rebuild_time);
 	nova_dbg_verbose("Rebuild snapshot table\n");
 
 	sbi->curr_snapshot = 0;
@@ -816,7 +816,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 
 out:
 //	nova_print_inode_log_page(sb, inode);
-	NOVA_END_TIMING(rebuild_file_t, rebuild_time);
+	NOVA_END_TIMING(rebuild_snapshot_t, rebuild_time);
 
 	nova_dbg("Recovered %d snapshots, current snapshot %d, "
 			"latest epoch ID %llu\n",
