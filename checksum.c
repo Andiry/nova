@@ -536,6 +536,14 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	return 0;
 }
 
+/*
+int nova_update_file_write_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, loff_t pos, size_t bytes,
+	const char __user *buf, unsigned long blocknr)
+{
+}
+*/
+
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero)
@@ -662,14 +670,13 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	unsigned long index, size_t offset, unsigned long dst_blknr,
 	bool is_end_blk)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	unsigned long src_blknr;
 	unsigned int csum_size = NOVA_DATA_CSUM_LEN;
-	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int num_strps;
 	unsigned long src_strp_nr, dst_strp_nr;
 	size_t src_blk_off, dst_blk_off;
-	u8 *zero_strp;
 	u32 zero_csum;
 	u32 *src_csum_ptr, *dst_csum_ptr;
 
@@ -702,14 +709,8 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	} else { // entry == NULL
 		/* According to nova_handle_head_tail_blocks():
 		 * NULL-entry partial blocks are zero-ed */
-		zero_strp = kzalloc(strp_size, GFP_KERNEL);
-		if (zero_strp == NULL) {
-			nova_err(sb, "%s: buffer allocation error\n", __func__);
-			return -ENOMEM;
-		}
-		zero_csum = nova_crc32c(NOVA_INIT_CSUM, zero_strp, strp_size);
+		zero_csum = cpu_to_le32(sbi->zero_csum);
 		src_csum_ptr = &zero_csum;
-		kfree(zero_strp);
 	}
 
 	while (num_strps > 0) {

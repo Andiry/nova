@@ -468,7 +468,7 @@ static int nova_post_memcpy_operation(struct inode *inode,
 		}
 	}
 	if (copied > 0 && data_csum > 0) {
-	csummed = copied - nova_update_cow_csum(inode, blocknr,
+		csummed = copied - nova_update_cow_csum(inode, blocknr,
 						kbuf, offset, copied);
 		if (unlikely(csummed != copied)) {
 			if (kbuf != NULL) kfree(kbuf);
