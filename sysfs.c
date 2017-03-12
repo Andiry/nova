@@ -64,13 +64,105 @@ static int nova_seq_timing_open(struct inode *inode, struct file *file)
 ssize_t nova_seq_clear_stats(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
-	nova_clear_timing_stats();
+	nova_clear_stats();
 	return len;
 }
 
 static const struct file_operations nova_seq_timing_fops = {
 	.owner		= THIS_MODULE,
 	.open		= nova_seq_timing_open,
+	.read		= seq_read,
+	.write		= nova_seq_clear_stats,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static int nova_seq_IO_show(struct seq_file *seq, void *v)
+{
+	struct super_block *sb = seq->private;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct free_list *free_list;
+	unsigned long alloc_log_count = 0;
+	unsigned long alloc_log_pages = 0;
+	unsigned long alloc_data_count = 0;
+	unsigned long alloc_data_pages = 0;
+	unsigned long free_log_count = 0;
+	unsigned long freed_log_pages = 0;
+	unsigned long free_data_count = 0;
+	unsigned long freed_data_pages = 0;
+	int i;
+
+	nova_get_timing_stats();
+	nova_get_IO_stats();
+
+	seq_printf(seq, "============ NOVA allocation stats ============\n\n");
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = nova_get_free_list(sb, i);
+
+		alloc_log_count += free_list->alloc_log_count;
+		alloc_log_pages += free_list->alloc_log_pages;
+		alloc_data_count += free_list->alloc_data_count;
+		alloc_data_pages += free_list->alloc_data_pages;
+		free_log_count += free_list->free_log_count;
+		freed_log_pages += free_list->freed_log_pages;
+		free_data_count += free_list->free_data_count;
+		freed_data_pages += free_list->freed_data_pages;
+	}
+
+	seq_printf(seq, "alloc log count %lu, allocated log pages %lu\n"
+		"alloc data count %lu, allocated data pages %lu\n"
+		"free log count %lu, freed log pages %lu\n"
+		"free data count %lu, freed data pages %lu\n",
+		alloc_log_count, alloc_log_pages,
+		alloc_data_count, alloc_data_pages,
+		free_log_count, freed_log_pages,
+		free_data_count, freed_data_pages);
+
+	seq_printf(seq, "Fast GC %llu, check pages %llu, free pages %llu, average %llu\n",
+		Countstats[fast_gc_t], IOstats[fast_checked_pages],
+		IOstats[fast_gc_pages], Countstats[fast_gc_t] ?
+			IOstats[fast_gc_pages] / Countstats[fast_gc_t] : 0);
+	seq_printf(seq, "Thorough GC %llu, checked pages %llu, free pages %llu, "
+		"average %llu\n", Countstats[thorough_gc_t],
+		IOstats[thorough_checked_pages], IOstats[thorough_gc_pages],
+		Countstats[thorough_gc_t] ?
+			IOstats[thorough_gc_pages] / Countstats[thorough_gc_t] : 0);
+
+	seq_printf(seq, "\n");
+
+	seq_printf(seq, "================ NOVA I/O stats ================\n\n");
+	seq_printf(seq, "Read %llu, bytes %llu, average %llu\n",
+		Countstats[dax_read_t], IOstats[read_bytes],
+		Countstats[dax_read_t] ?
+			IOstats[read_bytes] / Countstats[dax_read_t] : 0);
+	seq_printf(seq, "COW write %llu, bytes %llu, average %llu, "
+		"write breaks %llu, average %llu\n",
+		Countstats[cow_write_t], IOstats[cow_write_bytes],
+		Countstats[cow_write_t] ?
+			IOstats[cow_write_bytes] / Countstats[cow_write_t] : 0,
+		IOstats[cow_write_breaks], Countstats[cow_write_t] ?
+			IOstats[cow_write_breaks] / Countstats[cow_write_t] : 0);
+	seq_printf(seq, "Inplace write %llu, bytes %llu, average %llu, "
+		"write breaks %llu, average %llu\n",
+		Countstats[inplace_write_t], IOstats[inplace_write_bytes],
+		Countstats[inplace_write_t] ?
+			IOstats[inplace_write_bytes] / Countstats[inplace_write_t] : 0,
+		IOstats[inplace_write_breaks], Countstats[inplace_write_t] ?
+			IOstats[inplace_write_breaks] / Countstats[inplace_write_t] : 0);
+
+	seq_printf(seq, "\n");
+	return 0;
+}
+
+static int nova_seq_IO_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nova_seq_IO_show, PDE_DATA(inode));
+}
+
+static const struct file_operations nova_seq_IO_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nova_seq_IO_open,
 	.read		= seq_read,
 	.write		= nova_seq_clear_stats,
 	.llseek		= seq_lseek,
@@ -176,6 +268,8 @@ void nova_sysfs_init(struct super_block *sb)
 	if (sbi->s_proc) {
 		proc_create_data("timing_stats", S_IRUGO, sbi->s_proc,
 				 &nova_seq_timing_fops, sb);
+		proc_create_data("IO_stats", S_IRUGO, sbi->s_proc,
+				 &nova_seq_IO_fops, sb);
 		proc_create_data("create_snapshot", S_IRUGO, sbi->s_proc,
 				 &nova_seq_create_snapshot_fops, sb);
 		proc_create_data("delete_snapshot", S_IRUGO, sbi->s_proc,
@@ -191,6 +285,7 @@ void nova_sysfs_exit(struct super_block *sb)
 
 	if (sbi->s_proc) {
 		remove_proc_entry("timing_stats", sbi->s_proc);
+		remove_proc_entry("IO_stats", sbi->s_proc);
 		remove_proc_entry("create_snapshot", sbi->s_proc);
 		remove_proc_entry("delete_snapshot", sbi->s_proc);
 		remove_proc_entry("snapshots", sbi->s_proc);

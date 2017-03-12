@@ -276,7 +276,7 @@ void nova_print_timing_stats(struct super_block *sb)
 	nova_print_IO_stats(sb);
 }
 
-void nova_clear_timing_stats(void)
+static void nova_clear_timing_stats(void)
 {
 	int i;
 	int cpu;
@@ -291,7 +291,7 @@ void nova_clear_timing_stats(void)
 	}
 }
 
-void nova_clear_IO_stats(void)
+static void nova_clear_IO_stats(void)
 {
 	int i;
 	int cpu;
