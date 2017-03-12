@@ -23,6 +23,7 @@
 const char *Timingstring[TIMING_NUM] = 
 {
 	/* Init */
+	"================ Initialization ================",
 	"init",
 	"mount",
 	"ioremap",
@@ -30,6 +31,7 @@ const char *Timingstring[TIMING_NUM] =
 	"recovery",
 
 	/* Namei operations */
+	"============= Directory operations =============",
 	"create",
 	"lookup",
 	"link",
@@ -45,6 +47,7 @@ const char *Timingstring[TIMING_NUM] =
 	"setattr",
 
 	/* I/O operations */
+	"================ I/O operations ================",
 	"dax_read",
 	"cow_write",
 	"inplace_write",
@@ -54,6 +57,7 @@ const char *Timingstring[TIMING_NUM] =
 	"write_iter",
 
 	/* Memory operations */
+	"============== Memory operations ===============",
 	"memcpy_read_nvmm",
 	"memcpy_write_nvmm",
 	"memcpy_write_back_to_nvmm",
@@ -61,17 +65,20 @@ const char *Timingstring[TIMING_NUM] =
 	"buffer_partial_block",
 
 	/* Memory management */
+	"============== Memory management ===============",
 	"new_data_blocks",
 	"new_log_blocks",
 	"free_data_blocks",
 	"free_log_blocks",
 
 	/* Transaction */
+	"================= Transaction ==================",
 	"transaction_new_inode",
 	"transaction_link_change",
 	"update_tail",
 
 	/* Logging */
+	"============= Logging operations ===============",
 	"append_dir_entry",
 	"append_file_entry",
 	"append_mmap_entry",
@@ -80,15 +87,18 @@ const char *Timingstring[TIMING_NUM] =
 	"append_snapshot_info",
 
 	/* GC */
+	"============= Garbage collection ===============",
 	"log_fast_gc",
 	"log_thorough_gc",
 	"check_invalid_log",
 
 	/* Integrity */
+	"============ Integrity operations ==============",
 	"cow_csum",
 	"cow_parity",
 
 	/* Others */
+	"================ Miscellaneous =================",
 	"find_cache_page",
 	"assign_blocks",
 	"fsync",
@@ -103,6 +113,7 @@ const char *Timingstring[TIMING_NUM] =
 	"evict_inode",
 
 	/* Mmap */
+	"=============== MMap operations ================",
 	"mmap_page_fault",
 	"insert_vma",
 	"remove_vma",
@@ -110,10 +121,12 @@ const char *Timingstring[TIMING_NUM] =
 	"mmap_cow",
 
 	/* Rebuild */
+	"=================== Rebuild ====================",
 	"rebuild_dir",
 	"rebuild_file",
 
 	/* Snapshot */
+	"=================== Snapshot ===================",
 	"create_snapshot",
 	"delete_snapshot",
 };
@@ -237,6 +250,12 @@ void nova_print_timing_stats(struct super_block *sb)
 
 	printk("======== NOVA kernel timing stats ========\n");
 	for (i = 0; i < TIMING_NUM; i++) {
+		/* Title */
+		if (Timingstring[i][0] == '=') {
+			printk("\n%s\n\n", Timingstring[i]);
+			continue;
+		}
+
 		if (measure_timing || Timingstats[i]) {
 			printk("%s: count %llu, timing %llu, average %llu\n",
 				Timingstring[i],
@@ -251,6 +270,7 @@ void nova_print_timing_stats(struct super_block *sb)
 		}
 	}
 
+	printk("\n");
 	nova_print_alloc_stats(sb);
 	nova_print_IO_stats(sb);
 }

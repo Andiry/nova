@@ -29,8 +29,14 @@ static int nova_seq_timing_show(struct seq_file *seq, void *v)
 
 	nova_get_timing_stats();
 
-	seq_printf(seq, "======== NOVA kernel timing stats ========\n");
+	seq_printf(seq, "=========== NOVA kernel timing stats ===========\n");
 	for (i = 0; i < TIMING_NUM; i++) {
+		/* Title */
+		if (Timingstring[i][0] == '=') {
+			seq_printf(seq, "\n%s\n\n", Timingstring[i]);
+			continue;
+		}
+
 		if (measure_timing || Timingstats[i]) {
 			seq_printf(seq, "%s: count %llu, timing %llu, "
 				"average %llu\n",
@@ -46,6 +52,7 @@ static int nova_seq_timing_show(struct seq_file *seq, void *v)
 		}
 	}
 
+	seq_printf(seq, "\n");
 	return 0;
 }
 

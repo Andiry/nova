@@ -22,6 +22,7 @@
 /* ======================= Timing ========================= */
 enum timing_category {
 	/* Init */
+	init_title_t,
 	init_t,
 	mount_t,
 	ioremap_t,
@@ -29,6 +30,7 @@ enum timing_category {
 	recovery_t,
 
 	/* Namei operations */
+	namei_title_t,
 	create_t,
 	lookup_t,
 	link_t,
@@ -44,6 +46,7 @@ enum timing_category {
 	setattr_t,
 
 	/* I/O operations */
+	io_title_t,
 	dax_read_t,
 	cow_write_t,
 	inplace_write_t,
@@ -53,6 +56,7 @@ enum timing_category {
 	write_iter_t,
 
 	/* Memory operations */
+	memory_title_t,
 	memcpy_r_nvmm_t,
 	memcpy_w_nvmm_t,
 	memcpy_w_wb_t,
@@ -60,17 +64,20 @@ enum timing_category {
 	partial_buffer_t,
 
 	/* Memory management */
+	mm_title_t,
 	new_data_blocks_t,
 	new_log_blocks_t,
 	free_data_t,
 	free_log_t,
 
 	/* Transaction */
+	trans_title_t,
 	create_trans_t,
 	link_trans_t,
 	update_tail_t,
 
 	/* Logging */
+	logging_title_t,
 	append_dir_entry_t,
 	append_file_entry_t,
 	append_mmap_entry_t,
@@ -79,15 +86,18 @@ enum timing_category {
 	append_snapshot_info_t,
 
 	/* GC */
+	gc_title_t,
 	fast_gc_t,
 	thorough_gc_t,
 	check_invalid_t,
 
 	/* Integrity */
+	integrity_title_t,
 	cow_csum_t,
 	cow_parity_t,
 
 	/* Others */
+	others_title_t,
 	find_cache_t,
 	assign_t,
 	fsync_t,
@@ -102,6 +112,7 @@ enum timing_category {
 	evict_inode_t,
 
 	/* Mmap */
+	mmap_title_t,
 	mmap_fault_t,
 	insert_vma_t,
 	remove_vma_t,
@@ -109,10 +120,12 @@ enum timing_category {
 	mmap_cow_t,
 
 	/* Rebuild */
+	rebuild_title_t,
 	rebuild_dir_t,
 	rebuild_file_t,
 
 	/* Snapshot */
+	snapshot_title_t,
 	create_snapshot_t,
 	delete_snapshot_t,
 
