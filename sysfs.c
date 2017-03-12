@@ -64,7 +64,11 @@ static int nova_seq_timing_open(struct inode *inode, struct file *file)
 ssize_t nova_seq_clear_stats(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
-	nova_clear_stats();
+	struct address_space *mapping = filp->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = PDE_DATA(inode);
+
+	nova_clear_stats(sb);
 	return len;
 }
 

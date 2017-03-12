@@ -1856,7 +1856,7 @@ void nova_sysfs_exit(struct super_block *sb);
 void nova_get_timing_stats(void);
 void nova_get_IO_stats(void);
 void nova_print_timing_stats(struct super_block *sb);
-void nova_clear_stats(void);
+void nova_clear_stats(struct super_block *sb);
 void nova_print_inode(struct nova_inode *pi);
 u64 nova_print_log_entry(struct super_block *sb, u64 curr);
 void nova_print_inode_log(struct super_block *sb, struct inode *inode);

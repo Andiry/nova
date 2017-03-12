@@ -135,7 +135,7 @@ setversion_out:
 		return 0;
 	}
 	case NOVA_CLEAR_STATS: {
-		nova_clear_stats();
+		nova_clear_stats(sb);
 		return 0;
 	}
 	case NOVA_PRINT_LOG: {

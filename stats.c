@@ -291,8 +291,10 @@ static void nova_clear_timing_stats(void)
 	}
 }
 
-static void nova_clear_IO_stats(void)
+static void nova_clear_IO_stats(struct super_block *sb)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct free_list *free_list;
 	int i;
 	int cpu;
 
@@ -301,12 +303,25 @@ static void nova_clear_IO_stats(void)
 		for_each_possible_cpu(cpu)
 			per_cpu(IOstats_percpu[i], cpu) = 0;
 	}
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = nova_get_free_list(sb, i);
+
+		free_list->alloc_log_count = 0;
+		free_list->alloc_log_pages = 0;
+		free_list->alloc_data_count = 0;
+		free_list->alloc_data_pages = 0;
+		free_list->free_log_count = 0;
+		free_list->freed_log_pages = 0;
+		free_list->free_data_count = 0;
+		free_list->freed_data_pages = 0;
+	}
 }
 
-void nova_clear_stats(void)
+void nova_clear_stats(struct super_block *sb)
 {
 	nova_clear_timing_stats();
-	nova_clear_IO_stats();
+	nova_clear_IO_stats(sb);
 }
 
 void nova_print_inode(struct nova_inode *pi)
