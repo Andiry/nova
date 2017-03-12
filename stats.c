@@ -249,7 +249,7 @@ void nova_print_timing_stats(struct super_block *sb)
 	nova_get_timing_stats();
 	nova_get_IO_stats();
 
-	printk("======== NOVA kernel timing stats ========\n");
+	printk("=========== NOVA kernel timing stats ============\n");
 	for (i = 0; i < TIMING_NUM; i++) {
 		/* Title */
 		if (Timingstring[i][0] == '=') {
