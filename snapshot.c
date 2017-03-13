@@ -1225,6 +1225,46 @@ int nova_print_snapshots(struct super_block *sb, struct seq_file *seq)
 	return 0;
 }
 
+int nova_print_snapshot_lists(struct super_block *sb, struct seq_file *seq)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct snapshot_info *info;
+	struct snapshot_list *list;
+	struct snapshot_info *infos[FREE_BATCH];
+	int nr_infos;
+	u64 epoch_id = 0;
+	int count = 0;
+	int sum;
+	int i, j;
+
+	seq_printf(seq, "========== NOVA snapshot statistics ==========\n");
+
+	/* Print in epoch ID increasing order */
+	do {
+		nr_infos = radix_tree_gang_lookup(&sbi->snapshot_info_tree,
+					(void **)infos, epoch_id, FREE_BATCH);
+		for (i = 0; i < nr_infos; i++) {
+			info = infos[i];
+			BUG_ON(!info);
+			epoch_id = info->epoch_id;
+			sum = 0;
+			for (j = 0; j < sbi->cpus; j++) {
+				list = &info->lists[j];
+				sum += list->num_pages;
+			}
+			seq_printf(seq, "Snapshot epoch ID %llu, "
+					"%d list pages\n",
+					epoch_id, sum);
+			count++;
+		}
+		epoch_id++;
+	} while (nr_infos == FREE_BATCH);
+
+	seq_printf(seq, "============= Total %d snapshots =============\n",
+			count);
+	return 0;
+}
+
 static int nova_traverse_and_delete_snapshot_infos(struct super_block *sb,
 	int save)
 {

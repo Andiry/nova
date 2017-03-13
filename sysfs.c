@@ -156,6 +156,10 @@ static int nova_seq_IO_show(struct seq_file *seq, void *v)
 			IOstats[inplace_write_breaks] / Countstats[inplace_write_t] : 0);
 
 	seq_printf(seq, "\n");
+
+	nova_print_snapshot_lists(sb, seq);
+	seq_printf(seq, "\n");
+
 	return 0;
 }
 
