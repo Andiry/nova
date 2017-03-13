@@ -129,6 +129,8 @@ enum timing_category {
 	snapshot_title_t,
 	create_snapshot_t,
 	delete_snapshot_t,
+	append_snapshot_file_t,
+	append_snapshot_inode_t,
 
 	/* Sentinel */
 	TIMING_NUM,

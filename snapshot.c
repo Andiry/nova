@@ -491,12 +491,14 @@ static int nova_append_snapshot_file_write_entry(struct super_block *sb,
 {
 	struct snapshot_file_write_entry entry;
 	int ret;
+	timing_t append_time;
 
 	if (!info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		return -EINVAL;
 	}
 
+	NOVA_START_TIMING(append_snapshot_file_t, append_time);
 	nova_dbgv("Append file write entry: block %llu, %llu pages, "
 			"delete epoch ID %llu to Snapshot epoch ID %llu\n",
 			nvmm, num_pages, delete_epoch_id,
@@ -512,6 +514,7 @@ static int nova_append_snapshot_file_write_entry(struct super_block *sb,
 	ret = nova_append_snapshot_list_entry(sb, info, &entry,
 			sizeof(struct snapshot_file_write_entry));
 
+	NOVA_END_TIMING(append_snapshot_file_t, append_time);
 	return ret;
 }
 
@@ -536,12 +539,14 @@ static int nova_append_snapshot_inode_entry(struct super_block *sb,
 {
 	struct snapshot_inode_entry entry;
 	int ret;
+	timing_t append_time;
 
 	if (!info) {
 		nova_dbg("%s: Snapshot info not found\n", __func__);
 		return -EINVAL;
 	}
 
+	NOVA_START_TIMING(append_snapshot_inode_t, append_time);
 	nova_dbgv("Append inode entry: inode %llu, delete epoch ID %llu "
 			"to Snapshot epoch ID %llu\n",
 			pi->nova_ino, pi->delete_epoch_id,
@@ -556,6 +561,7 @@ static int nova_append_snapshot_inode_entry(struct super_block *sb,
 	ret = nova_append_snapshot_list_entry(sb, info, &entry,
 			sizeof(struct snapshot_inode_entry));
 
+	NOVA_END_TIMING(append_snapshot_inode_t, append_time);
 	return ret;
 }
 

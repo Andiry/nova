@@ -130,6 +130,8 @@ const char *Timingstring[TIMING_NUM] =
 	"=================== Snapshot ===================",
 	"create_snapshot",
 	"delete_snapshot",
+	"append_snapshot_filedata",
+	"append_snapshot_inode",
 };
 
 u64 Timingstats[TIMING_NUM];
