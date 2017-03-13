@@ -877,6 +877,7 @@ void nova_evict_inode(struct inode *inode)
 	int destroy = 0;
 	int ret;
 
+	NOVA_START_TIMING(evict_inode_t, evict_time);
 	if (!sih) {
 		nova_err(sb, "%s: ino %lu sih is NULL!\n",
 				__func__, inode->i_ino);
@@ -904,7 +905,6 @@ void nova_evict_inode(struct inode *inode)
 			goto out;
 	}
 
-	NOVA_START_TIMING(evict_inode_t, evict_time);
 	nova_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
