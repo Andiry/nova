@@ -401,7 +401,9 @@ int nova_inplace_update_log_entry(struct super_block *sb,
 	u64 journal_tail;
 	size_t size;
 	int cpu;
+	timing_t update_time;
 
+	NOVA_START_TIMING(update_entry_t, update_time);
 	size = nova_get_log_entry_size(sb, type);
 
 	if (replica_metadata || unsafe_metadata) {
@@ -410,7 +412,7 @@ int nova_inplace_update_log_entry(struct super_block *sb,
 		// Also update the alter inode log entry.
 		nova_update_alter_entry(sb, entry);
 		nova_memlock_range(sb, entry, size);
-		return 0;
+		goto out;
 	}
 
 	cpu = smp_processor_id();
@@ -424,7 +426,8 @@ int nova_inplace_update_log_entry(struct super_block *sb,
 	nova_commit_lite_transaction(sb, journal_tail, cpu);
 	nova_memlock_journal(sb);
 	spin_unlock(&sbi->journal_locks[cpu]);
-
+out:
+	NOVA_END_TIMING(update_entry_t, update_time);
 	return 0;
 }
 

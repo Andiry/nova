@@ -86,6 +86,7 @@ const char *Timingstring[TIMING_NUM] =
 	"append_link_change",
 	"append_setattr",
 	"append_snapshot_info",
+	"inplace_update_entry",
 
 	/* Tree */
 	"=============== Tree operations ================",

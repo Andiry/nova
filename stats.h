@@ -85,6 +85,7 @@ enum timing_category {
 	append_link_change_t,
 	append_setattr_t,
 	append_snapshot_info_t,
+	update_entry_t,
 
 	/* Tree */
 	tree_title_t,
