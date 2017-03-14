@@ -1582,8 +1582,9 @@ int nova_recovery(struct super_block *sb);
 /* checksum.c */
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
-size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, size_t offset, size_t bytes);
+int nova_update_file_write_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
+	size_t offset, size_t bytes);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
 int nova_check_alter_entry(struct super_block *sb, u64 curr);
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,
@@ -1788,8 +1789,8 @@ int nova_calculate_block_parity(struct super_block *sb, void *parity,
 int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero);
-size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, int wrblocks);
+int nova_update_file_write_parity(struct super_block *sb, void *block,
+	unsigned long blocknr);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int bad_strp_id);
 int nova_update_truncated_block_parity(struct super_block *sb,

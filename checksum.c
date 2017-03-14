@@ -481,31 +481,25 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 	return 0;
 }
 
-/* Update copy-on-write data stripe checksums.
+/* Checksums a sequence of contiguous file write data stripes within one block
+ * and writes the checksum values to nvmm.
  *
- * This function checksums a sequence of contiguous copy-on-write data stripes
- * and writes the checksum values to nvmm. The cow data (wrbuf) to compute
- * checksums should reside in dram (more trusted), not in nvmm (less trusted).
- * The data of wrbuf is already copied to nvmm.
+ * The block buffer to compute checksums should reside in dram (more trusted),
+ * not in nvmm (less trusted).
  *
  * Checksum is calculated over a whole stripe.
  *
- * blocknr: destination nvmm block number where the wrbuf data is written to
- *          - used to derive checksum value addresses
- * wrbuf:   cow data buffer, must be block-aligned and whole number of blocks
- *          - should have both partial head-tail block data and user data
+ * block:   block buffer with user data and possibly partial head-tail block
  *          - should be in kernel memory (dram) to avoid page faults
- * offset:  byte offset of user data in wrbuf
- * bytes:   number of user data bytes in wrbuf
- *
- * return:  bytes NOT checksummed
- * */
-size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, size_t offset, size_t bytes)
+ * blocknr: destination nvmm block number where the block is written to
+ *          - used to derive checksum value addresses
+ * offset:  byte offset of user data in the block buffer
+ * bytes:   number of user data bytes in the block buffer
+ */
+int nova_update_file_write_csum(struct super_block *sb,
+	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
+	size_t offset, size_t bytes)
 {
-	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info        *si  = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
 	u8 *strp_ptr;
 	size_t blockoff;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
@@ -516,18 +510,18 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 	NOVA_START_TIMING(cow_csum_t, cow_csum_time);
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 
-	/* strp_index: stripe index within the first block of wrbuf
-	 * strp_offset: stripe offset within the first block of wrbuf
+	/* strp_index: stripe index within the block buffer
+	 * strp_offset: stripe offset within the block buffer
 	 *
 	 * strps: number of stripes touched by user data (need new checksums)
 	 * strp_nr: global stripe number converted from blocknr and offset
-	 * strp_ptr: pointer to stripes in wrbuf */
+	 * strp_ptr: pointer to stripes in the block buffer */
 	strp_index = offset >> strp_shift;
 	strp_offset = offset - (strp_index << strp_shift);
 
 	strps = ((strp_offset + bytes - 1) >> strp_shift) + 1;
 	strp_nr = (blockoff + offset) >> strp_shift;
-	strp_ptr = (u8 *) wrbuf + (strp_index << strp_shift);
+	strp_ptr = (u8 *) block + (strp_index << strp_shift);
 
 	nova_update_stripe_csum(sb, strps, strp_nr, strp_ptr, 0);
 
@@ -535,14 +529,6 @@ size_t nova_update_cow_csum(struct inode *inode, unsigned long blocknr,
 
 	return 0;
 }
-
-/*
-int nova_update_file_write_csum(struct super_block *sb,
-	struct nova_inode_info_header *sih, loff_t pos, size_t bytes,
-	const char __user *buf, unsigned long blocknr)
-{
-}
-*/
 
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,

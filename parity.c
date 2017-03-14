@@ -89,6 +89,8 @@ static int nova_update_block_parity(struct super_block *sb,
 	memcpy_to_pmem_nocache(par_addr, parity, strp_size);
 	nova_memlock_range(sb, par_addr, strp_size);
 
+	// TODO: The parity stripe should be checksummed for higher reliability.
+
 	return 0;
 }
 
@@ -124,52 +126,36 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	return 0;
 }
 
-/* Update copy-on-write data parity stripes.
+/* Computes a parity stripe for one file write data block and writes the parity
+ * stripe to nvmm.
  *
- * The function computes a parity stripe for each copy-on-write data block and
- * writes the parity strpe to nvmm. The cow data (wrbuf) to compute parity
- * stripes should reside in dram (more trusted), not in nvmm (less trusted).
- * The data of wrbuf is already copied to nvmm.
+ * The block buffer to compute checksums should reside in dram (more trusted),
+ * not in nvmm (less trusted).
  *
- * The parity stripe itself is not checksummed because it's only used during
- * data recovery, and the recovered data stripe is checksum-verified to tell if
- * the recovery was a success.
- *
- * blocknr:  destination nvmm block number where the wrbuf data is written to
- *           - used to derive parity stripe addresses
- * wrbuf:    cow data buffer, must be block-aligned and whole number of blocks
- *           - should have both partial head-tail block data and user data
- *           - should be in kernel memory (dram) to avoid page faults
- * wrblocks: number of blocks that wrbuf contains
- *
- * return:   blocks NOT parity-coded
- * */
-size_t nova_update_cow_parity(struct inode *inode, unsigned long blocknr,
-	void *wrbuf, int wrblocks)
+ * block:   block buffer with user data and possibly partial head-tail block
+ *          - should be in kernel memory (dram) to avoid page faults
+ * blocknr: destination nvmm block number where the block is written to
+ *          - used to derive checksum value addresses
+ */
+int nova_update_file_write_parity(struct super_block *sb, void *block,
+	unsigned long blocknr)
 {
-	struct super_block *sb = inode->i_sb;
-	size_t strp_size = NOVA_STRIPE_SIZE;
 	u8 *blockptr, *parbuf;
-	unsigned long block;
+	size_t strp_size = NOVA_STRIPE_SIZE;
 	timing_t cow_parity_time;
 
 	NOVA_START_TIMING(cow_parity_t, cow_parity_time);
 
-	blockptr = (u8 *) wrbuf;
+	blockptr = (u8 *) block;
 
 	/* parity stripe buffer for rolling updates */
 	parbuf = kmalloc(strp_size, GFP_KERNEL);
 	if (parbuf == NULL) {
 		nova_err(sb, "%s: parity buffer allocation error\n", __func__);
-		return wrblocks;
+		return -EFAULT;
 	}
 
-	for (block = 0; block < wrblocks; block++) {
-		nova_update_block_parity(sb, blocknr, parbuf, blockptr, 0);
-
-		blocknr  += 1;
-		blockptr += sb->s_blocksize;
-	}
+	nova_update_block_parity(sb, blocknr, parbuf, blockptr, 0);
 
 	kfree(parbuf);
 
