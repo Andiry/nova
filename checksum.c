@@ -463,7 +463,7 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 
 	for (strp = 0; strp < strps; strp++) {
 		if (zero)
-			csum = sbi->csum;
+			csum = sbi->zero_csum;
 		else
 			csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
 

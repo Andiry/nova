@@ -79,7 +79,7 @@ static int nova_update_block_parity(struct super_block *sb,
 	}
 
 	if (unlikely(zero))
-		parity = sbi->parity;
+		parity = sbi->zero_parity;
 	else
 		nova_calculate_block_parity(sb, parity, block, -1);
 

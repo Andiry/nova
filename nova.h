@@ -735,8 +735,8 @@ struct nova_sb_info {
 	void *zeroed_page;
 
 	/* Checksum and parity for zero block */
-	u32 csum;
-	void *parity;
+	u32 zero_csum;
+	void *zero_parity;
 
 	/* Per-CPU journal lock */
 	spinlock_t *journal_locks;

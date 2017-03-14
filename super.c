@@ -563,13 +563,14 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	sbi->csum = nova_crc32c(NOVA_INIT_CSUM, sbi->zeroed_page, strp_size);
-	sbi->parity = kmalloc(strp_size, GFP_KERNEL);
-	if (!sbi->parity) {
+	sbi->zero_csum = nova_crc32c(NOVA_INIT_CSUM, sbi->zeroed_page,
+			strp_size);
+	sbi->zero_parity = kmalloc(strp_size, GFP_KERNEL);
+	if (!sbi->zero_parity) {
 		retval = -ENOMEM;
 		goto out;
 	}
-	nova_calculate_block_parity(sb, sbi->parity, sbi->zeroed_page, -1);
+	nova_calculate_block_parity(sb, sbi->zero_parity, sbi->zeroed_page, -1);
 
 	sbi->snapshot_si = kmem_cache_alloc(nova_inode_cachep, GFP_NOFS);
 	nova_snapshot_init(sb);
@@ -685,9 +686,9 @@ out:
 		sbi->zeroed_page = NULL;
 	}
 
-	if (sbi->parity) {
-		kfree(sbi->parity);
-		sbi->parity = NULL;
+	if (sbi->zero_parity) {
+		kfree(sbi->zero_parity);
+		sbi->zero_parity = NULL;
 	}
 
 	if (sbi->free_lists) {
@@ -829,7 +830,7 @@ static void nova_put_super(struct super_block *sb)
 	nova_delete_free_lists(sb);
 
 	kfree(sbi->zeroed_page);
-	kfree(sbi->parity);
+	kfree(sbi->zero_parity);
 	nova_dbgmask = 0;
 	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
