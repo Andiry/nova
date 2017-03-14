@@ -63,6 +63,7 @@ const char *Timingstring[TIMING_NUM] =
 	"memcpy_write_back_to_nvmm",
 	"handle_partial_block",
 	"buffer_partial_block",
+	"merge_buffer",
 
 	/* Memory management */
 	"============== Memory management ===============",

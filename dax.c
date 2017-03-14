@@ -449,11 +449,14 @@ static int nova_post_memcpy_operation(struct inode *inode,
 	struct super_block *sb = inode->i_sb;
 	size_t csummed, coded;
 	int ret = 0;
+	timing_t copy_time;
 
 	if (copied > 0 && kbuf != NULL) {
 		/* merge user data in to the kernel buffer */
+		NOVA_START_TIMING(merge_buffer_t, copy_time);
 		csummed = copied - copy_from_user(kbuf + offset,
 							buf, copied);
+		NOVA_END_TIMING(merge_buffer_t, copy_time);
 		if (unlikely(csummed != copied)) {
 			if (kbuf != NULL) kfree(kbuf);
 			nova_err(sb, "%s: not all user data is copied! "
