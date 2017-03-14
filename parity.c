@@ -142,9 +142,9 @@ int nova_update_file_write_parity(struct super_block *sb, void *block,
 {
 	u8 *blockptr, *parbuf;
 	size_t strp_size = NOVA_STRIPE_SIZE;
-	timing_t cow_parity_time;
+	timing_t file_write_parity_time;
 
-	NOVA_START_TIMING(cow_parity_t, cow_parity_time);
+	NOVA_START_TIMING(file_write_parity_t, file_write_parity_time);
 
 	blockptr = (u8 *) block;
 
@@ -159,7 +159,7 @@ int nova_update_file_write_parity(struct super_block *sb, void *block,
 
 	kfree(parbuf);
 
-	NOVA_END_TIMING(cow_parity_t, cow_parity_time);
+	NOVA_END_TIMING(file_write_parity_t, file_write_parity_time);
 
 	return 0;
 }

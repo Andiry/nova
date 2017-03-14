@@ -380,9 +380,9 @@ static int nova_protect_file_data(struct super_block *sb,
 	struct nova_file_write_entry *entry;
 	bool nvmm_ok;
 	int ret = 0;
-	// timing_t protect_file_data_time;
+	timing_t protect_file_data_time;
 
-	// NOVA_START_TIMING(protect_file_data_t, protect_file_data_time);
+	NOVA_START_TIMING(protect_file_data_t, protect_file_data_time);
 
 	offset = pos & (blocksize - 1);
 	num_blocks = ((offset + count - 1) >> blocksize_bits) + 1;
@@ -500,7 +500,7 @@ eblk:
 out:
 	if (blockbuf != NULL) kfree(blockbuf);
 
-	// NOVA_END_TIMING(protect_file_data_t, protect_file_data_time);
+	NOVA_END_TIMING(protect_file_data_t, protect_file_data_time);
 
 	return ret;
 }
@@ -1216,17 +1216,6 @@ static ssize_t nova_flush_mmap_to_nvmm(struct super_block *sb,
 		nvmm_addr = nova_get_block(sb, nvmm_block);
 		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 				nvmm_addr + offset, bytes);
-
-		if ( (copied > 0) && (data_csum > 0) ) {
-			csummed = copied - nova_update_cow_csum(inode,
-				blocknr, nvmm_addr + offset, offset, copied);
-			if (unlikely(csummed != copied)) {
-				nova_dbg("%s: not all data bytes are "
-					"checksummed! copied %zu, "
-					"csummed %zu\n", __func__,
-					copied, csummed);
-			}
-		}
 
 		if (copied > 0) {
 			status = copied;

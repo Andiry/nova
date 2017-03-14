@@ -505,9 +505,9 @@ int nova_update_file_write_csum(struct super_block *sb,
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
 	unsigned long strps, strp_nr;
-	timing_t cow_csum_time;
+	timing_t file_write_csum_time;
 
-	NOVA_START_TIMING(cow_csum_t, cow_csum_time);
+	NOVA_START_TIMING(file_write_csum_t, file_write_csum_time);
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 
 	/* strp_index: stripe index within the block buffer
@@ -525,7 +525,7 @@ int nova_update_file_write_csum(struct super_block *sb,
 
 	nova_update_stripe_csum(sb, strps, strp_nr, strp_ptr, 0);
 
-	NOVA_END_TIMING(cow_csum_t, cow_csum_time);
+	NOVA_END_TIMING(file_write_csum_t, file_write_csum_time);
 
 	return 0;
 }

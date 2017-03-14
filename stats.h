@@ -62,7 +62,6 @@ enum timing_category {
 	memcpy_w_wb_t,
 	partial_block_t,
 	partial_buffer_t,
-	merge_buffer_t,
 
 	/* Memory management */
 	mm_title_t,
@@ -100,8 +99,9 @@ enum timing_category {
 
 	/* Integrity */
 	integrity_title_t,
-	cow_csum_t,
-	cow_parity_t,
+	file_write_csum_t,
+	file_write_parity_t,
+	protect_file_data_t,
 
 	/* Others */
 	others_title_t,
