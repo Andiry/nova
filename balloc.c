@@ -593,15 +593,17 @@ retry:
 			first = container_of(temp, struct nova_range_node, node);
 			free_list->first_node = first;
 		} else {
+			if (retried >= 2)
+				/* Allocate anyway */
+				goto alloc;
+
 			spin_unlock(&free_list->s_lock);
-			if (retried >= 3)
-				return -ENOSPC;
 			cpuid = nova_get_candidate_free_list(sb);
 			retried++;
 			goto retry;
 		}
 	}
-
+alloc:
 	ret_blocks = nova_alloc_blocks_in_free_list(sb, free_list, btype,
 						num_blocks, &new_blocknr);
 
