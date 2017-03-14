@@ -717,8 +717,8 @@ struct nova_sb_info {
 	struct nova_inode_info	*snapshot_si;
 	struct radix_tree_root	snapshot_info_tree;
 	int num_snapshots;
-	int curr_snapshot;
-	volatile u64 s_epoch_id;	/* Current epoch */
+	/* Current epoch. volatile guarantees visibility */
+	volatile u64 s_epoch_id;
 
 	int mount_snapshot;
 	u64 mount_snapshot_epoch_id;

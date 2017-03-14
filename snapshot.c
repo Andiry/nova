@@ -861,10 +861,8 @@ int nova_restore_snapshot_entry(struct super_block *sb,
 		goto out;
 	}
 
-	if (epoch_id > sbi->s_epoch_id) {
-		sbi->curr_snapshot = epoch_id;
+	if (epoch_id > sbi->s_epoch_id)
 		sbi->s_epoch_id = epoch_id;
-	}
 
 out:
 	nova_clear_nvmm_page(sb, entry, just_init);
@@ -949,7 +947,6 @@ int nova_create_snapshot(struct super_block *sb)
 	}
 
 	sbi->num_snapshots++;
-	sbi->curr_snapshot = epoch_id;
 
 	ret = nova_insert_snapshot_info(sb, info);
 
