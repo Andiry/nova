@@ -721,6 +721,9 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
+	timing_t check_time;
+
+	NOVA_START_TIMING(check_entry_t, check_time);
 
 	*ret_entry = NULL;
 	*inplace = 0;
@@ -770,6 +773,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	}
 
 out:
+	NOVA_END_TIMING(check_entry_t, check_time);
 	return ent_blks;
 }
 

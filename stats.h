@@ -85,6 +85,11 @@ enum timing_category {
 	append_setattr_t,
 	append_snapshot_info_t,
 
+	/* Tree */
+	tree_title_t,
+	check_entry_t,
+	assign_t,
+
 	/* GC */
 	gc_title_t,
 	fast_gc_t,
@@ -99,7 +104,6 @@ enum timing_category {
 	/* Others */
 	others_title_t,
 	find_cache_t,
-	assign_t,
 	fsync_t,
 	fallocate_t,
 	direct_IO_t,

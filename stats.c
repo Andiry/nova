@@ -86,6 +86,11 @@ const char *Timingstring[TIMING_NUM] =
 	"append_setattr",
 	"append_snapshot_info",
 
+	/* Tree */
+	"=============== Tree operations ================",
+	"checking_entry",
+	"assign_blocks",
+
 	/* GC */
 	"============= Garbage collection ===============",
 	"log_fast_gc",
@@ -100,7 +105,6 @@ const char *Timingstring[TIMING_NUM] =
 	/* Others */
 	"================ Miscellaneous =================",
 	"find_cache_page",
-	"assign_blocks",
 	"fsync",
 	"fallocate",
 	"direct_IO",
