@@ -411,8 +411,8 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 						allocated, blocknr);
 
 		if (allocated <= 0) {
-			nova_dbg("%s alloc blocks failed!, %d\n", __func__,
-							allocated);
+			nova_dbg("%s alloc %lu blocks failed!, %d\n",
+						__func__, ent_blks, allocated);
 			ret = allocated;
 			goto out;
 		}
