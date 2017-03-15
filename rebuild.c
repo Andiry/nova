@@ -190,6 +190,9 @@ int nova_reset_csum_parity_range(struct super_block *sb,
 	struct nova_file_write_entry *curr;
 	unsigned long pgoff;
 
+	if (data_csum == 0 && data_parity == 0)
+		return 0;
+
 	for (pgoff = start_pgoff; pgoff < end_pgoff; pgoff++) {
 		if (entry && check_entry && zero == 0) {
 			curr = nova_get_write_entry(sb, sih, pgoff);
@@ -280,6 +283,9 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 	bool done = false;
 	int count = 0;
 	int i;
+
+	if (data_csum == 0 && data_parity == 0)
+		return 0;
 
 	nova_dbgv("%s: pgoff %lu to %lu\n",
 			__func__, start_pgoff, end_pgoff);
