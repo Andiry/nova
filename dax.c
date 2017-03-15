@@ -368,17 +368,18 @@ void nova_init_file_write_entry(struct super_block *sb,
 	entry->size = file_size;
 }
 
-static int nova_protect_file_data(struct super_block *sb,
-	struct nova_inode_info_header *sih, loff_t pos, size_t count,
-	const char __user *buf, unsigned long blocknr)
+static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
+	loff_t pos, size_t count, const char __user *buf, unsigned long blocknr)
 {
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	size_t offset, eblk_offset, bytes, left;
 	unsigned long start_blk, end_blk, num_blocks, nvmm, nvmmoff;
 	unsigned long blocksize = sb->s_blocksize;
 	unsigned int blocksize_bits = sb->s_blocksize_bits;
 	u8 *blockbuf, *blockptr;
 	struct nova_file_write_entry *entry;
-	bool nvmm_ok;
+	bool mapped, nvmm_ok;
 	int ret = 0;
 	timing_t protect_file_data_time;
 
@@ -416,10 +417,14 @@ static int nova_protect_file_data(struct super_block *sb,
 			nvmmoff = nova_get_block_off(sb, nvmm, sih->i_blk_type);
 			blockptr = (u8 *) nova_get_block(sb, nvmmoff);
 
-			nvmm_ok = nova_verify_data_csum(sb, sih, nvmm, 0, offset);
-			if (!nvmm_ok) {
-				ret = -EIO;
-				goto out;
+			mapped = nova_find_pgoff_in_vma(inode, start_blk);
+			if (!mapped && data_csum > 0) {
+				nvmm_ok = nova_verify_data_csum(sb, sih, nvmm,
+								0, offset);
+				if (!nvmm_ok) {
+					ret = -EIO;
+					goto out;
+				}
 			}
 
 			ret = memcpy_from_pmem(blockbuf, blockptr, offset);
@@ -469,11 +474,14 @@ eblk:
 			nvmmoff = nova_get_block_off(sb, nvmm, sih->i_blk_type);
 			blockptr = (u8 *) nova_get_block(sb, nvmmoff);
 
-			nvmm_ok = nova_verify_data_csum(sb, sih, nvmm,
+			mapped = nova_find_pgoff_in_vma(inode, end_blk);
+			if (!mapped && data_csum > 0) {
+				nvmm_ok = nova_verify_data_csum(sb, sih, nvmm,
 					eblk_offset, blocksize - eblk_offset);
-			if (!nvmm_ok) {
-				ret = -EIO;
-				goto out;
+				if (!nvmm_ok) {
+					ret = -EIO;
+					goto out;
+				}
 			}
 
 			ret = memcpy_from_pmem(blockbuf + eblk_offset,
@@ -606,7 +614,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 			bytes = count;
 
 		if (data_csum > 0 || data_parity > 0) {
-			ret = nova_protect_file_data(sb, sih, pos, bytes,
+			ret = nova_protect_file_data(sb, inode, pos, bytes,
 							buf, blocknr);
 			if (ret) goto out;
 		}
@@ -888,7 +896,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			bytes = count;
 
 		if (data_csum > 0 || data_parity > 0) {
-			ret = nova_protect_file_data(sb, sih, pos, bytes,
+			ret = nova_protect_file_data(sb, inode, pos, bytes,
 							buf, blocknr);
 			if (ret) goto out;
 		}
