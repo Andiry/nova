@@ -309,6 +309,9 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 		}
 
 		count += pvec.nr;
+		if (pvec.nr < PAGEVEC_SIZE)
+			break;
+
 		start_pgoff = indices[pvec.nr - 1] + 1;
 	}
 
