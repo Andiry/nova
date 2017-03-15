@@ -303,7 +303,7 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 		}
 
 		count += pvec.nr;
-		start_pgoff += pvec.nr;
+		start_pgoff = indices[i] + 1;
 	}
 
 	nova_dbgv("%s: reset %d pages\n", __func__, count);
