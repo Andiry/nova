@@ -467,7 +467,7 @@ int nova_free_log_blocks(struct super_block *sb,
 	return ret;
 }
 
-static unsigned long nova_alloc_blocks_in_free_list(struct super_block *sb,
+static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	struct free_list *free_list, unsigned short btype,
 	unsigned long num_blocks, unsigned long *new_blocknr)
 {
@@ -526,6 +526,14 @@ static unsigned long nova_alloc_blocks_in_free_list(struct super_block *sb,
 		break;
 	}
 
+	if (free_list->num_free_blocks < num_blocks) {
+		nova_dbg("%s: free list %d has %lu free blocks, "
+				"but allocated %lu blocks?\n",
+				__func__, free_list->index,
+				free_list->num_free_blocks, num_blocks);
+		return -ENOSPC;
+	}
+
 	free_list->num_free_blocks -= num_blocks;
 
 	NOVA_STATS_ADD(alloc_steps, step);
@@ -564,8 +572,8 @@ static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	struct free_list *free_list;
 	void *bp;
 	unsigned long num_blocks = 0;
-	unsigned long ret_blocks = 0;
 	unsigned long new_blocknr = 0;
+	long ret_blocks = 0;
 	struct rb_node *temp;
 	struct nova_range_node *first;
 	int cpuid;
@@ -587,8 +595,10 @@ retry:
 			free_list->num_free_blocks, num_blocks,
 			free_list->num_blocknode);
 		if (free_list->num_free_blocks >= num_blocks) {
-			nova_dbg("first node is NULL "
-				"but still has free blocks\n");
+			nova_dbg("free list %d: first node is NULL "
+				"but still has %lu free blocks\n",
+				free_list->index,
+				free_list->num_free_blocks);
 			temp = rb_first(&free_list->block_free_tree);
 			first = container_of(temp, struct nova_range_node, node);
 			free_list->first_node = first;
