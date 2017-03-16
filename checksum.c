@@ -580,6 +580,9 @@ bool nova_verify_data_csum(struct super_block *sb,
 	unsigned long strp, strps, strp_nr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
+	timing_t verify_time;
+
+	NOVA_START_TIMING(verify_csum_t, verify_time);
 
 	/* Only a whole stripe can be checksum verified.
 	 * strps: # of stripes to be checked since offset. */
@@ -639,6 +642,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 
 	}
 
+	NOVA_END_TIMING(verify_csum_t, verify_time);
 	return match;
 }
 
