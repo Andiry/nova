@@ -478,6 +478,9 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	bool found = 0;
 	unsigned long step = 0;
 
+	if (!free_list->first_node || free_list->num_free_blocks == 0)
+		return -ENOSPC;
+
 	tree = &(free_list->block_free_tree);
 	temp = &(free_list->first_node->node);
 
@@ -617,12 +620,14 @@ alloc:
 	ret_blocks = nova_alloc_blocks_in_free_list(sb, free_list, btype,
 						num_blocks, &new_blocknr);
 
-	if (atype == LOG) {
-		free_list->alloc_log_count++;
-		free_list->alloc_log_pages += ret_blocks;
-	} else if (atype == DATA) {
-		free_list->alloc_data_count++;
-		free_list->alloc_data_pages += ret_blocks;
+	if (ret_blocks > 0) {
+		if (atype == LOG) {
+			free_list->alloc_log_count++;
+			free_list->alloc_log_pages += ret_blocks;
+		} else if (atype == DATA) {
+			free_list->alloc_data_count++;
+			free_list->alloc_data_pages += ret_blocks;
+		}
 	}
 
 	spin_unlock(&free_list->s_lock);
