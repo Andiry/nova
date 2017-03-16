@@ -175,7 +175,10 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	u8 *blockptr, *bad_strp, *strp_buf, *par_addr;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
+	timing_t restore_time;
+	int ret = 0;
 
+	NOVA_START_TIMING(restore_data_t, restore_time);
 	blockoff = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
 	blockptr = nova_get_block(sb, blockoff);
 	bad_strp = blockptr + bad_strp_id * strp_size;
@@ -185,14 +188,16 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	if (strp_buf == NULL) {
 		nova_err(sb, "%s: stripe buffer allocation error\n",
 				__func__);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 	if (par_addr == NULL) {
 		kfree(strp_buf);
 		nova_err(sb, "%s: parity address error\n", __func__);
-		return -EIO;
+		ret = -EIO;
+		goto out;
 	}
 
 	/* TODO: Handle MCE: par_addr read from NVMM */
@@ -213,9 +218,11 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 
 	kfree(strp_buf);
 
-	if (!match) return -EIO;
+	if (!match) ret = -EIO;
 
-	return 0;
+out:
+	NOVA_END_TIMING(restore_data_t, restore_time);
+	return ret;
 }
 
 int nova_update_truncated_block_parity(struct super_block *sb,

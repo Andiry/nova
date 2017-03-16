@@ -102,6 +102,7 @@ enum timing_category {
 	file_write_csum_t,
 	file_write_parity_t,
 	protect_file_data_t,
+	restore_data_t,
 
 	/* Others */
 	others_title_t,

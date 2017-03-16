@@ -103,6 +103,7 @@ const char *Timingstring[TIMING_NUM] =
 	"file_write_csum",
 	"file_write_parity",
 	"protect_file_data",
+	"restore_file_data",
 
 	/* Others */
 	"================ Miscellaneous =================",
