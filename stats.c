@@ -104,11 +104,14 @@ const char *Timingstring[TIMING_NUM] =
 	"protect_file_data",
 	"verify_csum",
 	"restore_file_data",
+	"reset_mapping",
+	"reset_vma",
 
 	/* Others */
 	"================ Miscellaneous =================",
 	"find_cache_page",
 	"fsync",
+	"write_pages",
 	"fallocate",
 	"direct_IO",
 	"delete_file_tree",

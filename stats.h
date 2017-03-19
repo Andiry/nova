@@ -103,11 +103,14 @@ enum timing_category {
 	protect_file_data_t,
 	verify_csum_t,
 	restore_data_t,
+	reset_mapping_t,
+	reset_vma_t,
 
 	/* Others */
 	others_title_t,
 	find_cache_t,
 	fsync_t,
+	write_pages_t,
 	fallocate_t,
 	direct_IO_t,
 	delete_file_tree_t,

@@ -1441,8 +1441,14 @@ unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 static int nova_writepages(struct address_space *mapping,
 	struct writeback_control *wbc)
 {
-	return dax_writeback_mapping_range(mapping,
+	int ret;
+	timing_t wp_time;
+
+	NOVA_START_TIMING(write_pages_t, wp_time);
+	ret = dax_writeback_mapping_range(mapping,
 			mapping->host->i_sb->s_bdev, wbc);
+	NOVA_END_TIMING(write_pages_t, wp_time);
+	return ret;
 }
 
 const struct address_space_operations nova_aops_dax = {

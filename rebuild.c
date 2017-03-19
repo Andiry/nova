@@ -282,11 +282,13 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 	struct pagevec pvec;
 	bool done = false;
 	int count = 0;
+	timing_t reset_time;
 	int i;
 
 	if (data_csum == 0 && data_parity == 0)
 		return 0;
 
+	NOVA_START_TIMING(reset_mapping_t, reset_time);
 	nova_dbgv("%s: pgoff %lu to %lu\n",
 			__func__, start_pgoff, end_pgoff);
 
@@ -316,6 +318,7 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 	}
 
 	nova_dbgv("%s: reset %d pages\n", __func__, count);
+	NOVA_END_TIMING(reset_mapping_t, reset_time);
 	return 0;
 }
 
@@ -328,11 +331,13 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 	struct nova_mmap_entry *entry;
 	unsigned long num_pages;
 	unsigned long start_index, end_index;
+	timing_t reset_time;
 	int ret = 0;
 
 	if (data_csum == 0 && data_parity == 0)
 		return 0;
 
+	NOVA_START_TIMING(reset_vma_t, reset_time);
 	num_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
 	start_index = vma->vm_pgoff;
 	end_index = vma->vm_pgoff + num_pages;
@@ -345,6 +350,7 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 		ret = nova_invalidate_logentry(sb, entry, MMAP_WRITE, 0);
 	}
 
+	NOVA_END_TIMING(reset_vma_t, reset_time);
 	return ret;
 }
 
