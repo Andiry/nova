@@ -17,7 +17,8 @@
 
 #include "nova.h"
 
-int nova_calculate_block_parity(struct super_block *sb, u8 *parity, u8 *block)
+static int nova_calculate_block_parity(struct super_block *sb, u8 *parity,
+	u8 *block)
 {
 	unsigned int strp, num_strps, i, j;
 	size_t strp_size = NOVA_STRIPE_SIZE;
