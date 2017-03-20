@@ -54,30 +54,40 @@ static int nova_calculate_block_parity(struct super_block *sb, u8 *parity,
 }
 
 /* Compute parity for a whole data block and write the parity stripe to nvmm */
-static int nova_update_block_parity(struct super_block *sb,
-	unsigned long blocknr, void *parity, void *block, int zero)
+static int nova_update_block_parity(struct super_block *sb, void *block,
+	unsigned long blocknr, int zero)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	size_t strp_size = NOVA_STRIPE_SIZE;
-	void *par_addr;
+	void *parity, *nvmmptr;
+	int ret = 0;
 
-	if ((parity == NULL) || (block == NULL)) {
-		nova_dbg("%s: pointer error\n", __func__);
-		return -EINVAL;
+	parity = kmalloc(strp_size, GFP_KERNEL);
+	if (parity == NULL) {
+		nova_err(sb, "%s: parity buffer allocation error\n", __func__);
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	if (block == NULL) {
+		nova_dbg("%s: block pointer error\n", __func__);
+		ret = -EINVAL;
+		goto out;
 	}
 
 	if (unlikely(zero))
-		parity = sbi->zero_parity;
+		memset(parity, 0, strp_size);
 	else
 		nova_calculate_block_parity(sb, parity, block);
 
-	par_addr = nova_get_parity_addr(sb, blocknr);
+	nvmmptr = nova_get_parity_addr(sb, blocknr);
 
-	nova_memunlock_range(sb, par_addr, strp_size);
-	memcpy_to_pmem_nocache(par_addr, parity, strp_size);
-	nova_memlock_range(sb, par_addr, strp_size);
+	nova_memunlock_range(sb, nvmmptr, strp_size);
+	memcpy_to_pmem_nocache(nvmmptr, parity, strp_size);
+	nova_memlock_range(sb, nvmmptr, strp_size);
 
 	// TODO: The parity stripe should be checksummed for higher reliability.
+out:
+	if (parity != NULL) kfree(parity);
 
 	return 0;
 }
@@ -86,10 +96,8 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero)
 {
-	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned long blocknr;
 	void *dax_mem = NULL;
-	u8 *parbuf;
 	u64 blockoff;
 
 	blockoff = nova_find_nvmm_block(sb, sih, entry, pgoff);
@@ -97,20 +105,11 @@ int nova_update_pgoff_parity(struct super_block *sb,
 	if (blockoff == 0)
 		return 0;
 
-	/* parity buffer for rolling updates */
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (!parbuf) {
-		nova_err(sb, "%s: parity buffer allocation error\n",
-				__func__);
-		return -ENOMEM;
-	}
-
 	dax_mem = nova_get_block(sb, blockoff);
 
 	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
-	nova_update_block_parity(sb, blocknr, parbuf, dax_mem, zero);
+	nova_update_block_parity(sb, dax_mem, blocknr, zero);
 
-	kfree(parbuf);
 	return 0;
 }
 
@@ -128,24 +127,11 @@ int nova_update_pgoff_parity(struct super_block *sb,
 int nova_update_file_write_parity(struct super_block *sb, void *block,
 	unsigned long blocknr)
 {
-	u8 *blockptr, *parbuf;
-	size_t strp_size = NOVA_STRIPE_SIZE;
 	timing_t file_write_parity_time;
 
 	NOVA_START_TIMING(file_write_parity_t, file_write_parity_time);
 
-	blockptr = (u8 *) block;
-
-	/* parity stripe buffer for rolling updates */
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (parbuf == NULL) {
-		nova_err(sb, "%s: parity buffer allocation error\n", __func__);
-		return -EFAULT;
-	}
-
-	nova_update_block_parity(sb, blocknr, parbuf, blockptr, 0);
-
-	kfree(parbuf);
+	nova_update_block_parity(sb, block, blocknr, 0);
 
 	NOVA_END_TIMING(file_write_parity_t, file_write_parity_time);
 
@@ -161,7 +147,7 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	size_t blockoff, offset;
 	unsigned long bad_strp_nr;
-	u8 *blockptr, *bad_strp, *blockbuf, *parbuf, *parity;
+	u8 *blockptr, *bad_strp, *blockbuf, *stripe, *parity;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
 	timing_t restore_time;
@@ -173,9 +159,9 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	bad_strp = blockptr + (bad_strp_id << strp_shift);
 	bad_strp_nr = (blockoff + (bad_strp_id << strp_shift)) >> strp_shift;
 
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
+	stripe = kmalloc(strp_size, GFP_KERNEL);
 	blockbuf = kmalloc(sb->s_blocksize, GFP_KERNEL);
-	if (parbuf == NULL || blockbuf == NULL) {
+	if (stripe == NULL || blockbuf == NULL) {
 		nova_err(sb, "%s: buffer allocation error\n", __func__);
 		ret = -ENOMEM;
 		goto out;
@@ -204,23 +190,23 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 		}
 	}
 
-	nova_calculate_block_parity(sb, parbuf, blockbuf);
+	nova_calculate_block_parity(sb, stripe, blockbuf);
 
-	csum_calc = nova_crc32c(NOVA_INIT_CSUM, parbuf, strp_size);
+	csum_calc = nova_crc32c(NOVA_INIT_CSUM, stripe, strp_size);
 	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr);
 	csum_nvmm = le32_to_cpu(*csum_addr);
 	match     = (csum_calc == csum_nvmm);
 
 	if (match) {
 		nova_memunlock_range(sb, bad_strp, strp_size);
-	        memcpy_to_pmem_nocache(bad_strp, parbuf, strp_size);
+	        memcpy_to_pmem_nocache(bad_strp, stripe, strp_size);
 		nova_memlock_range(sb, bad_strp, strp_size);
 	}
 
 	if (!match) ret = -EIO;
 
 out:
-	if (parbuf != NULL) kfree(parbuf);
+	if (stripe != NULL) kfree(stripe);
 	if (blockbuf != NULL) kfree(blockbuf);
 
 	NOVA_END_TIMING(restore_data_t, restore_time);
@@ -234,9 +220,8 @@ int nova_update_truncated_block_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih = &si->header;
 	unsigned long pgoff, blocknr;
 	u64 nvmm;
-	char *nvmm_addr, *blkbuf, *parbuf;
+	char *nvmm_addr, *block;
 	u8 btype = sih->i_blk_type;
-	size_t strp_size = NOVA_STRIPE_SIZE;
 
 	pgoff = newsize >> sb->s_blocksize_bits;
 
@@ -247,26 +232,20 @@ int nova_update_truncated_block_parity(struct super_block *sb,
 	nvmm_addr = (char *)nova_get_block(sb, nvmm);
 
 	blocknr = nova_get_blocknr(sb, nvmm, btype);
-	parbuf = kmalloc(strp_size, GFP_KERNEL);
-	if (parbuf == NULL) {
-		nova_err(sb, "%s: buffer allocation error\n", __func__);
-		return -ENOMEM;
-	}
 
 	/* Copy to DRAM to catch MCE.
-	blkbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);
-	if (blkbuf == NULL) {
+	block = kmalloc(blocksize, GFP_KERNEL);
+	if (block == NULL) {
 		nova_err(sb, "%s: buffer allocation error\n", __func__);
 		return -ENOMEM;
 	}
 	*/
 
-//	memcpy_from_pmem(blkbuf, nvmm_addr, PAGE_SIZE);
-	blkbuf = nvmm_addr;
+//	memcpy_from_pmem(block, nvmm_addr, blocksize);
+	block = nvmm_addr;
 
-	nova_update_block_parity(sb, blocknr, parbuf, blkbuf, 0);
+	nova_update_block_parity(sb, block, blocknr, 0);
 
-	kfree(parbuf);
 //	kfree(blkbuf);
 
 	return 0;
