@@ -90,8 +90,8 @@ static int nova_alloc_inode_table(struct super_block *sb,
 		block = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
 		nova_memunlock_range(sb, inode_table, CACHELINE_SIZE);
 		inode_table->log_head = block;
-		nova_flush_buffer(inode_table, CACHELINE_SIZE, 0);
 		nova_memlock_range(sb, inode_table, CACHELINE_SIZE);
+		nova_flush_buffer(inode_table, CACHELINE_SIZE, 0);
 	}
 
 	return 0;
@@ -191,7 +191,11 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 
 			curr = nova_get_block_off(sb, blocknr,
 						NOVA_BLOCK_TYPE_2M);
+			nova_memunlock_range(sb, (void *)curr_addr,
+						CACHELINE_SIZE);
 			*(u64 *)(curr_addr) = curr;
+			nova_memlock_range(sb, (void *)curr_addr,
+						CACHELINE_SIZE);
 			nova_flush_buffer((void *)curr_addr,
 						NOVA_INODE_SIZE, 1);
 		}
