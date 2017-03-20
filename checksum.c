@@ -498,7 +498,7 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
  * zero:    if the user data is all zero
  */
 int nova_update_block_csum(struct super_block *sb,
-	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
+	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes, int zero)
 {
 	u8 *strp_ptr;
@@ -522,7 +522,7 @@ int nova_update_block_csum(struct super_block *sb,
 
 	strps = ((strp_offset + bytes - 1) >> strp_shift) + 1;
 	strp_nr = (blockoff + offset) >> strp_shift;
-	strp_ptr = (u8 *) block + (strp_index << strp_shift);
+	strp_ptr = block + (strp_index << strp_shift);
 
 	nova_update_stripe_csum(sb, strps, strp_nr, strp_ptr, zero);
 

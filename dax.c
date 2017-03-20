@@ -440,11 +440,8 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	if (num_blocks == 1) goto eblk;
 
 	do {
-		if (data_csum > 0)
-			nova_update_block_csum(sb, sih, blockbuf, blocknr,
-							offset, bytes, 0);
-		if (data_parity > 0)
-			nova_update_block_parity(sb, blockbuf, blocknr, 0);
+		nova_update_block_csum_parity(sb, sih, blockbuf, blocknr,
+							offset, bytes);
 
 		blocknr++;
 		pos += bytes;
@@ -500,11 +497,7 @@ eblk:
 						eblk_offset, blocknr, true);
 	}
 
-	if (data_csum > 0)
-		nova_update_block_csum(sb, sih, blockbuf, blocknr,
-						offset, bytes, 0);
-	if (data_parity > 0)
-		nova_update_block_parity(sb, blockbuf, blocknr, 0);
+	nova_update_block_csum_parity(sb, sih, blockbuf, blocknr, offset, bytes);
 
 out:
 	if (blockbuf != NULL) kfree(blockbuf);

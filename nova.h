@@ -421,6 +421,12 @@ static inline __le32 nova_mask_flags(umode_t mode, __le32 flags)
 		return flags & cpu_to_le32(NOVA_OTHER_FLMASK);
 }
 
+/* Update the crc32c value by appending a 64b data word. */
+#define nova_crc32c_qword(qword, crc) \
+	asm volatile ("crc32q %1, %0" \
+		: "=r" (crc) \
+		: "r" (qword), "0" (crc))
+
 static inline u32 nova_crc32c(u32 crc, const u8 *data, size_t len)
 {
 	u8 *ptr = (u8 *) data;
@@ -1583,7 +1589,7 @@ int nova_recovery(struct super_block *sb);
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
 int nova_update_block_csum(struct super_block *sb,
-	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
+	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes, int zero);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
 int nova_check_alter_entry(struct super_block *sb, u64 curr);
@@ -1787,8 +1793,11 @@ extern struct dentry *nova_get_parent(struct dentry *child);
 int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero);
-int nova_update_block_parity(struct super_block *sb, void *block,
+int nova_update_block_parity(struct super_block *sb, u8 *block,
 	unsigned long blocknr, int zero);
+int nova_update_block_csum_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
+	size_t offset, size_t bytes);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int bad_strp_id);
 int nova_update_truncated_block_parity(struct super_block *sb,

@@ -72,7 +72,7 @@ static int nova_update_block_parity(struct super_block *sb,
 	size_t offset, size_t bytes, int zero)
 
  */
-int nova_update_block_parity(struct super_block *sb, void *block,
+int nova_update_block_parity(struct super_block *sb, u8 *block,
 	unsigned long blocknr, int zero)
 {
 	size_t strp_size = NOVA_STRIPE_SIZE;
@@ -132,6 +132,111 @@ int nova_update_pgoff_parity(struct super_block *sb,
 
 	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
 	nova_update_block_parity(sb, dax_mem, blocknr, zero);
+
+	return 0;
+}
+
+/* Update block checksums and/or parity.
+ *
+ * Since this part of computing is along the critical path, unroll by 8 to gain
+ * performance if possible. This unrolling applies to stripe width of 8 and
+ * whole block writes.
+ */
+#define CSUM0 NOVA_INIT_CSUM
+int nova_update_block_csum_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
+	size_t offset, size_t bytes)
+{
+	unsigned int i, strp_offset, num_strps;
+	size_t csum_size = NOVA_DATA_CSUM_LEN;
+	size_t strp_size = NOVA_STRIPE_SIZE;
+	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
+	unsigned long strp_nr, blockoff, blocksize = sb->s_blocksize;
+	void *nvmmptr;
+	u32 crc[8];
+	u64 qwd[8], *parity = NULL;
+	u64 acc[8] = {CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0};
+	bool unroll_csum = false, unroll_parity = false;
+	int ret = 0;
+
+	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
+	strp_nr = blockoff >> strp_shift;
+
+	strp_offset = offset & (strp_size - 1);
+	num_strps = ((strp_offset + bytes - 1) >> strp_shift) + 1;
+
+	unroll_parity = (blocksize / strp_size == 8) && (num_strps == 8);
+	unroll_csum = unroll_parity && static_cpu_has(X86_FEATURE_XMM4_2);
+
+	/* unrolled-by-8 implementation */
+	if (unroll_csum || unroll_parity) {
+		if (data_parity > 0) {
+			parity = (u64 *) kmalloc(strp_size, GFP_KERNEL);
+			if (parity == NULL) {
+				nova_err(sb, "%s: buffer allocation error\n",
+								__func__);
+				ret = -ENOMEM;
+				goto out;
+			}
+		}
+		for (i = 0; i < strp_size / 8; i++) {
+			qwd[0] = *((u64 *) (block));
+			qwd[1] = *((u64 *) (block + 1 * strp_size));
+			qwd[2] = *((u64 *) (block + 2 * strp_size));
+			qwd[3] = *((u64 *) (block + 3 * strp_size));
+			qwd[4] = *((u64 *) (block + 4 * strp_size));
+			qwd[5] = *((u64 *) (block + 5 * strp_size));
+			qwd[6] = *((u64 *) (block + 6 * strp_size));
+			qwd[7] = *((u64 *) (block + 7 * strp_size));
+
+			if (data_csum > 0 && unroll_csum) {
+				nova_crc32c_qword(qwd[0], acc[0]);
+				nova_crc32c_qword(qwd[1], acc[1]);
+				nova_crc32c_qword(qwd[2], acc[2]);
+				nova_crc32c_qword(qwd[3], acc[3]);
+				nova_crc32c_qword(qwd[4], acc[4]);
+				nova_crc32c_qword(qwd[5], acc[5]);
+				nova_crc32c_qword(qwd[6], acc[6]);
+				nova_crc32c_qword(qwd[7], acc[7]);
+			}
+
+			if (data_parity > 0) {
+				parity[i] =	qwd[0] ^ qwd[1] ^ qwd[2] ^ \
+						qwd[3] ^ qwd[4] ^ qwd[5] ^ \
+						qwd[6] ^ qwd[7];
+			}
+
+			block += 8;
+		}
+		if (data_csum > 0 && unroll_csum) {
+			crc[0] = cpu_to_le32( (u32) acc[0] );
+			crc[1] = cpu_to_le32( (u32) acc[1] );
+			crc[2] = cpu_to_le32( (u32) acc[2] );
+			crc[3] = cpu_to_le32( (u32) acc[3] );
+			crc[4] = cpu_to_le32( (u32) acc[4] );
+			crc[5] = cpu_to_le32( (u32) acc[5] );
+			crc[6] = cpu_to_le32( (u32) acc[6] );
+			crc[7] = cpu_to_le32( (u32) acc[7] );
+
+			nvmmptr = nova_get_data_csum_addr(sb, strp_nr);
+			nova_memunlock_range(sb, nvmmptr, csum_size * 8);
+			memcpy_to_pmem_nocache(nvmmptr, crc, csum_size * 8);
+			nova_memlock_range(sb, nvmmptr, csum_size * 8);
+		}
+
+		nvmmptr = nova_get_parity_addr(sb, blocknr);
+		nova_memunlock_range(sb, nvmmptr, strp_size);
+		memcpy_to_pmem_nocache(nvmmptr, parity, strp_size);
+		nova_memlock_range(sb, nvmmptr, strp_size);
+	}
+
+	if (data_csum > 0 && !unroll_csum)
+		nova_update_block_csum(sb, sih, block, blocknr, offset, bytes, 0);
+	if (data_parity > 0 && !unroll_parity)
+		nova_update_block_parity(sb, block, blocknr, 0);
+
+out:
+	if (parity != NULL) kfree(parity);
 
 	return 0;
 }
