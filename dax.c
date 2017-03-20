@@ -78,7 +78,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 				goto out;
 			}
 		}
-retry:
+
 		entry = nova_get_write_entry(sb, sih, index);
 		if (unlikely(entry == NULL)) {
 			nova_dbgv("Required extent not found: pgoff %lu, "
@@ -87,9 +87,6 @@ retry:
 			zero = 1;
 			goto memcpy;
 		}
-
-		if (entry->updating)
-			goto retry;
 
 		/* Find contiguous blocks */
 		if (index < entry->pgoff ||
@@ -115,7 +112,7 @@ memcpy:
 			nr = len - copied;
 
 		if ( (!zero) && (data_csum > 0) ) {
-			if (nova_find_pgoff_in_vma(inode, index, 1))
+			if (nova_find_pgoff_in_vma(inode, index))
 				goto skip_verify;
 
 			if (!nova_verify_data_csum(sb, sih, nvmm, offset, nr)) {
@@ -148,9 +145,6 @@ skip_verify:
 			goto out;
 		}
 
-		if (entry && entry->updating)
-			goto retry;
-
 		copied += (nr - left);
 		offset += (nr - left);
 		index += offset >> PAGE_SHIFT;
@@ -176,14 +170,14 @@ out:
 ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 			    size_t len, loff_t *ppos)
 {
+	struct inode *inode = filp->f_mapping->host;
 	ssize_t res;
 	timing_t dax_read_time;
 
 	NOVA_START_TIMING(dax_read_t, dax_read_time);
-	/* Use OCC instead of rwlock */
-//	inode_lock_shared(inode);
+	inode_lock_shared(inode);
 	res = do_dax_mapping_read(filp, buf, len, ppos);
-//	inode_unlock_shared(inode);
+	inode_unlock_shared(inode);
 	NOVA_END_TIMING(dax_read_t, dax_read_time);
 	return res;
 }
@@ -423,7 +417,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 			nvmmoff = nova_get_block_off(sb, nvmm, sih->i_blk_type);
 			blockptr = (u8 *) nova_get_block(sb, nvmmoff);
 
-			mapped = nova_find_pgoff_in_vma(inode, start_blk, 0);
+			mapped = nova_find_pgoff_in_vma(inode, start_blk);
 			if (!mapped && data_csum > 0) {
 				nvmm_ok = nova_verify_data_csum(sb, sih, nvmm,
 								0, offset);
@@ -480,7 +474,7 @@ eblk:
 			nvmmoff = nova_get_block_off(sb, nvmm, sih->i_blk_type);
 			blockptr = (u8 *) nova_get_block(sb, nvmmoff);
 
-			mapped = nova_find_pgoff_in_vma(inode, end_blk, 0);
+			mapped = nova_find_pgoff_in_vma(inode, end_blk);
 			if (!mapped && data_csum > 0) {
 				nvmm_ok = nova_verify_data_csum(sb, sih, nvmm,
 					eblk_offset, blocksize - eblk_offset);
@@ -876,8 +870,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
-			nova_set_write_entry_updating(sb, entry, 1);
-			asm volatile ("mfence\n" : : );
+			if (data_csum || data_parity)
+				nova_set_write_entry_updating(sb, entry, 1);
 		} else {
 			/* Allocate blocks to fill hole */
 			allocated = nova_new_data_blocks(sb, sih, &blocknr, ent_blks,
@@ -951,7 +945,6 @@ ssize_t nova_inplace_file_write(struct file *filp,
 
 			nova_inplace_update_write_entry(sb, inode, entry,
 							&entry_info);
-			asm volatile ("mfence\n" : : );
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);

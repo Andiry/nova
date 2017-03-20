@@ -346,8 +346,7 @@ static inline bool pgoff_in_vma(struct vm_area_struct *vma,
 	return false;
 }
 
-bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff,
-	int need_lock)
+bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -358,9 +357,6 @@ bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff,
 	if (sih->num_vmas == 0)
 		return ret;
 
-	if (need_lock)
-		inode_lock_shared(inode);
-
 	temp = rb_first(&sih->vma_tree);
 	while (temp) {
 		item = container_of(temp, struct vma_item, node);
@@ -370,9 +366,6 @@ bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff,
 			break;
 		}
 	}
-
-	if (need_lock)
-		inode_unlock_shared(inode);
 
 	return ret;
 }
