@@ -1582,9 +1582,9 @@ int nova_recovery(struct super_block *sb);
 /* checksum.c */
 void nova_update_entry_csum(void *entry);
 bool nova_verify_entry_csum(struct super_block *sb, void *entry);
-int nova_update_file_write_csum(struct super_block *sb,
+int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
-	size_t offset, size_t bytes);
+	size_t offset, size_t bytes, int zero);
 int nova_update_alter_entry(struct super_block *sb, void *entry);
 int nova_check_alter_entry(struct super_block *sb, u64 curr);
 int nova_check_inode_integrity(struct super_block *sb, u64 ino,

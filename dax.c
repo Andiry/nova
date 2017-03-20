@@ -441,8 +441,8 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 
 	do {
 		if (data_csum > 0)
-			nova_update_file_write_csum(sb, sih, blockbuf, blocknr,
-								offset, bytes);
+			nova_update_block_csum(sb, sih, blockbuf, blocknr,
+							offset, bytes, 0);
 		if (data_parity > 0)
 			nova_update_file_write_parity(sb, blockbuf, blocknr);
 
@@ -501,8 +501,8 @@ eblk:
 	}
 
 	if (data_csum > 0)
-		nova_update_file_write_csum(sb, sih, blockbuf,
-					blocknr, offset, count);
+		nova_update_block_csum(sb, sih, blockbuf, blocknr,
+						offset, bytes, 0);
 	if (data_parity > 0)
 		nova_update_file_write_parity(sb, blockbuf, blocknr);
 

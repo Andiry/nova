@@ -495,19 +495,20 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
  *          - used to derive checksum value addresses
  * offset:  byte offset of user data in the block buffer
  * bytes:   number of user data bytes in the block buffer
+ * zero:    if the user data is all zero
  */
-int nova_update_file_write_csum(struct super_block *sb,
+int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
-	size_t offset, size_t bytes)
+	size_t offset, size_t bytes, int zero)
 {
 	u8 *strp_ptr;
 	size_t blockoff;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned int strp_index, strp_offset;
 	unsigned long strps, strp_nr;
-	timing_t file_write_csum_time;
+	timing_t block_csum_time;
 
-	NOVA_START_TIMING(file_write_csum_t, file_write_csum_time);
+	NOVA_START_TIMING(block_csum_t, block_csum_time);
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 
 	/* strp_index: stripe index within the block buffer
@@ -523,9 +524,9 @@ int nova_update_file_write_csum(struct super_block *sb,
 	strp_nr = (blockoff + offset) >> strp_shift;
 	strp_ptr = (u8 *) block + (strp_index << strp_shift);
 
-	nova_update_stripe_csum(sb, strps, strp_nr, strp_ptr, 0);
+	nova_update_stripe_csum(sb, strps, strp_nr, strp_ptr, zero);
 
-	NOVA_END_TIMING(file_write_csum_t, file_write_csum_time);
+	NOVA_END_TIMING(block_csum_t, block_csum_time);
 
 	return 0;
 }
