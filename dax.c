@@ -444,7 +444,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 			nova_update_block_csum(sb, sih, blockbuf, blocknr,
 							offset, bytes, 0);
 		if (data_parity > 0)
-			nova_update_file_write_parity(sb, blockbuf, blocknr);
+			nova_update_block_parity(sb, blockbuf, blocknr, 0);
 
 		blocknr++;
 		pos += bytes;
@@ -504,7 +504,7 @@ eblk:
 		nova_update_block_csum(sb, sih, blockbuf, blocknr,
 						offset, bytes, 0);
 	if (data_parity > 0)
-		nova_update_file_write_parity(sb, blockbuf, blocknr);
+		nova_update_block_parity(sb, blockbuf, blocknr, 0);
 
 out:
 	if (blockbuf != NULL) kfree(blockbuf);

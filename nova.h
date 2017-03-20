@@ -1787,8 +1787,8 @@ extern struct dentry *nova_get_parent(struct dentry *child);
 int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero);
-int nova_update_file_write_parity(struct super_block *sb, void *block,
-	unsigned long blocknr);
+int nova_update_block_parity(struct super_block *sb, void *block,
+	unsigned long blocknr, int zero);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int bad_strp_id);
 int nova_update_truncated_block_parity(struct super_block *sb,

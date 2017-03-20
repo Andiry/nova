@@ -53,13 +53,34 @@ static int nova_calculate_block_parity(struct super_block *sb, u8 *parity,
 	return 0;
 }
 
-/* Compute parity for a whole data block and write the parity stripe to nvmm */
-static int nova_update_block_parity(struct super_block *sb, void *block,
+/* Compute parity for a whole data block and write the parity stripe to nvmm
+ *
+ * The block buffer to compute checksums should reside in dram (more trusted),
+ * not in nvmm (less trusted).
+ *
+ * block:   block buffer with user data and possibly partial head-tail block
+ *          - should be in kernel memory (dram) to avoid page faults
+ * blocknr: destination nvmm block number where the block is written to
+ *          - used to derive the parity stripe address
+
+ * If the modified content is less than a stripe size (small writes), it's
+ * possible to re-compute the parity only using the difference of the modified
+ * stripe, without re-computing for the whole block.
+
+static int nova_update_block_parity(struct super_block *sb,
+	struct nova_inode_info_header *sih, void *block, unsigned long blocknr,
+	size_t offset, size_t bytes, int zero)
+
+ */
+int nova_update_block_parity(struct super_block *sb, void *block,
 	unsigned long blocknr, int zero)
 {
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	void *parity, *nvmmptr;
 	int ret = 0;
+	timing_t block_parity_time;
+
+	NOVA_START_TIMING(block_parity_t, block_parity_time);
 
 	parity = kmalloc(strp_size, GFP_KERNEL);
 	if (parity == NULL) {
@@ -85,9 +106,11 @@ static int nova_update_block_parity(struct super_block *sb, void *block,
 	memcpy_to_pmem_nocache(nvmmptr, parity, strp_size);
 	nova_memlock_range(sb, nvmmptr, strp_size);
 
-	// TODO: The parity stripe should be checksummed for higher reliability.
+	// TODO: The parity stripe is better checksummed for higher reliability.
 out:
 	if (parity != NULL) kfree(parity);
+
+	NOVA_END_TIMING(block_parity_t, block_parity_time);
 
 	return 0;
 }
@@ -109,31 +132,6 @@ int nova_update_pgoff_parity(struct super_block *sb,
 
 	blocknr = nova_get_blocknr(sb, blockoff, sih->i_blk_type);
 	nova_update_block_parity(sb, dax_mem, blocknr, zero);
-
-	return 0;
-}
-
-/* Computes a parity stripe for one file write data block and writes the parity
- * stripe to nvmm.
- *
- * The block buffer to compute checksums should reside in dram (more trusted),
- * not in nvmm (less trusted).
- *
- * block:   block buffer with user data and possibly partial head-tail block
- *          - should be in kernel memory (dram) to avoid page faults
- * blocknr: destination nvmm block number where the block is written to
- *          - used to derive checksum value addresses
- */
-int nova_update_file_write_parity(struct super_block *sb, void *block,
-	unsigned long blocknr)
-{
-	timing_t file_write_parity_time;
-
-	NOVA_START_TIMING(file_write_parity_t, file_write_parity_time);
-
-	nova_update_block_parity(sb, block, blocknr, 0);
-
-	NOVA_END_TIMING(file_write_parity_t, file_write_parity_time);
 
 	return 0;
 }

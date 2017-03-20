@@ -100,7 +100,7 @@ const char *Timingstring[TIMING_NUM] =
 	/* Integrity */
 	"============ Integrity operations ==============",
 	"block_csum",
-	"file_write_parity",
+	"block_parity",
 	"protect_file_data",
 	"verify_csum",
 	"restore_file_data",

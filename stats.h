@@ -99,7 +99,7 @@ enum timing_category {
 	/* Integrity */
 	integrity_title_t,
 	block_csum_t,
-	file_write_parity_t,
+	block_parity_t,
 	protect_file_data_t,
 	verify_csum_t,
 	restore_data_t,
