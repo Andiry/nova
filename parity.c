@@ -17,48 +17,35 @@
 
 #include "nova.h"
 
-int nova_calculate_block_parity(struct super_block *sb, void *parity,
-	void *block, int strp_skip)
+int nova_calculate_block_parity(struct super_block *sb, u8 *parity, u8 *block)
 {
 	unsigned int strp, num_strps, i, j;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	u8 *init_ptr;
-	u8 *par_ptr  = (u8 *) parity;
-	u8 *strp_ptr = (u8 *) block;
 	u64 xor;
-
-	if (strp_skip < 0) { // compute whole block parity
-		init_ptr = (u8 *) block;
-		strp_skip = 0; // skip the first stripe
-	} else { // data recovery
-		init_ptr = (u8 *) parity;
-	}
 
 	num_strps = sb->s_blocksize >> strp_shift;
 	if ( static_cpu_has(X86_FEATURE_XMM2) ) { // sse2 128b
 		for (i = 0; i < strp_size; i += 16) {
-			asm volatile("movdqa %0, %%xmm0" : : "m" (init_ptr[i]));
-			for (strp = 0; strp < num_strps; strp++) {
-				if (strp == strp_skip) continue;
+			asm volatile("movdqa %0, %%xmm0" : : "m" (block[i]));
+			for (strp = 1; strp < num_strps; strp++) {
 				j = (strp << strp_shift) + i;
 				asm volatile(
 					"movdqa     %0, %%xmm1\n"
 					"pxor   %%xmm1, %%xmm0\n"
-					: : "m" (strp_ptr[j])
+					: : "m" (block[j])
 				);
 			}
-			asm volatile("movntdq %%xmm0, %0" : "=m" (par_ptr[i]));
+			asm volatile("movntdq %%xmm0, %0" : "=m" (parity[i]));
 		}
 	} else { // common 64b
 		for (i = 0; i < strp_size; i += 8) {
-			xor = *((u64 *) &init_ptr[i]);
-			for (strp = 0; strp < num_strps; strp++) {
-				if (strp == strp_skip) continue;
+			xor = *((u64 *) &block[i]);
+			for (strp = 1; strp < num_strps; strp++) {
 				j = (strp << strp_shift) + i;
-				xor ^= *((u64 *) &strp_ptr[j]);
+				xor ^= *((u64 *) &block[j]);
 			}
-			*((u64 *) &par_ptr[i]) = xor;
+			*((u64 *) &parity[i]) = xor;
 		}
 	}
 
@@ -81,7 +68,7 @@ static int nova_update_block_parity(struct super_block *sb,
 	if (unlikely(zero))
 		parity = sbi->zero_parity;
 	else
-		nova_calculate_block_parity(sb, parity, block, -1);
+		nova_calculate_block_parity(sb, parity, block);
 
 	par_addr = nova_get_parity_addr(sb, blocknr);
 
@@ -168,11 +155,12 @@ int nova_update_file_write_parity(struct super_block *sb, void *block,
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
         unsigned int bad_strp_id)
 {
+	unsigned int i, num_strps;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
-	size_t blockoff;
+	size_t blockoff, offset;
 	unsigned long bad_strp_nr;
-	u8 *blockptr, *bad_strp, *strp_buf, *par_addr;
+	u8 *blockptr, *bad_strp, *blockbuf, *parbuf, *parity;
 	u32 csum_calc, csum_nvmm, *csum_addr;
 	bool match;
 	timing_t restore_time;
@@ -181,46 +169,59 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	NOVA_START_TIMING(restore_data_t, restore_time);
 	blockoff = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
 	blockptr = nova_get_block(sb, blockoff);
-	bad_strp = blockptr + bad_strp_id * strp_size;
-	bad_strp_nr = (blockoff + bad_strp_id * strp_size) >> strp_shift;
+	bad_strp = blockptr + (bad_strp_id << strp_shift);
+	bad_strp_nr = (blockoff + (bad_strp_id << strp_shift)) >> strp_shift;
 
-	strp_buf = kmalloc(strp_size, GFP_KERNEL);
-	if (strp_buf == NULL) {
-		nova_err(sb, "%s: stripe buffer allocation error\n",
-				__func__);
+	parbuf = kmalloc(strp_size, GFP_KERNEL);
+	blockbuf = kmalloc(sb->s_blocksize, GFP_KERNEL);
+	if (parbuf == NULL || blockbuf == NULL) {
+		nova_err(sb, "%s: buffer allocation error\n", __func__);
 		ret = -ENOMEM;
 		goto out;
 	}
 
-	par_addr = nova_get_parity_addr(sb, blocknr);
-	if (par_addr == NULL) {
-		kfree(strp_buf);
+	parity = nova_get_parity_addr(sb, blocknr);
+	if (parity == NULL) {
 		nova_err(sb, "%s: parity address error\n", __func__);
 		ret = -EIO;
 		goto out;
 	}
 
-	/* TODO: Handle MCE: par_addr read from NVMM */
-	memcpy_from_pmem(strp_buf, par_addr, strp_size);
+	num_strps = sb->s_blocksize >> strp_shift;
+	for (i = 0; i < num_strps; i++) {
+		offset = i << strp_shift;
+		if (i == bad_strp_id)
+			ret = memcpy_from_pmem(blockbuf + offset,
+							parity, strp_size);
+		else
+			ret = memcpy_from_pmem(blockbuf + offset,
+						blockptr + offset, strp_size);
+		if (ret < 0) {
+			nova_err(sb, "%s: unrecoverable media error\n",
+							__func__);
+			goto out;
+		}
+	}
 
-	nova_calculate_block_parity(sb, strp_buf, blockptr, bad_strp_id);
+	nova_calculate_block_parity(sb, parbuf, blockbuf);
 
-	csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_buf, strp_size);
+	csum_calc = nova_crc32c(NOVA_INIT_CSUM, parbuf, strp_size);
 	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr);
 	csum_nvmm = le32_to_cpu(*csum_addr);
 	match     = (csum_calc == csum_nvmm);
 
 	if (match) {
 		nova_memunlock_range(sb, bad_strp, strp_size);
-	        memcpy_to_pmem_nocache(bad_strp, strp_buf, strp_size);
+	        memcpy_to_pmem_nocache(bad_strp, parbuf, strp_size);
 		nova_memlock_range(sb, bad_strp, strp_size);
 	}
-
-	kfree(strp_buf);
 
 	if (!match) ret = -EIO;
 
 out:
+	if (parbuf != NULL) kfree(parbuf);
+	if (blockbuf != NULL) kfree(blockbuf);
+
 	NOVA_END_TIMING(restore_data_t, restore_time);
 	return ret;
 }

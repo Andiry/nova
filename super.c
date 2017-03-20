@@ -570,7 +570,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		retval = -ENOMEM;
 		goto out;
 	}
-	nova_calculate_block_parity(sb, sbi->zero_parity, sbi->zeroed_page, -1);
+	nova_calculate_block_parity(sb, sbi->zero_parity, sbi->zeroed_page);
 
 	sbi->snapshot_si = kmem_cache_alloc(nova_inode_cachep, GFP_NOFS);
 	nova_snapshot_init(sb);
