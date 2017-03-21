@@ -174,7 +174,7 @@ static int nova_reset_csum_parity_page(struct super_block *sb,
 	nova_dbgv("%s: update page off %lu\n", __func__, pgoff);
 
 	if (data_csum)
-		nova_update_block_csum(sb, sih, entry, pgoff, zero);
+		nova_update_pgoff_csum(sb, sih, entry, pgoff, zero);
 
 	if (data_parity)
 		nova_update_pgoff_parity(sb, sih, entry, pgoff, zero);

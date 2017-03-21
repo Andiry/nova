@@ -530,7 +530,7 @@ int nova_update_file_write_csum(struct super_block *sb,
 	return 0;
 }
 
-int nova_update_block_csum(struct super_block *sb,
+int nova_update_pgoff_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero)
 {
