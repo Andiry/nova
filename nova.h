@@ -1793,8 +1793,6 @@ extern struct dentry *nova_get_parent(struct dentry *child);
 int nova_update_pgoff_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long pgoff, int zero);
-int nova_update_block_parity(struct super_block *sb, u8 *block,
-	unsigned long blocknr, int zero);
 int nova_update_block_csum_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes);

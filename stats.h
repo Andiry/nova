@@ -100,6 +100,7 @@ enum timing_category {
 	integrity_title_t,
 	block_csum_t,
 	block_parity_t,
+	block_csum_parity_t,
 	protect_file_data_t,
 	verify_csum_t,
 	restore_data_t,

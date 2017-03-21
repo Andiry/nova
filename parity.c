@@ -72,7 +72,7 @@ static int nova_update_block_parity(struct super_block *sb,
 	size_t offset, size_t bytes, int zero)
 
  */
-int nova_update_block_parity(struct super_block *sb, u8 *block,
+static int nova_update_block_parity(struct super_block *sb, u8 *block,
 	unsigned long blocknr, int zero)
 {
 	size_t strp_size = NOVA_STRIPE_SIZE;
@@ -158,6 +158,9 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	u64 acc[8] = {CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0};
 	bool unroll_csum = false, unroll_parity = false;
 	int ret = 0;
+	timing_t block_csum_parity_time;
+
+	NOVA_START_TIMING(block_csum_parity_t, block_csum_parity_time);
 
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 	strp_nr = blockoff >> strp_shift;
@@ -237,6 +240,8 @@ int nova_update_block_csum_parity(struct super_block *sb,
 
 out:
 	if (parity != NULL) kfree(parity);
+
+	NOVA_END_TIMING(block_csum_parity_t, block_csum_parity_time);
 
 	return 0;
 }
