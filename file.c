@@ -396,9 +396,11 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 		if (entry && inplace) {
 			if (entry->size < new_size) {
 				/* Update existing entry */
+				nova_memunlock_range(sb, entry, CACHELINE_SIZE);
 				entry->size = new_size;
 				nova_update_entry_csum(entry);
 				nova_update_alter_entry(sb, entry);
+				nova_memlock_range(sb, entry, CACHELINE_SIZE);
 			}
 			allocated = ent_blks;
 			goto next;
