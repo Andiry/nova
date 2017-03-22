@@ -138,7 +138,7 @@ extern unsigned int nova_dbgmask;
 #define	INVALID_CPU			(-1)
 #define	SHARED_CPU			(65536)
 #define	ANY_CPU				SHARED_CPU
-#define FREE_BATCH			(16)
+#define	FREE_BATCH			(16)
 
 extern int measure_timing;
 extern int replica_metadata;
@@ -903,7 +903,7 @@ struct inode_table *nova_get_inode_table(struct super_block *sb,
 	if (cpu >= sbi->cpus)
 		return NULL;
 
-	if (version % 2 == 0)
+	if ((version & 0x1) == 0)
 		table_start = INODE_TABLE0_START;
 	else
 		table_start = INODE_TABLE1_START;
