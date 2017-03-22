@@ -590,8 +590,8 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		start_blk = pos >> sb->s_blocksize_bits;
 
 		/* don't zero-out the allocated blocks */
-		allocated = nova_new_data_blocks(sb, sih, &blocknr, num_blocks,
-						start_blk, 0, 1);
+		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
+						num_blocks, 0);
 		nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
 						allocated, blocknr);
 
@@ -868,8 +868,8 @@ ssize_t nova_inplace_file_write(struct file *filp,
 				nova_set_write_entry_updating(sb, entry, 1);
 		} else {
 			/* Allocate blocks to fill hole */
-			allocated = nova_new_data_blocks(sb, sih, &blocknr, ent_blks,
-							start_blk, 0, 0);
+			allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
+							ent_blks, 0);
 			nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
 							allocated, blocknr);
 
@@ -1093,8 +1093,8 @@ again:
 	update.alter_tail = sih->alter_log_tail;
 
 	/* Return initialized blocks to the user */
-	allocated = nova_new_data_blocks(sb, sih, &blocknr, num_blocks,
-						iblock, 1, 1);
+	allocated = nova_new_data_blocks(sb, sih, &blocknr, iblock,
+						num_blocks, 1);
 	if (allocated <= 0) {
 		nova_dbg("%s alloc blocks failed %d\n", __func__,
 							allocated);
@@ -1283,8 +1283,8 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(sih) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
-		allocated = nova_new_data_blocks(sb, sih, &blocknr, num_blocks,
-						start_blk, 0, 0);
+		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
+						num_blocks, 0);
 		if (allocated <= 0) {
 			nova_dbg("%s alloc blocks failed %d\n", __func__,
 								allocated);
@@ -1391,8 +1391,7 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 		mmap_block = MMAP_ADDR(cache_addr);
 		mmap_addr = nova_get_block(sb, mmap_block);
 	} else {
-		ret = nova_new_data_blocks(sb, sih, &blocknr, 1,
-						pgoff, 0, 1);
+		ret = nova_new_data_blocks(sb, sih, &blocknr, pgoff, 1, 0);
 
 		if (ret <= 0) {
 			nova_dbg("%s alloc blocks failed %d\n",

@@ -1557,10 +1557,10 @@ extern int nova_free_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
 extern int nova_free_log_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
-extern int nova_new_data_blocks(struct super_block *sb,
+extern inline int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
-	unsigned int num, unsigned long start_blk,
-	int zero, int cow);
+	unsigned long start_blk, unsigned int num,
+	int zero);
 extern int nova_new_log_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	unsigned long *blocknr, unsigned int num, int zero);

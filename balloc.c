@@ -650,8 +650,8 @@ alloc:
 
 inline int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
-	unsigned int num, unsigned long start_blk,
-	int zero, int cow)
+	unsigned long start_blk, unsigned int num,
+	int zero)
 {
 	int allocated;
 	timing_t alloc_time;
@@ -659,9 +659,9 @@ inline int nova_new_data_blocks(struct super_block *sb,
 	allocated = nova_new_blocks(sb, blocknr, num,
 					sih->i_blk_type, zero, DATA);
 	NOVA_END_TIMING(new_data_blocks_t, alloc_time);
-	nova_dbgv("Inode %lu, start blk %lu, cow %d, "
+	nova_dbgv("Inode %lu, start blk %lu, "
 			"alloc %d data blocks from %lu to %lu\n",
-			sih->ino, start_blk, cow, allocated, *blocknr,
+			sih->ino, start_blk, allocated, *blocknr,
 			*blocknr + allocated - 1);
 	return allocated;
 }

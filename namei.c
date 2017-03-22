@@ -279,8 +279,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 		goto out_fail1;
 	}
 
-	allocated = nova_new_data_blocks(sb, sih, &name_blocknr,
-					1, 0, 1, 0);
+	allocated = nova_new_data_blocks(sb, sih, &name_blocknr, 0, 1, 1);
 	if (allocated != 1 || name_blocknr == 0) {
 		err = allocated;
 		goto out_fail2;
