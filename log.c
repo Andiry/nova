@@ -936,7 +936,7 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 /* Log block resides in NVMM */
 int nova_allocate_inode_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long num_pages,
-	u64 *new_block)
+	u64 *new_block, int cpuid)
 {
 	unsigned long new_inode_blocknr;
 	unsigned long first_blocknr;
@@ -945,7 +945,7 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	int ret_pages = 0;
 
 	allocated = nova_new_log_blocks(sb, sih, &new_inode_blocknr,
-					num_pages, 0, ANY_CPU);
+					num_pages, 0, cpuid);
 
 	if (allocated <= 0) {
 		nova_err(sb, "ERROR: no inode log page available: %d %d\n",
@@ -965,7 +965,8 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	/* Allocate remaining pages */
 	while (num_pages) {
 		allocated = nova_new_log_blocks(sb, sih,
-					&new_inode_blocknr, num_pages, 0, ANY_CPU);
+					&new_inode_blocknr, num_pages,
+					0, cpuid);
 
 		nova_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
 					allocated, new_inode_blocknr);
@@ -996,7 +997,7 @@ static int nova_initialize_inode_log(struct super_block *sb,
 	int allocated;
 
 	allocated = nova_allocate_inode_log_pages(sb, sih,
-					1, &new_block);
+					1, &new_block, ANY_CPU);
 	if (allocated != 1) {
 		nova_err(sb, "%s ERROR: no inode log page "
 					"available\n", __func__);
@@ -1060,7 +1061,7 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 //	nova_dbg("Before append log pages:\n");
 //	nova_print_inode_log_page(sb, inode);
 	allocated = nova_allocate_inode_log_pages(sb, sih,
-					num_pages, &new_block);
+					num_pages, &new_block, ANY_CPU);
 	nova_dbg_verbose("Link block %llu to block %llu\n",
 					curr_p >> PAGE_SHIFT,
 					new_block >> PAGE_SHIFT);
@@ -1074,7 +1075,7 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 
 	if (replica_metadata) {
 		allocated = nova_allocate_inode_log_pages(sb, sih,
-					num_pages, &alter_new_block);
+					num_pages, &alter_new_block, ANY_CPU);
 		if (allocated <= 0) {
 			nova_err(sb, "%s ERROR: no inode log page "
 					"available\n", __func__);
@@ -1109,7 +1110,8 @@ static u64 nova_append_one_log_page(struct super_block *sb,
 	u64 curr_block;
 	int allocated;
 
-	allocated = nova_allocate_inode_log_pages(sb, sih, 1, &new_block);
+	allocated = nova_allocate_inode_log_pages(sb, sih, 1, &new_block,
+							ANY_CPU);
 	if (allocated != 1) {
 		nova_err(sb, "%s: ERROR: no inode log page available\n",
 				__func__);
