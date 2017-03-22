@@ -271,6 +271,7 @@ static int nova_init_blockmap_from_inode(struct super_block *sb)
 		free_list->num_blocknode++;
 		if (free_list->num_blocknode == 1)
 			free_list->first_node = blknode;
+		free_list->last_node = blknode;
 		free_list->num_free_blocks +=
 			blknode->range_high - blknode->range_low + 1;
 		curr_p += sizeof(struct nova_range_node_lowhigh);
@@ -606,6 +607,7 @@ static int nova_insert_blocknode_map(struct super_block *sb,
 	}
 	if (!free_list->first_node)
 		free_list->first_node = blknode;
+	free_list->last_node = blknode;
 	free_list->num_blocknode++;
 	free_list->num_free_blocks += num_blocks;
 out:

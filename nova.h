@@ -644,6 +644,7 @@ struct free_list {
 	spinlock_t s_lock;
 	struct rb_root	block_free_tree;
 	struct nova_range_node *first_node;
+	struct nova_range_node *last_node;
 	int 		index;
 	unsigned long	csum_start;
 	unsigned long	parity_start;

@@ -110,6 +110,7 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 				return;
 			}
 			free_list->first_node = blknode;
+			free_list->last_node = blknode;
 			free_list->num_blocknode = 1;
 		}
 
@@ -369,6 +370,8 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 		free_list->num_blocknode--;
 		prev->range_high = next->range_high;
 		nova_update_range_node_checksum(prev);
+		if (free_list->last_node == next)
+			free_list->last_node = prev;
 		nova_free_blocknode(sb, next);
 		goto block_found;
 	}
@@ -397,6 +400,9 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	}
 	if (!prev)
 		free_list->first_node = curr_node;
+	if (!next)
+		free_list->last_node = curr_node;
+
 	free_list->num_blocknode++;
 
 block_found:
@@ -474,8 +480,8 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	unsigned long num_blocks, unsigned long *new_blocknr)
 {
 	struct rb_root *tree;
-	struct nova_range_node *curr, *next = NULL;
-	struct rb_node *temp, *next_node;
+	struct nova_range_node *curr, *next = NULL, *prev = NULL;
+	struct rb_node *temp, *next_node, *prev_node;
 	unsigned long curr_blocks;
 	bool found = 0;
 	unsigned long step = 0;
@@ -512,6 +518,14 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 					next = container_of(next_node,
 						struct nova_range_node, node);
 				free_list->first_node = next;
+			}
+
+			if (curr == free_list->last_node) {
+				prev_node = rb_prev(temp);
+				if (prev_node)
+					prev = container_of(prev_node,
+						struct nova_range_node, node);
+				free_list->last_node = prev;
 			}
 
 			rb_erase(&curr->node, tree);
