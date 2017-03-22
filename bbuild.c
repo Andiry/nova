@@ -475,7 +475,7 @@ void nova_save_inode_list_to_log(struct super_block *sb)
 		num_blocks++;
 
 	allocated = nova_allocate_inode_log_pages(sb, &sih, num_blocks,
-						&new_block, ANY_CPU);
+						&new_block, ANY_CPU, 0);
 	if (allocated != num_blocks) {
 		nova_dbg("Error saving inode list: %d\n", allocated);
 		return;
@@ -534,7 +534,7 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 		num_pages++;
 
 	allocated = nova_allocate_inode_log_pages(sb, &sih, num_pages,
-						&new_block, ANY_CPU);
+						&new_block, ANY_CPU, 0);
 	if (allocated != num_pages) {
 		nova_dbg("Error saving blocknode mappings: %d\n", allocated);
 		return;

@@ -310,7 +310,7 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 		goto out;
 
 	allocated = nova_allocate_inode_log_pages(sb, sih, blocks,
-					&new_head, ANY_CPU);
+					&new_head, ANY_CPU, 0);
 	if (allocated != blocks) {
 		nova_err(sb, "%s: ERROR: no inode log page "
 					"available\n", __func__);
@@ -435,7 +435,7 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 		goto out;
 
 	allocated = nova_allocate_inode_log_pages(sb, sih, blocks,
-					&new_head, ANY_CPU);
+					&new_head, ANY_CPU, 1);
 	if (allocated != blocks) {
 		nova_err(sb, "%s: ERROR: no inode log page "
 					"available\n", __func__);

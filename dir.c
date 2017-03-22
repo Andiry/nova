@@ -296,7 +296,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 
 	allocated = nova_allocate_inode_log_pages(sb, &sih, 1, &new_block,
-							ANY_CPU);
+							ANY_CPU, 0);
 	if (allocated != 1) {
 		nova_err(sb, "ERROR: no inode log page available\n");
 		return - ENOMEM;
@@ -318,7 +318,7 @@ int nova_append_dir_init_entries(struct super_block *sb,
 		return 0;
 
 	allocated = nova_allocate_inode_log_pages(sb, &sih, 1, &new_block,
-							ANY_CPU);
+							ANY_CPU, 1);
 	if (allocated != 1) {
 		nova_err(sb, "ERROR: no inode log page available\n");
 		return - ENOMEM;

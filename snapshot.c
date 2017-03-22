@@ -1142,7 +1142,7 @@ static int nova_save_snapshot_info(struct super_block *sb,
 
 	/* Support up to 128 CPUs */
 	allocated = nova_allocate_inode_log_pages(sb, &sih, 1,
-						&nvmm_page_addr, ANY_CPU);
+						&nvmm_page_addr, ANY_CPU, 0);
 	if (allocated != 1) {
 		nova_dbg("Error allocating NVMM info page\n");
 		return -ENOSPC;
@@ -1155,7 +1155,7 @@ static int nova_save_snapshot_info(struct super_block *sb,
 		list = &info->lists[i];
 		num_pages = list->num_pages;
 		allocated = nova_allocate_inode_log_pages(sb, &sih,
-					num_pages, &new_block, i);
+					num_pages, &new_block, i, 0);
 		if (allocated != num_pages) {
 			nova_dbg("Error saving snapshot list: %d\n", allocated);
 			return -ENOSPC;

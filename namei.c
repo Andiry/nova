@@ -273,7 +273,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	sih = &si->header;
 
 	allocated = nova_allocate_inode_log_pages(sb, sih,
-					num_logs, &log_block, ANY_CPU);
+					num_logs, &log_block, ANY_CPU, 0);
 	if (allocated != num_logs || log_block == 0) {
 		err = allocated;
 		goto out_fail1;
