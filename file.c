@@ -277,8 +277,6 @@ out:
 int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct address_space *mapping = file->f_mapping;
-	struct inode *inode = mapping->host;
-	struct super_block *sb = inode->i_sb;
 	unsigned long start_pgoff, end_pgoff;
 	int ret = 0;
 	timing_t fsync_time;
@@ -294,8 +292,9 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	nova_dbgv("%s: msync pgoff range %lu to %lu\n",
 			__func__, start_pgoff, end_pgoff);
 
-	nova_reset_mapping_csum_parity(sb, inode, mapping,
-					start_pgoff, end_pgoff);
+	/* Set csum and parity */
+//	nova_reset_mapping_csum_parity(sb, inode, mapping,
+//					start_pgoff, end_pgoff);
 
 	ret = generic_file_fsync(file, start, end, datasync);
 
