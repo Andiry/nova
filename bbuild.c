@@ -835,10 +835,8 @@ static int nova_traverse_inode_log(struct super_block *sb,
 
 	curr_p = head;
 
-	if (curr_p == 0) {
-		nova_err(sb, "Inode %llu log is NULL!\n", pi->nova_ino);
-		BUG();
-	}
+	if (curr_p == 0)
+		return 0;
 
 	BUG_ON(curr_p & (PAGE_SIZE - 1));
 	set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
