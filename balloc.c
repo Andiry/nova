@@ -477,7 +477,8 @@ int nova_free_log_blocks(struct super_block *sb,
 
 static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	struct free_list *free_list, unsigned short btype,
-	unsigned long num_blocks, unsigned long *new_blocknr)
+	unsigned long num_blocks, unsigned long *new_blocknr,
+	int from_tail)
 {
 	struct rb_root *tree;
 	struct nova_range_node *curr, *next = NULL, *prev = NULL;
@@ -490,7 +491,10 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 		return -ENOSPC;
 
 	tree = &(free_list->block_free_tree);
-	temp = &(free_list->first_node->node);
+	if (from_tail == 0)
+		temp = &(free_list->first_node->node);
+	else
+		temp = &(free_list->last_node->node);
 
 	while (temp) {
 		step++;
@@ -498,18 +502,15 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 
 		if (!nova_range_node_checksum_ok(curr)) {
 			nova_err(sb, "%s curr failed\n", __func__);
-			temp = rb_next(temp);
-			continue;
+			goto next;
 		}
 
 		curr_blocks = curr->range_high - curr->range_low + 1;
 
 		if (num_blocks >= curr_blocks) {
 			/* Superpage allocation must succeed */
-			if (btype > 0 && num_blocks > curr_blocks) {
-				temp = rb_next(temp);
-				continue;
-			}
+			if (btype > 0 && num_blocks > curr_blocks)
+				goto next;
 
 			/* Otherwise, allocate the whole blocknode */
 			if (curr == free_list->first_node) {
@@ -538,11 +539,22 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 		}
 
 		/* Allocate partial blocknode */
-		*new_blocknr = curr->range_low;
-		curr->range_low += num_blocks;
+		if (from_tail == 0) {
+			*new_blocknr = curr->range_low;
+			curr->range_low += num_blocks;
+		} else {
+			*new_blocknr = curr->range_high - num_blocks;
+			curr->range_high -= num_blocks;
+		}
+
 		nova_update_range_node_checksum(curr);
 		found = 1;
 		break;
+next:
+		if (from_tail == 0)
+			temp = rb_next(temp);
+		else
+			temp = rb_prev(temp);
 	}
 
 	if (free_list->num_free_blocks < num_blocks) {
@@ -553,12 +565,12 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 		return -ENOSPC;
 	}
 
-	free_list->num_free_blocks -= num_blocks;
+	if (found == 1)
+		free_list->num_free_blocks -= num_blocks;
+	else
+		return -ENOSPC;
 
 	NOVA_STATS_ADD(alloc_steps, step);
-
-	if (found == 0)
-		return -ENOSPC;
 
 	return num_blocks;
 }
@@ -636,7 +648,7 @@ retry:
 	}
 alloc:
 	ret_blocks = nova_alloc_blocks_in_free_list(sb, free_list, btype,
-						num_blocks, &new_blocknr);
+						num_blocks, &new_blocknr, 0);
 
 	if (ret_blocks > 0) {
 		if (atype == LOG) {
