@@ -75,21 +75,15 @@ static int nova_alloc_inode_table(struct super_block *sb,
 	u64 block;
 	int allocated;
 	int i;
-	int cpu;
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_table = nova_get_inode_table(sb, version, i);
 		if (!inode_table)
 			return -EINVAL;
 
-		/* Do not allocate replicate inodes from the same region */
-		if (version == 0)
-			cpu = i;
-		else
-			cpu = (i + sbi->cpus / 2) % sbi->cpus;
-
+		/* Allocate replicate inodes from tail */
 		allocated = nova_new_log_blocks(sb, sih, &blocknr, 1, 1,
-							cpu, 0);
+							i, version);
 		nova_dbgv("%s: allocate log @ 0x%lx\n", __func__,
 							blocknr);
 		if (allocated != 1 || blocknr == 0)
@@ -177,9 +171,6 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	if (curr == 0)
 		return -EINVAL;
 
-	if (version & 0x1)
-		cpuid = (cpuid + sbi->cpus / 2) % sbi->cpus;
-
 	for (i = 0; i < superpage_count; i++) {
 		if (curr == 0)
 			return -EINVAL;
@@ -196,7 +187,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 			extended = 1;
 
 			allocated = nova_new_log_blocks(sb, &sih, &blocknr,
-							1, 1, cpuid, 0);
+							1, 1, cpuid, version);
 
 			if (allocated != 1)
 				return allocated;
