@@ -323,12 +323,14 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	int cpuid;
 	int new_node_used = 0;
 	int ret;
+	timing_t free_time;
 
 	if (num <= 0) {
 		nova_dbg("%s ERROR: free %d\n", __func__, num);
 		return -EINVAL;
 	}
 
+	NOVA_START_TIMING(free_blocks_t, free_time);
 	cpuid = blocknr / sbi->per_list_blocks;
 	if (cpuid >= sbi->cpus)
 		cpuid = SHARED_CPU;
@@ -337,6 +339,7 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 	curr_node = nova_alloc_blocknode(sb);
 	if (curr_node == NULL) {
 		/* returning without freeing the block*/
+		NOVA_END_TIMING(free_blocks_t, free_time);
 		return -ENOMEM;
 	}
 
@@ -356,9 +359,7 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	if (ret) {
 		nova_dbg("%s: find free slot fail: %d\n", __func__, ret);
-		spin_unlock(&free_list->s_lock);
-		nova_free_blocknode(sb, curr_node);
-		return ret;
+		goto out;
 	}
 
 	if (prev && next && (block_low == prev->range_high + 1) &&
@@ -414,6 +415,7 @@ out:
 	if (new_node_used == 0)
 		nova_free_blocknode(sb, curr_node);
 
+	NOVA_END_TIMING(free_blocks_t, free_time);
 	return ret;
 }
 
@@ -580,11 +582,13 @@ static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	struct rb_node *temp;
 	struct nova_range_node *first;
 	int retried = 0;
+	timing_t alloc_time;
 
 	num_blocks = num * nova_get_numblocks(btype);
 	if (num_blocks == 0)
 		return -EINVAL;
 
+	NOVA_START_TIMING(new_blocks_t, alloc_time);
 	if (cpuid == ANY_CPU)
 		cpuid = smp_processor_id();
 
@@ -631,6 +635,7 @@ alloc:
 	}
 
 	spin_unlock(&free_list->s_lock);
+	NOVA_END_TIMING(new_blocks_t, alloc_time);
 
 	if (ret_blocks <= 0 || new_blocknr == 0)
 		return -ENOSPC;

@@ -64,8 +64,10 @@ enum timing_category {
 
 	/* Memory management */
 	mm_title_t,
+	new_blocks_t,
 	new_data_blocks_t,
 	new_log_blocks_t,
+	free_blocks_t,
 	free_data_t,
 	free_log_t,
 
