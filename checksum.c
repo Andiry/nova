@@ -468,7 +468,7 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 			csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
 
 		csum = cpu_to_le32(csum);
-		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr, 0);
 
 		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
@@ -602,7 +602,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 	match = true;
 	for (strp = 0; strp < strps; strp++) {
 		csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
-		csum_addr = nova_get_data_csum_addr(sb, strp_nr);
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr, 0);
 		csum_nvmm = le32_to_cpu(*csum_addr);
 		match     = (csum_calc == csum_nvmm);
 
@@ -673,21 +673,21 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	 * not change. */
 	if (is_end_blk) {
 		dst_strp_nr = ((dst_blk_off + offset - 1) >> strp_shift) + 1;
-		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr);
+		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr, 0);
 		num_strps = (sb->s_blocksize - offset) >> strp_shift;
 	} else {
 		dst_strp_nr = dst_blk_off >> strp_shift;
-		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr);
+		dst_csum_ptr = nova_get_data_csum_addr(sb, dst_strp_nr, 0);
 		num_strps = offset >> strp_shift;
 	}
 
 	/* copy source checksums only if they exist */
 	if (entry != NULL && is_end_blk) {
 		src_strp_nr = ((src_blk_off + offset - 1) >> strp_shift) + 1;
-		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
+		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr, 0);
 	} else if (entry != NULL && !is_end_blk) {
 		src_strp_nr = src_blk_off >> strp_shift;
-		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr);
+		src_csum_ptr = nova_get_data_csum_addr(sb, src_strp_nr, 0);
 	} else { // entry == NULL
 		/* According to nova_handle_head_tail_blocks():
 		 * NULL-entry partial blocks are zero-ed */

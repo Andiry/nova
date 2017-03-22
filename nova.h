@@ -1457,7 +1457,8 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 /* Checksum methods */
-static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr)
+static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr,
+	int replica)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct free_list *free_list;
@@ -1482,7 +1483,10 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr)
 
 	strp_nr -= (index * sbi->per_list_blocks) << BLOCK_SHIFT;
 	free_list = nova_get_free_list(sb, index);
-	blockoff = free_list->csum_start << PAGE_SHIFT;
+	if (replica == 0)
+		blockoff = free_list->csum_start << PAGE_SHIFT;
+	else
+		blockoff = free_list->replica_csum_start << PAGE_SHIFT;
 
 	/* Range test */
 	if (((NOVA_DATA_CSUM_LEN * strp_nr) >> PAGE_SHIFT) >=

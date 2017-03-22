@@ -221,7 +221,7 @@ int nova_update_block_csum_parity(struct super_block *sb,
 			crc[6] = cpu_to_le32( (u32) acc[6] );
 			crc[7] = cpu_to_le32( (u32) acc[7] );
 
-			nvmmptr = nova_get_data_csum_addr(sb, strp_nr);
+			nvmmptr = nova_get_data_csum_addr(sb, strp_nr, 0);
 			nova_memunlock_range(sb, nvmmptr, csum_size * 8);
 			memcpy_to_pmem_nocache(nvmmptr, crc, csum_size * 8);
 			nova_memlock_range(sb, nvmmptr, csum_size * 8);
@@ -301,7 +301,7 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	nova_calculate_block_parity(sb, stripe, blockbuf);
 
 	csum_calc = nova_crc32c(NOVA_INIT_CSUM, stripe, strp_size);
-	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr);
+	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr, 0);
 	csum_nvmm = le32_to_cpu(*csum_addr);
 	match     = (csum_calc == csum_nvmm);
 
