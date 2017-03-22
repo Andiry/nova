@@ -277,6 +277,8 @@ out:
 int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct address_space *mapping = file->f_mapping;
+//	struct inode *inode = file->f_path.dentry->d_inode;
+//	struct super_block *sb = inode->i_sb;
 	unsigned long start_pgoff, end_pgoff;
 	int ret = 0;
 	timing_t fsync_time;
