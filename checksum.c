@@ -789,6 +789,10 @@ int nova_data_csum_init_free_list(struct super_block *sb,
 	free_list->num_csum_blocks =
 		free_list->block_start - free_list->csum_start;
 
+	free_list->replica_csum_start = free_list->block_end + 1 -
+						free_list->num_csum_blocks;
+	free_list->block_end -= free_list->num_csum_blocks;
+
 	return 0;
 }
 

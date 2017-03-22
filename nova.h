@@ -647,6 +647,7 @@ struct free_list {
 	struct nova_range_node *last_node;
 	int 		index;
 	unsigned long	csum_start;
+	unsigned long	replica_csum_start;
 	unsigned long	parity_start;
 	unsigned long	block_start;
 	unsigned long	block_end;
