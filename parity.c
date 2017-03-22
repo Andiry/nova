@@ -152,7 +152,7 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned long strp_nr, blockoff, blocksize = sb->s_blocksize;
-	void *nvmmptr;
+	void *nvmmptr, *nvmmptr1;
 	u32 crc[8];
 	u64 qwd[8], *parity = NULL;
 	u64 acc[8] = {CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0, CSUM0};
@@ -222,8 +222,10 @@ int nova_update_block_csum_parity(struct super_block *sb,
 			crc[7] = cpu_to_le32( (u32) acc[7] );
 
 			nvmmptr = nova_get_data_csum_addr(sb, strp_nr, 0);
+			nvmmptr1 = nova_get_data_csum_addr(sb, strp_nr, 1);
 			nova_memunlock_range(sb, nvmmptr, csum_size * 8);
 			memcpy_to_pmem_nocache(nvmmptr, crc, csum_size * 8);
+			memcpy_to_pmem_nocache(nvmmptr1, crc, csum_size * 8);
 			nova_memlock_range(sb, nvmmptr, csum_size * 8);
 		}
 
@@ -257,6 +259,7 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	unsigned long bad_strp_nr;
 	u8 *blockptr, *bad_strp, *blockbuf, *stripe, *parity;
 	u32 csum_calc, csum_nvmm, *csum_addr;
+	u32 csum_nvmm1, *csum_addr1;
 	bool match;
 	timing_t restore_time;
 	int ret = 0;
@@ -303,7 +306,9 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	csum_calc = nova_crc32c(NOVA_INIT_CSUM, stripe, strp_size);
 	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr, 0);
 	csum_nvmm = le32_to_cpu(*csum_addr);
-	match     = (csum_calc == csum_nvmm);
+	csum_addr1 = nova_get_data_csum_addr(sb, bad_strp_nr, 1);
+	csum_nvmm1 = le32_to_cpu(*csum_addr1);
+	match     = (csum_calc == csum_nvmm) || (csum_calc == csum_nvmm1);
 
 	if (match) {
 		nova_memunlock_range(sb, bad_strp, strp_size);
