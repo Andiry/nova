@@ -177,6 +177,9 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	if (curr == 0)
 		return -EINVAL;
 
+	if (version & 0x1)
+		cpuid = (cpuid + sbi->cpus / 2) % sbi->cpus;
+
 	for (i = 0; i < superpage_count; i++) {
 		if (curr == 0)
 			return -EINVAL;
@@ -191,8 +194,9 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 				return -EINVAL;
 
 			extended = 1;
+
 			allocated = nova_new_log_blocks(sb, &sih, &blocknr,
-							1, 1, ANY_CPU);
+							1, 1, cpuid);
 
 			if (allocated != 1)
 				return allocated;
