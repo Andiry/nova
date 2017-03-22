@@ -543,7 +543,7 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 			*new_blocknr = curr->range_low;
 			curr->range_low += num_blocks;
 		} else {
-			*new_blocknr = curr->range_high - num_blocks;
+			*new_blocknr = curr->range_high + 1 - num_blocks;
 			curr->range_high -= num_blocks;
 		}
 
