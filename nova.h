@@ -137,6 +137,7 @@ extern unsigned int nova_dbgmask;
 #define	READDIR_END			(ULONG_MAX)
 #define	INVALID_CPU			(-1)
 #define	SHARED_CPU			(65536)
+#define	ANY_CPU				SHARED_CPU
 #define FREE_BATCH			(16)
 
 extern int measure_timing;
@@ -1560,10 +1561,10 @@ extern int nova_free_log_blocks(struct super_block *sb,
 extern inline int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
 	unsigned long start_blk, unsigned int num,
-	int zero);
+	int zero, int cpu);
 extern int nova_new_log_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih,
-	unsigned long *blocknr, unsigned int num, int zero);
+	unsigned long *blocknr, unsigned int num, int zero, int cpu);
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	unsigned long ino, struct nova_range_node **ret_node);

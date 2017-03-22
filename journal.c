@@ -504,7 +504,8 @@ int nova_lite_journal_hard_init(struct super_block *sb)
 		if (!pair)
 			return -EINVAL;
 
-		allocated = nova_new_log_blocks(sb, &sih, &blocknr, 1, 1);
+		allocated = nova_new_log_blocks(sb, &sih, &blocknr, 1, 1,
+							ANY_CPU);
 		nova_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__,
 							blocknr);
 		if (allocated != 1 || blocknr == 0)

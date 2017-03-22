@@ -570,7 +570,7 @@ static int nova_get_candidate_free_list(struct super_block *sb)
 /* Return how many blocks allocated */
 static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero,
-	enum alloc_type atype)
+	enum alloc_type atype, int cpuid)
 {
 	struct free_list *free_list;
 	void *bp;
@@ -579,14 +579,14 @@ static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	long ret_blocks = 0;
 	struct rb_node *temp;
 	struct nova_range_node *first;
-	int cpuid;
 	int retried = 0;
 
 	num_blocks = num * nova_get_numblocks(btype);
 	if (num_blocks == 0)
 		return -EINVAL;
 
-	cpuid = smp_processor_id();
+	if (cpuid == ANY_CPU)
+		cpuid = smp_processor_id();
 
 retry:
 	free_list = nova_get_free_list(sb, cpuid);
@@ -651,13 +651,13 @@ alloc:
 inline int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
 	unsigned long start_blk, unsigned int num,
-	int zero)
+	int zero, int cpu)
 {
 	int allocated;
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_data_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num,
-					sih->i_blk_type, zero, DATA);
+					sih->i_blk_type, zero, DATA, cpu);
 	NOVA_END_TIMING(new_data_blocks_t, alloc_time);
 	nova_dbgv("Inode %lu, start blk %lu, "
 			"alloc %d data blocks from %lu to %lu\n",
@@ -668,13 +668,13 @@ inline int nova_new_data_blocks(struct super_block *sb,
 
 inline int nova_new_log_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih,
-	unsigned long *blocknr, unsigned int num, int zero)
+	unsigned long *blocknr, unsigned int num, int zero, int cpu)
 {
 	int allocated;
 	timing_t alloc_time;
 	NOVA_START_TIMING(new_log_blocks_t, alloc_time);
 	allocated = nova_new_blocks(sb, blocknr, num,
-					sih->i_blk_type, zero, LOG);
+					sih->i_blk_type, zero, LOG, cpu);
 	NOVA_END_TIMING(new_log_blocks_t, alloc_time);
 	nova_dbgv("Inode %lu, alloc %d log blocks from %lu to %lu\n",
 			sih->ino, allocated, *blocknr,

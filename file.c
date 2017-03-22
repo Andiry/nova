@@ -407,7 +407,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 
 		/* Allocate zeroed blocks to fill hole */
 		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
-						ent_blks, 1);
+						ent_blks, 1, ANY_CPU);
 		nova_dbgv("%s: alloc %d blocks @ %lu\n", __func__,
 						allocated, blocknr);
 

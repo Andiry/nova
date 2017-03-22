@@ -81,7 +81,8 @@ static int nova_alloc_inode_table(struct super_block *sb,
 		if (!inode_table)
 			return -EINVAL;
 
-		allocated = nova_new_log_blocks(sb, sih, &blocknr, 1, 1);
+		allocated = nova_new_log_blocks(sb, sih, &blocknr, 1, 1,
+							ANY_CPU);
 		nova_dbg_verbose("%s: allocate log @ 0x%lx\n", __func__,
 							blocknr);
 		if (allocated != 1 || blocknr == 0)
@@ -184,7 +185,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 
 			extended = 1;
 			allocated = nova_new_log_blocks(sb, &sih, &blocknr,
-							1, 1);
+							1, 1, ANY_CPU);
 
 			if (allocated != 1)
 				return allocated;

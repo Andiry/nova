@@ -945,7 +945,7 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	int ret_pages = 0;
 
 	allocated = nova_new_log_blocks(sb, sih, &new_inode_blocknr,
-					num_pages, 0);
+					num_pages, 0, ANY_CPU);
 
 	if (allocated <= 0) {
 		nova_err(sb, "ERROR: no inode log page available: %d %d\n",
@@ -965,7 +965,7 @@ int nova_allocate_inode_log_pages(struct super_block *sb,
 	/* Allocate remaining pages */
 	while (num_pages) {
 		allocated = nova_new_log_blocks(sb, sih,
-					&new_inode_blocknr, num_pages, 0);
+					&new_inode_blocknr, num_pages, 0, ANY_CPU);
 
 		nova_dbg_verbose("Alloc %d log blocks @ 0x%lx\n",
 					allocated, new_inode_blocknr);
