@@ -591,7 +591,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 
 		/* don't zero-out the allocated blocks */
 		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
-						num_blocks, 0, ANY_CPU);
+						num_blocks, 0, ANY_CPU, 0);
 		nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
 						allocated, blocknr);
 
@@ -869,7 +869,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		} else {
 			/* Allocate blocks to fill hole */
 			allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
-							ent_blks, 0, ANY_CPU);
+							ent_blks, 0, ANY_CPU, 0);
 			nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
 							allocated, blocknr);
 
@@ -1094,7 +1094,7 @@ again:
 
 	/* Return initialized blocks to the user */
 	allocated = nova_new_data_blocks(sb, sih, &blocknr, iblock,
-						num_blocks, 1, ANY_CPU);
+						num_blocks, 1, ANY_CPU, 0);
 	if (allocated <= 0) {
 		nova_dbg("%s alloc blocks failed %d\n", __func__,
 							allocated);
@@ -1284,7 +1284,7 @@ ssize_t nova_copy_to_nvmm(struct super_block *sb, struct inode *inode,
 		offset = pos & (nova_inode_blk_size(sih) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
-						num_blocks, 0, ANY_CPU);
+						num_blocks, 0, ANY_CPU, 0);
 		if (allocated <= 0) {
 			nova_dbg("%s alloc blocks failed %d\n", __func__,
 								allocated);
@@ -1392,7 +1392,7 @@ static int nova_get_nvmm_pfn(struct super_block *sb, struct nova_inode *pi,
 		mmap_addr = nova_get_block(sb, mmap_block);
 	} else {
 		ret = nova_new_data_blocks(sb, sih, &blocknr, pgoff, 1, 0,
-							ANY_CPU);
+							ANY_CPU, 0);
 
 		if (ret <= 0) {
 			nova_dbg("%s alloc blocks failed %d\n",
