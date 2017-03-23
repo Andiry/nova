@@ -1503,11 +1503,11 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr,
 }
 
 static inline void nova_write_csums(struct super_block *sb, void *nvmmptr,
-	u32 *csums, int count)
+	u32 *csumptr, int count)
 {
-	nova_memunlock_range(sb, nvmmptr, count * NOVA_DATA_CSUM_LEN);
-	memcpy_to_pmem_nocache(nvmmptr, csums, count * NOVA_DATA_CSUM_LEN);
-	nova_memlock_range(sb, nvmmptr, count * NOVA_DATA_CSUM_LEN);
+	nova_memunlock_range(sb, nvmmptr, NOVA_DATA_CSUM_LEN * count);
+	memcpy_to_pmem_nocache(nvmmptr, csumptr, NOVA_DATA_CSUM_LEN * count);
+	nova_memlock_range(sb, nvmmptr, NOVA_DATA_CSUM_LEN * count);
 }
 
 static inline void *nova_get_parity_addr(struct super_block *sb,

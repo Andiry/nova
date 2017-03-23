@@ -468,12 +468,13 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 			csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
 
 		csum = cpu_to_le32(csum);
-
-		csum_addr  = nova_get_data_csum_addr(sb, strp_nr, 0);
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr, 0);
 		csum_addr1 = nova_get_data_csum_addr(sb, strp_nr, 1);
 
-		nova_write_csums(sb, csum_addr,  &csum, 1);
-		nova_write_csums(sb, csum_addr1, &csum, 1);
+		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
+		memcpy_to_pmem_nocache(csum_addr, &csum, NOVA_DATA_CSUM_LEN);
+		memcpy_to_pmem_nocache(csum_addr1, &csum, NOVA_DATA_CSUM_LEN);
+		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 
 		strp_nr += 1;
 		if (!zero) strp_ptr += strp_size;
@@ -761,12 +762,8 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 		/* TODO: Handle MCE: src_csum_ptr read from NVMM */
 		nova_memunlock_range(sb, dst_csum_ptr, csum_size);
 		memcpy_from_pmem(dst_csum_ptr, src_csum_ptr, csum_size);
-		nova_memlock_range(sb, dst_csum_ptr, csum_size);
-
-		nova_memunlock_range(sb, dst_csum_ptr1, csum_size);
 		memcpy_from_pmem(dst_csum_ptr1, src_csum_ptr, csum_size);
-		nova_memlock_range(sb, dst_csum_ptr1, csum_size);
-
+		nova_memlock_range(sb, dst_csum_ptr, csum_size);
 		nova_flush_buffer(dst_csum_ptr, csum_size, 0);
 		nova_flush_buffer(dst_csum_ptr1, csum_size, 0);
 
