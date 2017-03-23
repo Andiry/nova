@@ -196,10 +196,10 @@ static inline int nova_copy_partial_block(struct super_block *sb,
 
 	if (ptr != NULL) {
 		if (is_end_blk)
-			rc = memcpy_from_pmem(kmem + offset, ptr + offset,
+			rc = memcpy_to_pmem_nocache(kmem + offset, ptr + offset,
 						sb->s_blocksize - offset);
 		else
-			rc = memcpy_from_pmem(kmem, ptr, offset);
+			rc = memcpy_to_pmem_nocache(kmem, ptr, offset);
 	}
 
 	/* TODO: If rc < 0, go to MCE data recovery. */
@@ -239,13 +239,12 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL)
 			/* Fill zero */
-		    	memset(kmem, 0, offset);
+			clear_pmem(kmem, offset);
 		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
 					offset, kmem, false);
 		nova_memlock_block(sb, kmem);
-		nova_flush_buffer(kmem, offset, 0);
 	}
 
 	kmem = (void *)((char *)kmem +
@@ -258,15 +257,13 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL)
 			/* Fill zero */
-		    	memset(kmem + eblk_offset, 0,
+			clear_pmem(kmem + eblk_offset,
 					sb->s_blocksize - eblk_offset);
 		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, end_blk,
 					eblk_offset, kmem, true);
 		nova_memlock_block(sb, kmem);
-		nova_flush_buffer(kmem + eblk_offset,
-					sb->s_blocksize - eblk_offset, 0);
 
 	}
 	NOVA_END_TIMING(partial_block_t, partial_time);
