@@ -248,9 +248,18 @@ out:
 	return 0;
 }
 
-/* Restore a stripe of data. */
+/* Restore a stripe of data.
+ *
+ * When this function is called, the two corresponding checksum copies are also
+ * given. After recovery the restored data stripe is checksum-verified using the
+ * given checksums. If any one matches, data recovery is considered successful
+ * and the restored stripe is written to nvmm to repair the corrupted data.
+ *
+ * If recovery succeeded, the known good checksum is returned by csum_good, and
+ * the caller will also check if any checksum restoration is necessary.
+ */
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
-        unsigned int bad_strp_id)
+        unsigned int bad_strp_id, u32 csum, u32 csum1, u32 *csum_good)
 {
 	unsigned int i, num_strps;
 	size_t strp_size = NOVA_STRIPE_SIZE;
@@ -258,9 +267,7 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	size_t blockoff, offset;
 	unsigned long bad_strp_nr;
 	u8 *blockptr, *bad_strp, *blockbuf, *stripe, *parity;
-	u32 csum_calc, csum_nvmm, *csum_addr;
-	u32 csum_nvmm1, *csum_addr1;
-	bool match;
+	u32 csum_calc;
 	timing_t restore_time;
 	int ret = 0;
 
@@ -304,19 +311,19 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	nova_calculate_block_parity(sb, stripe, blockbuf);
 
 	csum_calc = nova_crc32c(NOVA_INIT_CSUM, stripe, strp_size);
-	csum_addr = nova_get_data_csum_addr(sb, bad_strp_nr, 0);
-	csum_nvmm = le32_to_cpu(*csum_addr);
-	csum_addr1 = nova_get_data_csum_addr(sb, bad_strp_nr, 1);
-	csum_nvmm1 = le32_to_cpu(*csum_addr1);
-	match     = (csum_calc == csum_nvmm) || (csum_calc == csum_nvmm1);
 
-	if (match) {
+	if (csum_calc == csum || csum_calc == csum1) {
+		/* recovery success, repair the bad nvmm data */
 		nova_memunlock_range(sb, bad_strp, strp_size);
 	        memcpy_to_pmem_nocache(bad_strp, stripe, strp_size);
 		nova_memlock_range(sb, bad_strp, strp_size);
-	}
 
-	if (!match) ret = -EIO;
+		/* return the good checksum */
+		*csum_good = csum_calc;
+	} else {
+		/* unrecoverable data corruption */
+		ret = -EIO;
+	}
 
 out:
 	if (stripe != NULL) kfree(stripe);

@@ -584,6 +584,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 	u32 csum_calc, csum_nvmm, csum_nvmm1;
 	u32 *csum_addr, *csum_addr1;
 	bool match;
+	int error;
 	timing_t verify_time;
 
 	NOVA_START_TIMING(verify_csum_t, verify_time);
@@ -604,52 +605,86 @@ bool nova_verify_data_csum(struct super_block *sb,
 
 	match = true;
 	for (strp = 0; strp < strps; strp++) {
-		csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
 		csum_addr = nova_get_data_csum_addr(sb, strp_nr, 0);
 		csum_nvmm = le32_to_cpu(*csum_addr);
-		match     = (csum_calc == csum_nvmm);
+
+		csum_addr1 = nova_get_data_csum_addr(sb, strp_nr, 1);
+		csum_nvmm1 = le32_to_cpu(*csum_addr1);
+
+		csum_calc = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
+		match = (csum_calc == csum_nvmm) || (csum_calc == csum_nvmm1);
 
 		if (!match) {
-			nova_dbg("%s: nova data stripe checksum fail! "
-				"inode %lu, strp %lu of %lu, "
-				"block offset %lu, stripe nr %lu, "
-				"csum calc 0x%08x, csum nvmm 0x%08x\n",
-				__func__, sih->ino, strp, strps,
-				blockoff, strp_nr,
-				csum_calc, csum_nvmm);
+			/* Getting here, data is considered corrupted.
+			 *
+			 * if: csum_nvmm == csum_nvmm1
+			 *     both csums good, run data recovery
+			 * if: csum_nvmm != csum_nvmm1
+			 *     at least one csum is corrupted, also need to run
+			 *     data recovery to see if one csum is still good
+			 */
+			nova_dbg("%s: nova data corruption detected! "
+				"inode %lu, strp %lu of %lu, block offset %lu, "
+				"stripe nr %lu, csum calc 0x%08x, "
+				"csum nvmm 0x%08x, csum nvmm 0x%08x\n",
+				__func__, sih->ino, strp, strps, blockoff,
+				strp_nr, csum_calc, csum_nvmm, csum_nvmm1);
 
-			csum_addr1 = nova_get_data_csum_addr(sb, strp_nr, 1);
-			csum_nvmm1 = le32_to_cpu(*csum_addr1);
-
-			if (csum_calc == csum_nvmm1) {
-				nova_dbg("%s: recover corrupt csum "
-					"with replica.\n", __func__);
-				nova_memunlock_range(sb, csum_addr,
-							NOVA_DATA_CSUM_LEN);
-				memcpy_to_pmem_nocache(csum_addr, &csum_calc,
-							NOVA_DATA_CSUM_LEN);
-				nova_memlock_range(sb, csum_addr,
-							NOVA_DATA_CSUM_LEN);
-				goto next;
+			if (data_parity == 0) {
+				nova_dbg("%s: no data redundancy available, "
+					"can not repair data corruption!\n",
+					 __func__);
+				break;
 			}
 
-			if (data_parity > 0)
-				nova_dbg("%s: nova data recovery begins.\n",
-						__func__);
-			else
-				break;
+			nova_dbg("%s: nova data recovery begins\n", __func__);
 
-			if (nova_restore_data(sb, blocknr, strp_index) == 0) {
-				nova_dbg("%s: nova data recovery success!\n",
-						__func__);
-				match = true;
-			} else {
-				nova_dbg("%s: nova data recovery fail!\n",
+			error = nova_restore_data(sb, blocknr, strp_index,
+					csum_nvmm, csum_nvmm1, &csum_calc);
+			if (error) {
+				nova_dbg("%s: nova data recovery fails!\n",
 						__func__);
 				break;
 			}
+
+			/* Getting here, data corruption is repaired and the
+			 * good checksum is stored in csum_calc.
+			 */
+			nova_dbg("%s: nova data recovery success!\n", __func__);
+			match = true;
 		}
-next:
+
+		/* Getting here, match must be true, otherwise already breaking
+		 * out the for loop. Data is known good, either it's good in
+		 * nvmm, or good after recovery.
+		 */
+		if (csum_nvmm != csum_nvmm1) {
+			/* Getting here, data is known good but one checksum is
+			 * considered corrupted. */
+			nova_dbg("%s: nova checksum corruption detected! "
+				"inode %lu, strp %lu of %lu, block offset %lu, "
+				"stripe nr %lu, csum calc 0x%08x, "
+				"csum nvmm 0x%08x, csum nvmm 0x%08x\n",
+				__func__, sih->ino, strp, strps, blockoff,
+				strp_nr, csum_calc, csum_nvmm, csum_nvmm1);
+
+			if (csum_nvmm != csum_calc) {
+				csum_nvmm = cpu_to_le32(csum_calc);
+				nova_write_csums(sb, csum_addr, &csum_nvmm, 1);
+			}
+
+			if (csum_nvmm1 != csum_calc) {
+				csum_nvmm1 = cpu_to_le32(csum_calc);
+				nova_write_csums(sb, csum_addr1, &csum_nvmm1, 1);
+			}
+
+			nova_dbg("%s: nova checksum corruption repaired!\n",
+								__func__);
+		}
+
+		/* Getting here, the data stripe and both checksum copies are
+		 * known good. Continue to the next stripe.
+		 */
 		strp_nr    += 1;
 		strp_index += 1;
 		strp_ptr   += strp_size;
@@ -662,6 +697,7 @@ next:
 	}
 
 	NOVA_END_TIMING(verify_csum_t, verify_time);
+
 	return match;
 }
 

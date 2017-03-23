@@ -1502,6 +1502,14 @@ static inline void *nova_get_data_csum_addr(struct super_block *sb, u64 strp_nr,
 	return data_csum_addr;
 }
 
+static inline void nova_write_csums(struct super_block *sb, void *nvmmptr,
+	u32 *csumptr, int count)
+{
+	nova_memunlock_range(sb, nvmmptr, NOVA_DATA_CSUM_LEN * count);
+	memcpy_to_pmem_nocache(nvmmptr, csumptr, NOVA_DATA_CSUM_LEN * count);
+	nova_memlock_range(sb, nvmmptr, NOVA_DATA_CSUM_LEN * count);
+}
+
 static inline void *nova_get_parity_addr(struct super_block *sb,
 	unsigned long blocknr)
 {
@@ -1805,7 +1813,7 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
-        unsigned int bad_strp_id);
+        unsigned int bad_strp_id, u32 csum, u32 csum1, u32 *csum_good);
 int nova_update_truncated_block_parity(struct super_block *sb,
 	struct inode *inode, loff_t newsize);
 int nova_data_parity_init_free_list(struct super_block *sb,
