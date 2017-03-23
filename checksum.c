@@ -625,7 +625,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 			nova_dbg("%s: nova data corruption detected! "
 				"inode %lu, strp %lu of %lu, block offset %lu, "
 				"stripe nr %lu, csum calc 0x%08x, "
-				"csum nvmm 0x%08x, csum nvmm 0x%08x\n",
+				"csum nvmm 0x%08x, csum nvmm replica 0x%08x\n",
 				__func__, sih->ino, strp, strps, blockoff,
 				strp_nr, csum_calc, csum_nvmm, csum_nvmm1);
 
@@ -663,7 +663,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 			nova_dbg("%s: nova checksum corruption detected! "
 				"inode %lu, strp %lu of %lu, block offset %lu, "
 				"stripe nr %lu, csum calc 0x%08x, "
-				"csum nvmm 0x%08x, csum nvmm 0x%08x\n",
+				"csum nvmm 0x%08x, csum nvmm replica 0x%08x\n",
 				__func__, sih->ino, strp, strps, blockoff,
 				strp_nr, csum_calc, csum_nvmm, csum_nvmm1);
 
