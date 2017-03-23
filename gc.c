@@ -366,7 +366,6 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 	nova_set_next_page_flag(sb, new_curr);
 	nova_set_next_page_address(sb, curr_page, tail_block, 0);
 	nova_memlock_block(sb, curr_page);
-	nova_flush_buffer(curr_page, PAGE_SIZE, 0);
 
 	/* Step 2: Atomically switch to the new log */
 	nova_memunlock_inode(sb, pi);
@@ -476,7 +475,6 @@ static unsigned long nova_inode_alter_log_thorough_gc(struct super_block *sb,
 	nova_memunlock_block(sb, alter_curr_page);
 	nova_set_next_page_address(sb, alter_curr_page, alter_tail_block, 0);
 	nova_memlock_block(sb, alter_curr_page);
-	nova_flush_buffer(alter_curr_page, PAGE_SIZE, 0);
 
 	/* Step 2: Find the old log block before the tail block */
 	alter_curr_p = sih->alter_log_head;

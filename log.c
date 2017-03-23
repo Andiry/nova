@@ -166,6 +166,7 @@ struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
 void nova_clear_last_page_tail(struct super_block *sb,
 	struct inode *inode, loff_t newsize)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	unsigned long offset = newsize & (sb->s_blocksize - 1);
@@ -185,8 +186,7 @@ void nova_clear_last_page_tail(struct super_block *sb,
 
 	nvmm_addr = (char *)nova_get_block(sb, nvmm);
 	nova_memunlock_range(sb, nvmm_addr + offset, length);
-	memset(nvmm_addr + offset, 0, length);
-	nova_flush_buffer(nvmm_addr + offset, length, 0);
+	memcpy_to_pmem_nocache(nvmm_addr + offset, sbi->zeroed_page, length);
 	nova_memlock_range(sb, nvmm_addr + offset, length);
 
 	if (data_csum > 0)
