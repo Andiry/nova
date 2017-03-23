@@ -432,16 +432,19 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 			if (ret < 0) goto out;
 		}
 
+		/* copying existing checksums from nvmm can be even slower than
+		 * re-computing checksums of a whole block.
 		if (data_csum > 0)
 			nova_copy_partial_block_csum(sb, sih, entry, start_blk,
 							offset, blocknr, false);
+		*/
 	}
 
 	if (num_blocks == 1) goto eblk;
 
 	do {
 		nova_update_block_csum_parity(sb, sih, blockbuf, blocknr,
-							offset, bytes);
+							0, blocksize);
 
 		blocknr++;
 		pos += bytes;
@@ -492,12 +495,15 @@ eblk:
 			memset(blockbuf + eblk_offset, 0,
 				blocksize - eblk_offset);
 
+		/* copying existing checksums from nvmm can be even slower than
+		 * re-computing checksums of a whole block.
 		if (data_csum > 0)
 			nova_copy_partial_block_csum(sb, sih, entry, end_blk,
 						eblk_offset, blocknr, true);
+		*/
 	}
 
-	nova_update_block_csum_parity(sb, sih, blockbuf, blocknr, offset, bytes);
+	nova_update_block_csum_parity(sb, sih, blockbuf, blocknr, 0, blocksize);
 
 out:
 	if (blockbuf != NULL) kfree(blockbuf);
