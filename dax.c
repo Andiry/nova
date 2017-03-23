@@ -1737,8 +1737,10 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 
 	item->vma = vma;
 
-	nova_dbgv("Insert vma %p, start 0x%lx, end 0x%lx\n",
-			vma, vma->vm_start, vma->vm_end);
+	nova_dbgv("Inode %lu insert vma %p, start 0x%lx, end 0x%lx, "
+			"pgoff %lu \n",
+			inode->i_ino, vma, vma->vm_start, vma->vm_end,
+			vma->vm_pgoff);
 
 	inode_lock(inode);
 
@@ -1834,9 +1836,10 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 	inode_unlock(inode);
 
 	if (found) {
-		nova_dbgv("Remove vma %p, start 0x%lx, end 0x%lx\n",
+		nova_dbgv("Inode %lu remove vma %p, start 0x%lx, end 0x%lx, "
+				"pgoff %lu\n", inode->i_ino,
 				curr->vma, curr->vma->vm_start,
-				curr->vma->vm_end);
+				curr->vma->vm_end, curr->vma->vm_pgoff);
 		nova_free_vma_item(sb, curr);
 	}
 
