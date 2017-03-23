@@ -229,10 +229,12 @@ int nova_update_block_csum_parity(struct super_block *sb,
 			nova_memlock_range(sb, nvmmptr, csum_size * 8);
 		}
 
-		nvmmptr = nova_get_parity_addr(sb, blocknr);
-		nova_memunlock_range(sb, nvmmptr, strp_size);
-		memcpy_to_pmem_nocache(nvmmptr, parity, strp_size);
-		nova_memlock_range(sb, nvmmptr, strp_size);
+		if (data_parity > 0) {
+			nvmmptr = nova_get_parity_addr(sb, blocknr);
+			nova_memunlock_range(sb, nvmmptr, strp_size);
+			memcpy_to_pmem_nocache(nvmmptr, parity, strp_size);
+			nova_memlock_range(sb, nvmmptr, strp_size);
+		}
 	}
 
 	if (data_csum > 0 && !unroll_csum)
