@@ -668,15 +668,19 @@ bool nova_verify_data_csum(struct super_block *sb,
 				__func__, sih->ino, strp, strps, blockoff,
 				strp_nr, csum_calc, csum_nvmm, csum_nvmm1);
 
+			nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 			if (csum_nvmm != csum_calc) {
 				csum_nvmm = cpu_to_le32(csum_calc);
-				nova_write_csums(sb, csum_addr, &csum_nvmm, 1);
+				memcpy_to_pmem_nocache(csum_addr, &csum_nvmm,
+							NOVA_DATA_CSUM_LEN);
 			}
 
 			if (csum_nvmm1 != csum_calc) {
 				csum_nvmm1 = cpu_to_le32(csum_calc);
-				nova_write_csums(sb, csum_addr1, &csum_nvmm1, 1);
+				memcpy_to_pmem_nocache(csum_addr1, &csum_nvmm1,
+							NOVA_DATA_CSUM_LEN);
 			}
+			nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN);
 
 			nova_dbg("%s: nova checksum corruption repaired!\n",
 								__func__);
