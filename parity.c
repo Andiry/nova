@@ -148,7 +148,6 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	size_t offset, size_t bytes)
 {
 	unsigned int i, strp_offset, num_strps;
-	size_t csum_size = NOVA_DATA_CSUM_LEN;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	unsigned long strp_nr, blockoff, blocksize = sb->s_blocksize;
@@ -221,12 +220,11 @@ int nova_update_block_csum_parity(struct super_block *sb,
 			crc[6] = cpu_to_le32( (u32) acc[6] );
 			crc[7] = cpu_to_le32( (u32) acc[7] );
 
-			nvmmptr = nova_get_data_csum_addr(sb, strp_nr, 0);
+			nvmmptr  = nova_get_data_csum_addr(sb, strp_nr, 0);
 			nvmmptr1 = nova_get_data_csum_addr(sb, strp_nr, 1);
-			nova_memunlock_range(sb, nvmmptr, csum_size * 8);
-			memcpy_to_pmem_nocache(nvmmptr, crc, csum_size * 8);
-			memcpy_to_pmem_nocache(nvmmptr1, crc, csum_size * 8);
-			nova_memlock_range(sb, nvmmptr, csum_size * 8);
+
+			nova_write_csums(sb, nvmmptr,  crc, 8);
+			nova_write_csums(sb, nvmmptr1, crc, 8);
 		}
 
 		nvmmptr = nova_get_parity_addr(sb, blocknr);
