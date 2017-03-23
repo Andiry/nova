@@ -214,6 +214,7 @@ static inline int nova_copy_partial_block(struct super_block *sb,
 static void nova_handle_head_tail_blocks(struct super_block *sb,
 	struct inode *inode, loff_t pos, size_t count, void *kmem)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	size_t offset, eblk_offset;
@@ -239,7 +240,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL)
 			/* Fill zero */
-			clear_pmem(kmem, offset);
+			memcpy_to_pmem_nocache(kmem, sbi->zeroed_page, offset);
 		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
@@ -257,7 +258,8 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		nova_memunlock_block(sb, kmem);
 		if (entry == NULL)
 			/* Fill zero */
-			clear_pmem(kmem + eblk_offset,
+			memcpy_to_pmem_nocache(kmem + eblk_offset,
+					sbi->zeroed_page,
 					sb->s_blocksize - eblk_offset);
 		else
 			/* Copy from original block */
