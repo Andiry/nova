@@ -206,14 +206,8 @@ struct nova_super_block {
 #define CACHELINE_MASK  (~(CACHELINE_SIZE - 1))
 #define CACHELINE_ALIGN(addr) (((addr)+CACHELINE_SIZE-1) & CACHELINE_MASK)
 
-#define X86_FEATURE_PCOMMIT	( 9*32+22) /* PCOMMIT instruction */
 #define X86_FEATURE_CLFLUSHOPT	( 9*32+23) /* CLFLUSHOPT instruction */
 #define X86_FEATURE_CLWB	( 9*32+24) /* CLWB instruction */
-
-static inline bool arch_has_pcommit(void)
-{
-	return static_cpu_has(X86_FEATURE_PCOMMIT);
-}
 
 static inline bool arch_has_clwb(void)
 {
@@ -221,7 +215,6 @@ static inline bool arch_has_clwb(void)
 }
 
 extern int support_clwb;
-extern int support_pcommit;
 
 #define _mm_clflush(addr)\
 	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
@@ -229,8 +222,6 @@ extern int support_pcommit;
 	asm volatile(".byte 0x66; clflush %0" : "+m" (*(volatile char *)(addr)))
 #define _mm_clwb(addr)\
 	asm volatile(".byte 0x66; xsaveopt %0" : "+m" (*(volatile char *)(addr)))
-#define _mm_pcommit()\
-	asm volatile(".byte 0x66, 0x0f, 0xae, 0xf8")
 
 /* Provides ordering from all previous clflush too */
 static inline void PERSISTENT_MARK(void)
@@ -241,9 +232,6 @@ static inline void PERSISTENT_MARK(void)
 static inline void PERSISTENT_BARRIER(void)
 {
 	asm volatile ("sfence\n" : : );
-	if (support_pcommit) {
-		/* Do nothing */
-	}
 }
 
 static inline void nova_flush_buffer(void *buf, uint32_t len, bool fence)

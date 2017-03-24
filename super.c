@@ -48,7 +48,6 @@ int data_csum = 0;
 int data_parity = 0;
 int dram_struct_csum = 0;
 int support_clwb = 0;
-int support_pcommit = 0;
 
 module_param(measure_timing, int, S_IRUGO);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
@@ -1079,14 +1078,10 @@ static int __init init_nova_fs(void)
 
 	NOVA_START_TIMING(init_t, init_time);
 	nova_dbg("%s: %d cpus online\n", __func__, num_online_cpus());
-	if (arch_has_pcommit())
-		support_pcommit = 1;
-
 	if (arch_has_clwb())
 		support_clwb = 1;
 
-	nova_info("Arch new instructions support: PCOMMIT %s, CLWB %s\n",
-			support_pcommit ? "YES" : "NO",
+	nova_info("Arch new instructions support: CLWB %s\n",
 			support_clwb ? "YES" : "NO");
 
 	nova_proc_root = proc_mkdir(proc_dirname, NULL);

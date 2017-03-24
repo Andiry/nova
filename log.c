@@ -1237,7 +1237,7 @@ int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(free_inode_log_t, free_time);
 
-	/* The inode is invalid now, no need to call PCOMMIT */
+	/* The inode is invalid now, no need to fence */
 	if (pi) {
 		nova_memunlock_inode(sb, pi);
 		pi->log_head = pi->log_tail = 0;
