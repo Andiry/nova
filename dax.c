@@ -185,7 +185,7 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 static inline int nova_copy_partial_block(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry, unsigned long index,
-	size_t offset, void* kmem, bool is_end_blk)
+	size_t offset, size_t length, void* kmem)
 {
 	void *ptr;
 	int rc = 0;
@@ -195,11 +195,8 @@ static inline int nova_copy_partial_block(struct super_block *sb,
 	ptr = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 
 	if (ptr != NULL) {
-		if (is_end_blk)
-			rc = memcpy_to_pmem_nocache(kmem + offset, ptr + offset,
-						sb->s_blocksize - offset);
-		else
-			rc = memcpy_to_pmem_nocache(kmem, ptr, offset);
+		rc = memcpy_to_pmem_nocache(kmem + offset, ptr + offset,
+						length);
 	}
 
 	/* TODO: If rc < 0, go to MCE data recovery. */
@@ -244,7 +241,7 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, start_blk,
-					offset, kmem, false);
+					0, offset, kmem);
 		nova_memlock_block(sb, kmem);
 	}
 
@@ -264,7 +261,9 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 		else
 			/* Copy from original block */
 			nova_copy_partial_block(sb, sih, entry, end_blk,
-					eblk_offset, kmem, true);
+					eblk_offset,
+					sb->s_blocksize - eblk_offset,
+					kmem);
 		nova_memlock_block(sb, kmem);
 
 	}
