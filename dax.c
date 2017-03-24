@@ -1101,7 +1101,7 @@ again:
 	allocated = nova_new_data_blocks(sb, sih, &blocknr, iblock,
 						num_blocks, 1, ANY_CPU, 0);
 	if (allocated <= 0) {
-		nova_dbg("%s alloc blocks failed %d\n", __func__,
+		nova_dbgv("%s alloc blocks failed %d\n", __func__,
 							allocated);
 		ret = allocated;
 		goto out;

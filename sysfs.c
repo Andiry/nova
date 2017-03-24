@@ -194,6 +194,18 @@ static int nova_seq_show_allocator(struct seq_file *seq, void *v)
 			free_list->block_end - free_list->block_start + 1,
 			free_list->num_free_blocks, free_list->num_blocknode);
 
+		if (free_list->first_node) {
+			seq_printf(seq, "First node %lu - %lu\n",
+					free_list->first_node->range_low,
+					free_list->first_node->range_high);
+		}
+
+		if (free_list->last_node) {
+			seq_printf(seq, "Last node %lu - %lu\n",
+					free_list->last_node->range_low,
+					free_list->last_node->range_high);
+		}
+
 		seq_printf(seq, "Free list %d: csum start %lu, "
 			"replica csum start %lu, csum blocks %lu, "
 			"parity start %lu, parity blocks %lu\n",
