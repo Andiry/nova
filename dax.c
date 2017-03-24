@@ -203,6 +203,26 @@ static inline int nova_copy_partial_block(struct super_block *sb,
 	return rc;
 }
 
+static inline int nova_handle_partial_block(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry, unsigned long index,
+	size_t offset, size_t length, void* kmem)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	nova_memunlock_block(sb, kmem);
+	if (entry == NULL)
+		/* Fill zero */
+		memcpy_to_pmem_nocache(kmem + offset, sbi->zeroed_page, length);
+	else
+		/* Copy from original block */
+		nova_copy_partial_block(sb, sih, entry, index,
+					offset, length, kmem);
+	nova_memlock_block(sb, kmem);
+
+	return 0;
+}
+
 /*
  * Fill the new start/end block from original blocks.
  * Do nothing if fully covered; copy if original blocks present;
@@ -211,7 +231,6 @@ static inline int nova_copy_partial_block(struct super_block *sb,
 static void nova_handle_head_tail_blocks(struct super_block *sb,
 	struct inode *inode, loff_t pos, size_t count, void *kmem)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	size_t offset, eblk_offset;
@@ -234,15 +253,8 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 				offset, start_blk, kmem);
 	if (offset != 0) {
 		entry = nova_get_write_entry(sb, sih, start_blk);
-		nova_memunlock_block(sb, kmem);
-		if (entry == NULL)
-			/* Fill zero */
-			memcpy_to_pmem_nocache(kmem, sbi->zeroed_page, offset);
-		else
-			/* Copy from original block */
-			nova_copy_partial_block(sb, sih, entry, start_blk,
+		nova_handle_partial_block(sb, sih, entry, start_blk,
 					0, offset, kmem);
-		nova_memlock_block(sb, kmem);
 	}
 
 	kmem = (void *)((char *)kmem +
@@ -252,19 +264,10 @@ static void nova_handle_head_tail_blocks(struct super_block *sb,
 				eblk_offset, end_blk, kmem);
 	if (eblk_offset != 0) {
 		entry = nova_get_write_entry(sb, sih, end_blk);
-		nova_memunlock_block(sb, kmem);
-		if (entry == NULL)
-			/* Fill zero */
-			memcpy_to_pmem_nocache(kmem + eblk_offset,
-					sbi->zeroed_page,
-					sb->s_blocksize - eblk_offset);
-		else
-			/* Copy from original block */
-			nova_copy_partial_block(sb, sih, entry, end_blk,
+		nova_handle_partial_block(sb, sih, entry, end_blk,
 					eblk_offset,
 					sb->s_blocksize - eblk_offset,
 					kmem);
-		nova_memlock_block(sb, kmem);
 
 	}
 	NOVA_END_TIMING(partial_block_t, partial_time);
