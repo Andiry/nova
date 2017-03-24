@@ -82,16 +82,9 @@ inline void set_bm(unsigned long bit, struct scan_bitmap *bm,
 	}
 }
 
-static int get_cpuid(struct nova_sb_info *sbi, unsigned long blocknr)
+inline static int get_cpuid(struct nova_sb_info *sbi, unsigned long blocknr)
 {
-	int cpuid;
-
-	cpuid = blocknr / sbi->per_list_blocks;
-
-	if (cpuid >= sbi->cpus)
-		cpuid = SHARED_CPU;
-
-	return cpuid;
+	return blocknr / sbi->per_list_blocks;
 }
 
 static int nova_failure_insert_inodetree(struct super_block *sb,
@@ -207,8 +200,6 @@ static void nova_destroy_blocknode_trees(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		nova_destroy_blocknode_tree(sb, i);
 	}
-
-	nova_destroy_blocknode_tree(sb, SHARED_CPU);
 }
 
 static int nova_init_blockmap_from_inode(struct super_block *sb)
@@ -524,11 +515,6 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 				i, free_list->num_blocknode);
 	}
 
-	free_list = nova_get_free_list(sb, SHARED_CPU);
-	num_blocknode += free_list->num_blocknode;
-	nova_dbgv("%s: shared list: %lu nodes\n", __func__,
-				free_list->num_blocknode);
-
 	num_pages = num_blocknode / RANGENODE_PER_PAGE;
 	if (num_blocknode % RANGENODE_PER_PAGE)
 		num_pages++;
@@ -561,8 +547,6 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	for (i = 0; i < sbi->cpus; i++) {
 		temp_tail = nova_save_free_list_blocknodes(sb, i, temp_tail);
 	}
-
-	temp_tail = nova_save_free_list_blocknodes(sb, SHARED_CPU, temp_tail);
 
 	/* Finally update log head and tail */
 	nova_memunlock_inode(sb, pi);
@@ -633,9 +617,9 @@ static int __nova_build_blocknode_map(struct super_block *sb,
 			break;
 		if (next == end) {
 			if (cpuid == sbi->cpus - 1)
-				cpuid = SHARED_CPU;
-			else
-				cpuid++;
+				break;
+
+			cpuid++;
 			free_list = nova_get_free_list(sb, cpuid);
 			start = free_list->block_start;
 			end = free_list->block_end + 1;
@@ -654,9 +638,9 @@ static int __nova_build_blocknode_map(struct super_block *sb,
 			break;
 		if (next == end) {
 			if (cpuid == sbi->cpus - 1)
-				cpuid = SHARED_CPU;
-			else
-				cpuid++;
+				break;
+
+			cpuid++;
 			free_list = nova_get_free_list(sb, cpuid);
 			start = free_list->block_start;
 			end = free_list->block_end + 1;

@@ -136,8 +136,7 @@ extern unsigned int nova_dbgmask;
 
 #define	READDIR_END			(ULONG_MAX)
 #define	INVALID_CPU			(-1)
-#define	SHARED_CPU			(65536)
-#define	ANY_CPU				SHARED_CPU
+#define	ANY_CPU				(65536)
 #define	FREE_BATCH			(16)
 
 extern int measure_timing;
@@ -758,10 +757,7 @@ struct nova_sb_info {
 
 	/* Per-CPU free block list */
 	struct free_list *free_lists;
-
-	/* Shared free block list */
 	unsigned long per_list_blocks;
-	struct free_list shared_free_list;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)
@@ -848,10 +844,7 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	if (cpu < sbi->cpus)
-		return &sbi->free_lists[cpu];
-	else
-		return &sbi->shared_free_list;
+	return &sbi->free_lists[cpu];
 }
 
 #include "mprotect.h"

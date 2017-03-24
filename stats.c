@@ -678,23 +678,4 @@ void nova_print_free_lists(struct super_block *sb)
 			free_list->free_data_count,
 			free_list->freed_data_pages);
 	}
-
-	i = SHARED_CPU;
-	free_list = nova_get_free_list(sb, i);
-	nova_dbg("Free list %d: block start %lu, block end %lu, "
-		"num_blocks %lu, num_free_blocks %lu, blocknode %lu\n",
-		i, free_list->block_start, free_list->block_end,
-		free_list->block_end - free_list->block_start + 1,
-		free_list->num_free_blocks, free_list->num_blocknode);
-
-	nova_dbg("Free list %d: alloc log count %lu, "
-		"allocated log pages %lu, alloc data count %lu, "
-		"allocated data pages %lu, free log count %lu, "
-		"freed log pages %lu, free data count %lu, "
-		"freed data pages %lu\n", i,
-		free_list->alloc_log_count, free_list->alloc_log_pages,
-		free_list->alloc_data_count, free_list->alloc_data_pages,
-		free_list->free_log_count, free_list->freed_log_pages,
-		free_list->free_data_count, free_list->freed_data_pages);
 }
-

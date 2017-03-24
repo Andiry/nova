@@ -120,13 +120,6 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 				free_list->block_end,
 				free_list->num_free_blocks);
 	}
-
-	free_list = nova_get_free_list(sb, (sbi->cpus - 1));
-	if (free_list->block_end + 1 < sbi->num_blocks) {
-		/* Shared free list gets any remaining blocks */
-		sbi->shared_free_list.block_start = free_list->block_end + 1;
-		sbi->shared_free_list.block_end = sbi->num_blocks - 1;
-	}
 }
 
 static inline int nova_rbtree_compare_rangenode(struct nova_range_node *curr,
@@ -333,8 +326,6 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	NOVA_START_TIMING(free_blocks_t, free_time);
 	cpuid = blocknr / sbi->per_list_blocks;
-	if (cpuid >= sbi->cpus)
-		cpuid = SHARED_CPU;
 
 	/* Pre-allocate blocknode */
 	curr_node = nova_alloc_blocknode(sb);
@@ -726,8 +717,6 @@ unsigned long nova_count_free_blocks(struct super_block *sb)
 		num_free_blocks += free_list->num_free_blocks;
 	}
 
-	free_list = nova_get_free_list(sb, SHARED_CPU);
-	num_free_blocks += free_list->num_free_blocks;
 	return num_free_blocks;
 }
 
