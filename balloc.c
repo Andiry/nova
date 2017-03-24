@@ -346,6 +346,18 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 
 	nova_dbgv("Free: %lu - %lu\n", block_low, block_high);
 
+	if (blocknr < free_list->block_start ||
+			blocknr + num > free_list->block_end + 1) {
+		nova_err(sb, "free blocks %lu to %lu, "
+				"free list %d, start %lu, end %lu\n",
+				blocknr, blocknr + num - 1,
+				free_list->index,
+				free_list->block_start,
+				free_list->block_end);
+		ret = -EIO;
+		goto out;
+	}
+
 	ret = nova_find_free_slot(sbi, tree, block_low,
 					block_high, &prev, &next);
 
