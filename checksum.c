@@ -459,7 +459,58 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned long strp;
 	u32 csum;
+	u32 crc[8];
 	void *csum_addr, *csum_addr1;
+	void *src_addr;
+
+	while (strps >= 8) {
+		if (zero) {
+			src_addr = sbi->zero_csum;
+			goto copy;
+		}
+
+		crc[0] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr, strp_size));
+		crc[1] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size, strp_size));
+		crc[2] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size * 2, strp_size));
+		crc[3] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size * 3, strp_size));
+		crc[4] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size * 4, strp_size));
+		crc[5] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size * 5, strp_size));
+		crc[6] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size * 6, strp_size));
+		crc[7] = cpu_to_le32(nova_crc32c(NOVA_INIT_CSUM,
+				strp_ptr + strp_size * 7, strp_size));
+
+		src_addr = crc;
+copy:
+		csum_addr = nova_get_data_csum_addr(sb, strp_nr, 0);
+		csum_addr1 = nova_get_data_csum_addr(sb, strp_nr, 1);
+
+		nova_memunlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN * 8);
+		if (support_clwb) {
+			memcpy(csum_addr, src_addr, NOVA_DATA_CSUM_LEN * 8);
+			memcpy(csum_addr1, src_addr, NOVA_DATA_CSUM_LEN * 8);
+		} else {
+			memcpy_to_pmem_nocache(csum_addr, src_addr,
+						NOVA_DATA_CSUM_LEN * 8);
+			memcpy_to_pmem_nocache(csum_addr1, src_addr,
+						NOVA_DATA_CSUM_LEN * 8);
+		}
+		nova_memlock_range(sb, csum_addr, NOVA_DATA_CSUM_LEN * 8);
+		if (support_clwb) {
+			nova_flush_buffer(csum_addr, NOVA_DATA_CSUM_LEN * 8, 0);
+			nova_flush_buffer(csum_addr1, NOVA_DATA_CSUM_LEN * 8, 0);
+		}
+
+		strp_nr += 8;
+		strps -= 8;
+		if (!zero) strp_ptr += strp_size * 8;
+	}
 
 	for (strp = 0; strp < strps; strp++) {
 		if (zero)
