@@ -559,8 +559,9 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	sbi->zero_csum = nova_crc32c(NOVA_INIT_CSUM, sbi->zeroed_page,
-			strp_size);
+	for (i = 0; i < 8; i++)
+		sbi->zero_csum[i] = nova_crc32c(NOVA_INIT_CSUM,
+				sbi->zeroed_page, strp_size);
 	sbi->zero_parity = kzalloc(strp_size, GFP_KERNEL);
 	if (!sbi->zero_parity) {
 		retval = -ENOMEM;

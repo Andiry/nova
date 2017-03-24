@@ -463,7 +463,7 @@ static int nova_update_stripe_csum(struct super_block *sb, unsigned long strps,
 
 	for (strp = 0; strp < strps; strp++) {
 		if (zero)
-			csum = sbi->zero_csum;
+			csum = sbi->zero_csum[0];
 		else
 			csum = nova_crc32c(NOVA_INIT_CSUM, strp_ptr, strp_size);
 
@@ -751,7 +751,7 @@ int nova_copy_partial_block_csum(struct super_block *sb,
 	} else { // entry == NULL
 		/* According to nova_handle_head_tail_blocks():
 		 * NULL-entry partial blocks are zero-ed */
-		zero_csum = cpu_to_le32(sbi->zero_csum);
+		zero_csum = cpu_to_le32(sbi->zero_csum[0]);
 		src_csum_ptr = &zero_csum;
 	}
 
