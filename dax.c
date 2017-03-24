@@ -195,7 +195,11 @@ static inline int nova_copy_partial_block(struct super_block *sb,
 	ptr = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 
 	if (ptr != NULL) {
-		rc = memcpy_to_pmem_nocache(kmem + offset, ptr + offset,
+		if (support_clwb)
+			rc = memcpy_from_pmem(kmem + offset, ptr + offset,
+						length);
+		else
+			memcpy_to_pmem_nocache(kmem + offset, ptr + offset,
 						length);
 	}
 
@@ -211,14 +215,21 @@ static inline int nova_handle_partial_block(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
 	nova_memunlock_block(sb, kmem);
-	if (entry == NULL)
+	if (entry == NULL) {
 		/* Fill zero */
-		memcpy_to_pmem_nocache(kmem + offset, sbi->zeroed_page, length);
-	else
+		if (support_clwb)
+			memset_nt(kmem + offset, 0, length);
+		else
+			memcpy_to_pmem_nocache(kmem + offset,
+					sbi->zeroed_page, length);
+	} else {
 		/* Copy from original block */
 		nova_copy_partial_block(sb, sih, entry, index,
 					offset, length, kmem);
+	}
 	nova_memlock_block(sb, kmem);
+	if (support_clwb)
+		nova_flush_buffer(kmem + offset, length, 0);
 
 	return 0;
 }
