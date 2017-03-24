@@ -23,6 +23,7 @@
 const char *proc_dirname = "fs/NOVA";
 struct proc_dir_entry *nova_proc_root;
 
+/* ====================== Statistics ======================== */
 static int nova_seq_timing_show(struct seq_file *seq, void *v)
 {
 	int i;
@@ -177,6 +178,62 @@ static const struct file_operations nova_seq_IO_fops = {
 	.release	= single_release,
 };
 
+static int nova_seq_show_allocator(struct seq_file *seq, void *v)
+{
+	struct super_block *sb = seq->private;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct free_list *free_list;
+	int i;
+
+	seq_printf(seq, "======== NOVA per-CPU allocator stats ========\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = nova_get_free_list(sb, i);
+		seq_printf(seq, "Free list %d: block start %lu, block end %lu, "
+			"num_blocks %lu, num_free_blocks %lu, blocknode %lu\n",
+			i, free_list->block_start, free_list->block_end,
+			free_list->block_end - free_list->block_start + 1,
+			free_list->num_free_blocks, free_list->num_blocknode);
+
+		seq_printf(seq, "Free list %d: csum start %lu, "
+			"replica csum start %lu, csum blocks %lu, "
+			"parity start %lu, parity blocks %lu\n",
+			i, free_list->csum_start, free_list->replica_csum_start,
+			free_list->num_csum_blocks,
+			free_list->parity_start, free_list->num_parity_blocks);
+
+		seq_printf(seq, "Free list %d: alloc log count %lu, "
+			"allocated log pages %lu, alloc data count %lu, "
+			"allocated data pages %lu, free log count %lu, "
+			"freed log pages %lu, free data count %lu, "
+			"freed data pages %lu\n", i,
+			free_list->alloc_log_count,
+			free_list->alloc_log_pages,
+			free_list->alloc_data_count,
+			free_list->alloc_data_pages,
+			free_list->free_log_count,
+			free_list->freed_log_pages,
+			free_list->free_data_count,
+			free_list->freed_data_pages);
+	}
+
+	return 0;
+}
+
+static int nova_seq_allocator_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nova_seq_show_allocator,
+				PDE_DATA(inode));
+}
+
+static const struct file_operations nova_seq_allocator_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nova_seq_allocator_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+/* ====================== Snapshot ======================== */
 static int nova_seq_create_snapshot_show(struct seq_file *seq, void *v)
 {
 	seq_printf(seq, "Write to create a snapshot\n");
@@ -278,6 +335,8 @@ void nova_sysfs_init(struct super_block *sb)
 				 &nova_seq_timing_fops, sb);
 		proc_create_data("IO_stats", S_IRUGO, sbi->s_proc,
 				 &nova_seq_IO_fops, sb);
+		proc_create_data("allocator", S_IRUGO, sbi->s_proc,
+				 &nova_seq_allocator_fops, sb);
 		proc_create_data("create_snapshot", S_IRUGO, sbi->s_proc,
 				 &nova_seq_create_snapshot_fops, sb);
 		proc_create_data("delete_snapshot", S_IRUGO, sbi->s_proc,
@@ -294,6 +353,7 @@ void nova_sysfs_exit(struct super_block *sb)
 	if (sbi->s_proc) {
 		remove_proc_entry("timing_stats", sbi->s_proc);
 		remove_proc_entry("IO_stats", sbi->s_proc);
+		remove_proc_entry("allocator", sbi->s_proc);
 		remove_proc_entry("create_snapshot", sbi->s_proc);
 		remove_proc_entry("delete_snapshot", sbi->s_proc);
 		remove_proc_entry("snapshots", sbi->s_proc);
