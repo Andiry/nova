@@ -403,7 +403,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	start_blk = pos >> blocksize_bits;
 	end_blk = start_blk + num_blocks - 1;
 
-	blockbuf = (u8 *) kzalloc(blocksize, GFP_KERNEL);
+	blockbuf = (u8 *) kmalloc(blocksize, GFP_KERNEL);
 	if (blockbuf == NULL) {
 		nova_err(sb, "%s: block buffer allocation error\n", __func__);
 		return -ENOMEM;
@@ -442,6 +442,8 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 
 			ret = memcpy_from_pmem(blockbuf, blockptr, offset);
 			if (ret < 0) goto out;
+		} else {
+			memset(blockbuf, 0, offset);
 		}
 
 		/* copying existing checksums from nvmm can be even slower than
@@ -501,11 +503,10 @@ eblk:
 						blockptr + eblk_offset,
 						blocksize - eblk_offset);
 			if (ret < 0) goto out;
-		}
-
-		if (entry == NULL && num_blocks > 1)
+		} else {
 			memset(blockbuf + eblk_offset, 0,
 				blocksize - eblk_offset);
+		}
 
 		/* copying existing checksums from nvmm can be even slower than
 		 * re-computing checksums of a whole block.
