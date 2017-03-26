@@ -25,7 +25,7 @@ static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 		case FILE_WRITE:
 			if (reassign)
 				((struct nova_file_write_entry *)entry)->reassigned = 1;
-			else
+			if (num_free)
 				((struct nova_file_write_entry *)entry)->invalid_pages
 							+= num_free;
 			break;
@@ -81,33 +81,18 @@ int nova_reassign_logentry(struct super_block *sb, void *entry,
 	return nova_invalidate_reassign_logentry(sb, entry, type, 1, 0);
 }
 
-static int nova_reassign_write_entry(struct super_block *sb,
-	struct nova_file_write_entry *entry)
+static inline int nova_invalidate_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry, int reassign,
+	unsigned int num_free)
 {
-	if (!entry || entry->reassigned == 1)
+	if (!entry)
 		return 0;
 
-	return nova_reassign_logentry(sb, entry, FILE_WRITE);
-}
+	if (num_free == 0 && entry->reassigned == 1)
+		return 0;
 
-static int nova_invalidate_file_write_entry(struct super_block *sb,
-	struct nova_file_write_entry *entry, unsigned int num_free)
-{
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	u64 curr;
-	int ret;
-
-	curr = nova_get_addr_off(sbi, entry);
-
-	ret = nova_check_alter_entry(sb, curr);
-	if (ret) {
-		nova_dbg("%s: check_alter_entry returned %d\n", __func__, ret);
-		return ret;
-	}
-
-	ret = nova_invalidate_logentry(sb, entry, FILE_WRITE, num_free);
-
-	return ret;
+	return nova_invalidate_reassign_logentry(sb, entry, FILE_WRITE,
+						reassign, num_free);
 }
 
 unsigned int nova_free_old_entry(struct super_block *sb,
@@ -125,16 +110,17 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 
 	NOVA_START_TIMING(free_old_t, free_time);
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
-	nova_reassign_write_entry(sb, entry);
 
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
 				num_free, epoch_id);
-		if (ret == 0)
+		if (ret == 0) {
+			nova_invalidate_write_entry(sb, entry, 1, 0);
 			goto out;
+		}
 	}
 
-	nova_invalidate_file_write_entry(sb, entry, num_free);
+	nova_invalidate_write_entry(sb, entry, 1, num_free);
 
 	nova_dbgv("%s: pgoff %lu, free %u blocks\n",
 				__func__, pgoff, num_free);
@@ -731,7 +717,8 @@ int nova_assign_write_entry(struct super_block *sb,
 							start_old_pgoff,
 							num_free, false,
 							entry->epoch_id);
-				nova_reassign_write_entry(sb, start_old_entry);
+				nova_invalidate_write_entry(sb,
+						start_old_entry, 1, 0);
 				start_old_entry = old_entry;
 				start_old_pgoff = curr_pgoff;
 				num_free = 1;
@@ -754,7 +741,7 @@ int nova_assign_write_entry(struct super_block *sb,
 					start_old_pgoff, num_free, false,
 					entry->epoch_id);
 
-	nova_reassign_write_entry(sb, start_old_entry);
+	nova_invalidate_write_entry(sb, start_old_entry, 1, 0);
 
 out:
 	NOVA_END_TIMING(assign_t, assign_time);
