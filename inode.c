@@ -291,30 +291,19 @@ static int nova_zero_cache_tree(struct super_block *sb,
 	return 0;
 }
 
-int nova_delete_file_tree(struct super_block *sb,
+static int nova_traverse_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
-	bool delete_dead, u64 epoch_id)
+	unsigned long last_blocknr, bool delete_nvmm, bool delete_dead,
+	u64 epoch_id)
 {
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry *old_entry = NULL;
 	unsigned long pgoff = start_blocknr;
 	unsigned long old_pgoff = 0;
-	timing_t delete_time;
 	unsigned int num_free = 0;
 	int freed = 0;
 	void *ret;
 
-	NOVA_START_TIMING(delete_file_tree_t, delete_time);
-
-	if (delete_mmap && sih->mmap_pages)
-		nova_delete_cache_tree(sb, sih, start_blocknr,
-						last_blocknr);
-
-	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
-		nova_zero_cache_tree(sb, sih, start_blocknr);
-
-	pgoff = start_blocknr;
 	/* Handle EOF blocks */
 	do {
 		entry = radix_tree_lookup(&sih->tree, pgoff);
@@ -352,10 +341,33 @@ int nova_delete_file_tree(struct super_block *sb,
 		freed += num_free;
 	}
 
-	NOVA_END_TIMING(delete_file_tree_t, delete_time);
 	nova_dbgv("Inode %lu: delete file tree from pgoff %lu to %lu, "
 			"%d blocks freed\n",
 			sih->ino, start_blocknr, last_blocknr, freed);
+	return freed;
+}
+
+int nova_delete_file_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long start_blocknr,
+	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
+	bool delete_dead, u64 epoch_id)
+{
+	int freed = 0;
+	timing_t delete_time;
+
+	NOVA_START_TIMING(delete_file_tree_t, delete_time);
+
+	if (delete_mmap && sih->mmap_pages)
+		nova_delete_cache_tree(sb, sih, start_blocknr,
+						last_blocknr);
+
+	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
+		nova_zero_cache_tree(sb, sih, start_blocknr);
+
+	freed = nova_traverse_delete_file_tree(sb, sih, start_blocknr,
+			last_blocknr, delete_nvmm, delete_dead, epoch_id);
+
+	NOVA_END_TIMING(delete_file_tree_t, delete_time);
 
 	return freed;
 }
