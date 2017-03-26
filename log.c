@@ -118,9 +118,9 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 			nova_invalidate_write_entry(sb, entry, 1, 0);
 			goto out;
 		}
-	}
 
-	nova_invalidate_write_entry(sb, entry, 1, num_free);
+		nova_invalidate_write_entry(sb, entry, 1, num_free);
+	}
 
 	nova_dbgv("%s: pgoff %lu, free %u blocks\n",
 				__func__, pgoff, num_free);
