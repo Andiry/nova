@@ -218,7 +218,7 @@ static inline int nova_handle_partial_block(struct super_block *sb,
 	if (entry == NULL) {
 		/* Fill zero */
 		if (support_clwb)
-			memset_nt(kmem + offset, 0, length);
+			memset(kmem + offset, 0, length);
 		else
 			memcpy_to_pmem_nocache(kmem + offset,
 					sbi->zeroed_page, length);
