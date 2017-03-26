@@ -1342,6 +1342,7 @@ static int failure_thread_func(void *data)
 						pi_addr);
 				continue;
 			}
+			/* FIXME: Check inode checksum */
 			if (fake_pi.i_mode && fake_pi.deleted == 0) {
 				if (fake_pi.valid == 0) {
 					ret = nova_append_inode_to_snapshot(sb,

@@ -741,16 +741,6 @@ static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(free_inode_t, free_time);
 
-	nova_memunlock_inode(sb, pi);
-	pi->deleted = 1;
-
-	if (pi->valid) {
-		nova_dbg("%s: inode %lu still valid\n",
-				__func__, sih->ino);
-		pi->valid = 0;
-	}
-	nova_memlock_inode(sb, pi);
-
 	nova_free_inode_log(sb, pi, sih);
 
 	sih->log_pages = 0;
@@ -850,6 +840,17 @@ static int nova_free_inode_resource(struct super_block *sb,
 	unsigned long last_blocknr;
 	int ret = 0;
 	int freed = 0;
+
+	nova_memunlock_inode(sb, pi);
+	/* FIXME: Update checksum */
+	pi->deleted = 1;
+
+	if (pi->valid) {
+		nova_dbg("%s: inode %lu still valid\n",
+				__func__, sih->ino);
+		pi->valid = 0;
+	}
+	nova_memlock_inode(sb, pi);
 
 	/* We need the log to free the blocks from the b-tree */
 	switch (sih->i_mode & S_IFMT) {
