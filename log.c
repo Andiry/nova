@@ -118,10 +118,12 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 {
 	unsigned long old_nvmm;
 	int ret;
+	timing_t free_time;
 
 	if (!entry)
 		return 0;
 
+	NOVA_START_TIMING(free_old_t, free_time);
 	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
 	nova_reassign_write_entry(sb, entry);
 
@@ -141,6 +143,7 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 out:
 	sih->i_blocks -= num_free;
 
+	NOVA_END_TIMING(free_old_t, free_time);
 	return num_free;
 }
 

@@ -116,6 +116,7 @@ enum timing_category {
 	write_pages_t,
 	fallocate_t,
 	direct_IO_t,
+	free_old_t,
 	delete_file_tree_t,
 	delete_dir_tree_t,
 	new_vfs_inode_t,

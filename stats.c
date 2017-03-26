@@ -117,6 +117,7 @@ const char *Timingstring[TIMING_NUM] =
 	"write_pages",
 	"fallocate",
 	"direct_IO",
+	"free_old_entry",
 	"delete_file_tree",
 	"delete_dir_tree",
 	"new_vfs_inode",
