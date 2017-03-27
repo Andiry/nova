@@ -194,6 +194,7 @@ struct nova_super_block {
 #define NOVA_LITEJOURNAL_INO	(5)
 #define NOVA_INODELIST1_INO	(6)
 #define NOVA_SNAPSHOT_INO	(7)	/* Fake snapshot inode */
+#define NOVA_TEST_PERF_INO	(8)
 
 
 /* Normal inode starts at 32 */

@@ -334,6 +334,47 @@ static const struct file_operations nova_seq_show_snapshots_fops = {
 	.release	= single_release,
 };
 
+/* ====================== Performance ======================== */
+static int nova_seq_test_perf_show(struct seq_file *seq, void *v)
+{
+	seq_printf(seq, "Echo function:poolmb:size:disks to test function "
+			"performance working on size of data.\n"
+			"    example: echo 1:128:4096:8 > "
+			"/proc/fs/NOVA/pmem0/test_perf\n"
+			"The disks value only matters for raid functions.\n"
+			"Set function to 0 to test all functions.\n");
+	return 0;
+}
+
+static int nova_seq_test_perf_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nova_seq_test_perf_show, PDE_DATA(inode));
+}
+
+ssize_t nova_seq_test_perf(struct file *filp, const char __user *buf,
+	size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode *inode = mapping->host;
+	struct super_block *sb = PDE_DATA(inode);
+	size_t size;
+	unsigned int func_id, poolmb, disks;
+
+	sscanf(buf, "%u:%u:%zu:%u", &func_id, &poolmb, &size, &disks);
+	nova_test_perf(sb, func_id, poolmb, size, disks);
+
+	return len;
+}
+
+static const struct file_operations nova_seq_test_perf_fops = {
+	.owner		= THIS_MODULE,
+	.open		= nova_seq_test_perf_open,
+	.read		= seq_read,
+	.write		= nova_seq_test_perf,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 void nova_sysfs_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -355,6 +396,8 @@ void nova_sysfs_init(struct super_block *sb)
 				 &nova_seq_delete_snapshot_fops, sb);
 		proc_create_data("snapshots", S_IRUGO, sbi->s_proc,
 				 &nova_seq_show_snapshots_fops, sb);
+		proc_create_data("test_perf", S_IRUGO, sbi->s_proc,
+				 &nova_seq_test_perf_fops, sb);
 	}
 }
 
@@ -369,6 +412,7 @@ void nova_sysfs_exit(struct super_block *sb)
 		remove_proc_entry("create_snapshot", sbi->s_proc);
 		remove_proc_entry("delete_snapshot", sbi->s_proc);
 		remove_proc_entry("snapshots", sbi->s_proc);
+		remove_proc_entry("test_perf", sbi->s_proc);
 		remove_proc_entry(sbi->s_bdev->bd_disk->disk_name,
 					nova_proc_root);
 	}

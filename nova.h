@@ -1872,4 +1872,8 @@ void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode);
 int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi);
 void nova_print_free_lists(struct super_block *sb);
 
+/* perf.c */
+int nova_test_perf(struct super_block *sb, unsigned int func_id,
+	unsigned int poolmb, size_t size, unsigned int disks);
+
 #endif /* __NOVA_H */
