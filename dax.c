@@ -1926,6 +1926,7 @@ static const struct vm_operations_struct nova_dax_vm_ops = {
 
 int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
+	struct inode *inode = file->f_mapping->host;
 	file_accessed(file);
 
 	vma->vm_flags |= VM_MIXEDMAP | VM_HUGEPAGE;
@@ -1936,10 +1937,10 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	if (mmap_cow || data_csum || data_parity)
 		nova_insert_write_vma(vma);
 
-	nova_dbg_mmap4k("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
+	nova_dbg("[%s:%d] inode %lu, MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
 			"vm_page_prot(0x%lx)\n", __func__,
-			__LINE__, vma->vm_start, vma->vm_end,
+			__LINE__, inode->i_ino, vma->vm_start, vma->vm_end,
 			vma->vm_flags, pgprot_val(vma->vm_page_prot));
 
 	return 0;

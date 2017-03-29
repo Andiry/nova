@@ -282,6 +282,7 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 	struct pagevec pvec;
 	bool done = false;
 	int count = 0;
+	unsigned long start = 0;
 	timing_t reset_time;
 	int i;
 
@@ -300,6 +301,9 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 		if (pvec.nr == 0)
 			break;
 
+		if (count == 0)
+			start = indices[0];
+
 		for (i = 0; i < pvec.nr; i++) {
 			if (indices[i] >= end_pgoff) {
 				done = true;
@@ -317,7 +321,10 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 		start_pgoff = indices[pvec.nr - 1] + 1;
 	}
 
-	nova_dbgv("%s: reset %d pages\n", __func__, count);
+	if (count)
+		nova_dbgv("%s: inode %lu, reset %d pages, start pgoff %lu\n",
+				__func__, sih->ino, count, start);
+
 	NOVA_END_TIMING(reset_mapping_t, reset_time);
 	return 0;
 }
