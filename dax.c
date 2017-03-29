@@ -457,8 +457,12 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	if (num_blocks == 1) goto eblk;
 
 	do {
-		nova_update_block_csum_parity(sb, sih, blockbuf, blocknr,
-							0, blocksize);
+		if (inplace)
+			nova_update_block_csum_parity(sb, sih, blockbuf,
+							blocknr, offset, bytes);
+		else
+			nova_update_block_csum_parity(sb, sih, blockbuf,
+							blocknr, 0, blocksize);
 
 		blocknr++;
 		pos += bytes;
@@ -516,7 +520,12 @@ eblk:
 		*/
 	}
 
-	nova_update_block_csum_parity(sb, sih, blockbuf, blocknr, 0, blocksize);
+	if (inplace)
+		nova_update_block_csum_parity(sb, sih, blockbuf, blocknr,
+							offset, bytes);
+	else
+		nova_update_block_csum_parity(sb, sih, blockbuf, blocknr,
+							0, blocksize);
 
 out:
 	if (blockbuf != NULL) kfree(blockbuf);
