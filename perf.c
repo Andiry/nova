@@ -74,6 +74,14 @@ static int to_pmem_nocache_call(char *dst, char *src, size_t off, size_t size)
 	return 0;
 }
 
+static int to_flush_call(char *dst, char *src, size_t off, size_t size)
+{
+	/* pin src address to cache most reads, if size fits */
+	/* dst address should point to pmem */
+	nova_flush_buffer(dst + off, size, 0);
+	return 0;
+}
+
 static int to_pmem_flush_call(char *dst, char *src, size_t off, size_t size)
 {
 	/* pin src address to cache most reads, if size fits */
@@ -87,6 +95,7 @@ static const memcpy_call_t to_pmem_calls[] =
 {
 	/* order should match enum to_pmem_call_id */
 	{ "memcpy_to_pmem_nocache", to_pmem_nocache_call },
+	{ "flush buffer",	    to_flush_call },
 	{ "memcpy + flush buffer",  to_pmem_flush_call }
 };
 

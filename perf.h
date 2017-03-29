@@ -43,6 +43,7 @@ enum from_pmem_call_id {
 
 enum to_pmem_call_id {
 	memcpy_to_pmem_nocache_id = 0,
+	flush_buffer_id,
 	memcpy_to_pmem_flush_id,
 	NUM_TO_PMEM_CALLS
 };
