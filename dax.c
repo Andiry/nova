@@ -1946,7 +1946,7 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 	if (mmap_cow || data_csum || data_parity)
 		nova_insert_write_vma(vma);
 
-	nova_dbg("[%s:%d] inode %lu, MMAP 4KPAGE vm_start(0x%lx),"
+	nova_dbg_mmap4k("[%s:%d] inode %lu, MMAP 4KPAGE vm_start(0x%lx),"
 			" vm_end(0x%lx), vm_flags(0x%lx), "
 			"vm_page_prot(0x%lx)\n", __func__,
 			__LINE__, inode->i_ino, vma->vm_start, vma->vm_end,
