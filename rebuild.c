@@ -310,6 +310,7 @@ int nova_reset_mapping_csum_parity(struct super_block *sb,
 				break;
 			}
 
+			NOVA_STATS_ADD(dirty_pages, 1);
 			nova_reset_csum_parity_page(sb, sih, NULL,
 						indices[i], 0);
 		}
