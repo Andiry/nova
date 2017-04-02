@@ -372,24 +372,18 @@ bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff)
 
 static int nova_set_sih_vmas_readonly(struct nova_inode_info_header *sih)
 {
-	struct nova_inode_info *si;
-	struct inode *inode;
 	struct vma_item *item;
 	struct rb_node *temp;
 	timing_t set_read_time;
 
 	NOVA_START_TIMING(set_vma_read_t, set_read_time);
-	si = container_of(sih, struct nova_inode_info, header);
-	inode = &(si->vfs_inode);
 
-	inode_lock(inode);
 	temp = rb_first(&sih->vma_tree);
 	while (temp) {
 		item = container_of(temp, struct vma_item, node);
 		temp = rb_next(temp);
 		nova_set_vma_read(item->vma);
 	}
-	inode_unlock(inode);
 
 	NOVA_END_TIMING(set_vma_read_t, set_read_time);
 	return 0;
