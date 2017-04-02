@@ -533,7 +533,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	set_opt(sbi->s_mount_opt, DAX);
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
-	spin_lock_init(&sbi->vma_lock);
+	mutex_init(&sbi->vma_mutex);
 	INIT_LIST_HEAD(&sbi->mmap_sih_list);
 
 	sbi->inode_maps = kzalloc(sbi->cpus * sizeof(struct inode_map),

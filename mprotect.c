@@ -404,10 +404,10 @@ int nova_set_vmas_readonly(struct super_block *sb)
 		return 0;
 
 	nova_dbgv("%s\n", __func__);
-	spin_lock(&sbi->vma_lock);
+	mutex_lock(&sbi->vma_mutex);
 	list_for_each_entry(sih, &sbi->mmap_sih_list, list)
 		nova_set_sih_vmas_readonly(sih);
-	spin_unlock(&sbi->vma_lock);
+	mutex_unlock(&sbi->vma_mutex);
 
 	return 0;
 }
@@ -423,7 +423,7 @@ int nova_destroy_vma_tree(struct super_block *sb)
 		return 0;
 
 	nova_dbgv("%s\n", __func__);
-	spin_lock(&sbi->vma_lock);
+	mutex_lock(&sbi->vma_mutex);
 	temp = rb_first(&sbi->vma_tree);
 	while (temp) {
 		item = container_of(temp, struct vma_item, node);
@@ -431,7 +431,7 @@ int nova_destroy_vma_tree(struct super_block *sb)
 		rb_erase(&item->node, &sbi->vma_tree);
 		kfree(item);
 	}
-	spin_unlock(&sbi->vma_lock);
+	mutex_unlock(&sbi->vma_mutex);
 
 	return 0;
 }

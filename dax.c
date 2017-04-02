@@ -1803,9 +1803,9 @@ out:
 	inode_unlock(inode);
 
 	if (insert) {
-		spin_lock(&sbi->vma_lock);
+		mutex_lock(&sbi->vma_mutex);
 		list_add_tail(&sih->list, &sbi->mmap_sih_list);
-		spin_unlock(&sbi->vma_lock);
+		mutex_unlock(&sbi->vma_mutex);
 	}
 
 	NOVA_END_TIMING(insert_vma_t, insert_vma_time);
@@ -1867,9 +1867,9 @@ static int nova_remove_write_vma(struct vm_area_struct *vma)
 	}
 
 	if (remove) {
-		spin_lock(&sbi->vma_lock);
+		mutex_lock(&sbi->vma_mutex);
 		list_del(&sih->list);
-		spin_unlock(&sbi->vma_lock);
+		mutex_unlock(&sbi->vma_mutex);
 	}
 
 	NOVA_END_TIMING(remove_vma_t, remove_vma_time);
