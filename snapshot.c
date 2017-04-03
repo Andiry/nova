@@ -924,7 +924,7 @@ int nova_create_snapshot(struct super_block *sb)
 	 * and data, to prevent overwriting logs that might belong to a
 	 * snapshot that is being created.
 	 */
-	nova_dbgv("%s: epoch id %llu\n", __func__, epoch_id);
+	nova_info("%s: epoch id %llu\n", __func__, epoch_id);
 
 	timestamp = CURRENT_TIME_SEC.tv_sec;
 
@@ -1044,7 +1044,7 @@ int nova_delete_snapshot(struct super_block *sb, u64 epoch_id)
 
 	NOVA_START_TIMING(delete_snapshot_t, delete_snapshot_time);
 	mutex_lock(&sbi->s_lock);
-	nova_dbg("Delete snapshot epoch ID %llu\n", epoch_id);
+	nova_info("Delete snapshot epoch ID %llu\n", epoch_id);
 
 	ret = nova_find_target_snapshot_info(sb, epoch_id, &info);
 	if (ret != 1 || info->epoch_id != epoch_id) {
