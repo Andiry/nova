@@ -172,10 +172,8 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 
 	pi = nova_get_inode(sb, inode);
 
-	nova_dbgv("%s: inode %lu, vm_start(0x%lx), vm_end(0x%lx), "
-			"vma pgoff(0x%lx), address 0x%lx\n", __func__,
-			inode->i_ino, vma->vm_start, vma->vm_end,
-			vma->vm_pgoff, address);
+	nova_dbgv("%s: inode %lu, start pgoff %lu, end pgoff %lu\n",
+			__func__, inode->i_ino, start_blk, end_blk);
 
 	time = CURRENT_TIME_SEC.tv_sec;
 

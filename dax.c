@@ -1625,11 +1625,15 @@ static struct iomap_ops nova_iomap_ops_lock = {
 
 static int nova_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
 	int ret = 0;
 	timing_t fault_time;
 
 	NOVA_START_TIMING(mmap_fault_t, fault_time);
 
+	nova_dbgv("%s: inode %lu, pgoff %lu\n",
+			__func__, inode->i_ino, vmf->pgoff);
 	ret = dax_iomap_fault(vma, vmf, &nova_iomap_ops_lock);
 
 	NOVA_END_TIMING(mmap_fault_t, fault_time);
