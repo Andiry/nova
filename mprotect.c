@@ -67,6 +67,48 @@ int nova_dax_mem_protect(struct super_block *sb, void *vaddr,
 	return nova_writeable(vaddr, size, rw);
 }
 
+static int nova_update_dax_mapping(struct super_block *sb,
+	struct vm_area_struct *vma, struct nova_file_write_entry *entry)
+{
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	void **pentry;
+	unsigned long start_pgoff = entry->pgoff;
+	unsigned int num = entry->num_pages;
+	unsigned long curr_pgoff;
+	unsigned long blocknr, start_blocknr;
+	unsigned long value, new_value;
+	int i;
+	int ret = 0;
+
+	start_blocknr = nova_get_blocknr(sb, entry->block, sih->i_blk_type);
+	spin_lock_irq(&mapping->tree_lock);
+	for (i = 0; i < num; i++) {
+		curr_pgoff = start_pgoff + i;
+		blocknr = start_blocknr + i;
+
+		pentry = radix_tree_lookup_slot(&mapping->page_tree,
+						curr_pgoff);
+		if (pentry) {
+			value = (unsigned long)radix_tree_deref_slot(pentry);
+			/* 9 = sector shift (3) + RADIX_DAX_SHIFT (6) */
+			new_value = (blocknr << 9) | (value & 0xff);
+			nova_dbgv("%s: pgoff %lu, entry 0x%lx, new 0x%lx\n",
+						__func__, curr_pgoff,
+						value, new_value);
+			radix_tree_replace_slot(&sih->tree, pentry,
+						(void *)new_value);
+			radix_tree_tag_set(&mapping->page_tree, curr_pgoff,
+						PAGECACHE_TAG_DIRTY);
+		}
+	}
+
+	spin_unlock_irq(&mapping->tree_lock);
+	return ret;
+}
+
 static int nova_update_entry_pfn(struct super_block *sb,
 	struct vm_area_struct *vma, struct nova_file_write_entry *entry)
 {
@@ -118,11 +160,18 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 			continue;
 		}
 
+		ret = nova_update_dax_mapping(sb, vma, entry_data);
+		if (ret) {
+			nova_err(sb, "update DAX mapping return %d\n", ret);
+			break;
+		}
+
 		ret = nova_update_entry_pfn(sb, vma, entry_data);
 		if (ret) {
 			nova_err(sb, "update_pfn return %d\n", ret);
 			break;
 		}
+
 		curr_p += entry_size;
 	}
 
