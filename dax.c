@@ -394,7 +394,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	struct nova_file_write_entry *entry;
 	bool mapped, nvmm_ok;
 	int ret = 0;
-	timing_t protect_file_data_time;
+	timing_t protect_file_data_time, memcpy_time;
 
 	NOVA_START_TIMING(protect_file_data_t, protect_file_data_time);
 
@@ -403,6 +403,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	start_blk = pos >> blocksize_bits;
 	end_blk = start_blk + num_blocks - 1;
 
+	NOVA_START_TIMING(protect_memcpy_t, memcpy_time);
 	blockbuf = (u8 *) kmalloc(blocksize, GFP_KERNEL);
 	if (blockbuf == NULL) {
 		nova_err(sb, "%s: block buffer allocation error\n", __func__);
@@ -413,6 +414,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	if (bytes > count) bytes = count;
 
 	left = copy_from_user(blockbuf + offset, buf, bytes);
+	NOVA_END_TIMING(protect_memcpy_t, memcpy_time);
 	if (unlikely(left != 0)) {
 		nova_err(sb, "%s: not all data is copied from user! "
 				"expect to copy %zu bytes, actually "

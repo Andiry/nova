@@ -103,6 +103,7 @@ enum timing_category {
 	block_csum_t,
 	block_parity_t,
 	block_csum_parity_t,
+	protect_memcpy_t,
 	protect_file_data_t,
 	verify_csum_t,
 	restore_data_t,

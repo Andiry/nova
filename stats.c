@@ -104,6 +104,7 @@ const char *Timingstring[TIMING_NUM] =
 	"block_csum",
 	"block_parity",
 	"block_csum_parity",
+	"protect_memcpy",
 	"protect_file_data",
 	"verify_csum",
 	"restore_file_data",
