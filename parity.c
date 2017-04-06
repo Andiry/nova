@@ -160,6 +160,7 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	int ret = 0;
 	timing_t block_csum_parity_time;
 
+	NOVA_STATS_ADD(block_csum_parity, 1);
 
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 	strp_nr = blockoff >> strp_shift;

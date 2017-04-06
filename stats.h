@@ -166,6 +166,7 @@ enum stats_category {
 	dirty_pages,
 	protect_head,
 	protect_tail,
+	block_csum_parity,
 
 	/* Sentinel */
 	STATS_NUM,
