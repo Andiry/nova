@@ -160,7 +160,6 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	int ret = 0;
 	timing_t block_csum_parity_time;
 
-	NOVA_START_TIMING(block_csum_parity_t, block_csum_parity_time);
 
 	blockoff = nova_get_block_off(sb, blocknr, sih->i_blk_type);
 	strp_nr = blockoff >> strp_shift;
@@ -173,12 +172,15 @@ int nova_update_block_csum_parity(struct super_block *sb,
 
 	/* unrolled-by-8 implementation */
 	if (unroll_csum || unroll_parity) {
+		NOVA_START_TIMING(block_csum_parity_t, block_csum_parity_time);
 		if (data_parity > 0) {
 			parity = (u64 *) kmalloc(strp_size, GFP_KERNEL);
 			if (parity == NULL) {
 				nova_err(sb, "%s: buffer allocation error\n",
 								__func__);
 				ret = -ENOMEM;
+				NOVA_END_TIMING(block_csum_parity_t,
+						block_csum_parity_time);
 				goto out;
 			}
 		}
@@ -235,6 +237,9 @@ int nova_update_block_csum_parity(struct super_block *sb,
 			memcpy_to_pmem_nocache(nvmmptr, parity, strp_size);
 			nova_memlock_range(sb, nvmmptr, strp_size);
 		}
+
+		if (parity) kfree(parity);
+		NOVA_END_TIMING(block_csum_parity_t, block_csum_parity_time);
 	}
 
 	if (data_csum > 0 && !unroll_csum)
@@ -243,10 +248,6 @@ int nova_update_block_csum_parity(struct super_block *sb,
 		nova_update_block_parity(sb, block, blocknr, 0);
 
 out:
-	if (parity != NULL) kfree(parity);
-
-	NOVA_END_TIMING(block_csum_parity_t, block_csum_parity_time);
-
 	return 0;
 }
 
