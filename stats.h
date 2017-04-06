@@ -163,6 +163,8 @@ enum stats_category {
 	fast_gc_pages,
 	thorough_gc_pages,
 	dirty_pages,
+	protect_head,
+	protect_tail,
 
 	/* Sentinel */
 	STATS_NUM,

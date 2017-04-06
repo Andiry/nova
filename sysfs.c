@@ -156,6 +156,8 @@ static int nova_seq_IO_show(struct seq_file *seq, void *v)
 		IOstats[inplace_write_breaks], Countstats[inplace_write_t] ?
 			IOstats[inplace_write_breaks] / Countstats[inplace_write_t] : 0);
 	seq_printf(seq, "Dirty pages %llu\n", IOstats[dirty_pages]);
+	seq_printf(seq, "Protect head %llu, tail %llu\n",
+			IOstats[protect_head], IOstats[protect_tail]);
 
 	seq_printf(seq, "\n");
 

@@ -423,6 +423,7 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	}
 
 	if (offset != 0) {
+		NOVA_STATS_ADD(protect_head, 1);
 		entry = nova_get_write_entry(sb, sih, start_blk);
 		if (entry != NULL) {
 			/* make sure data in the partial block head is good */
@@ -486,6 +487,7 @@ eblk:
 	eblk_offset = (pos + count) & (blocksize - 1);
 
 	if (eblk_offset != 0) {
+		NOVA_STATS_ADD(protect_tail, 1);
 		entry = nova_get_write_entry(sb, sih, end_blk);
 		if (entry != NULL) {
 			/* make sure data in the partial block tail is good */
