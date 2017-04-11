@@ -282,6 +282,11 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 				break;
 		}
 
+		if (entry->epoch_id == epoch_id) {
+			/* Someone has done it for us. */
+			break;
+		}
+
 		from_blocknr = get_nvmm(sb, sih, entry, start_blk);
 		from_blockoff = nova_get_block_off(sb, from_blocknr,
 						pi->i_blk_type);
@@ -295,11 +300,6 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 
 		if (avail_blocks > end_blk - start_blk)
 			avail_blocks = end_blk - start_blk;
-
-		if (entry->epoch_id == epoch_id) {
-			start_blk += avail_blocks;
-			continue;
-		}
 
 		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
 						avail_blocks, 0, ANY_CPU, 0);
