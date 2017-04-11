@@ -182,9 +182,23 @@ static int nova_get_dax_cow_range(struct super_block *sb,
 	struct vm_area_struct *vma, unsigned long address,
 	unsigned long *start_blk, int *num_blocks)
 {
-	*start_blk = vma->vm_pgoff;
-	*start_blk += (address - vma->vm_start) >> sb->s_blocksize_bits;
-	*num_blocks = 1;
+	int base = 1;
+	unsigned long vma_blocks;
+	unsigned long pgoff;
+	unsigned long start_pgoff;
+
+	vma_blocks = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
+	if (vma_blocks >= 262144)	// 1G
+		base = 262144;
+	else if (vma_blocks >= 512)	// 2M
+		base = 512;
+
+	pgoff = (address - vma->vm_start) >> sb->s_blocksize_bits;
+	start_pgoff = pgoff & ~(base - 1);
+	*start_blk = vma->vm_pgoff + start_pgoff;
+	*num_blocks = (base > vma_blocks - pgoff) ? vma_blocks - pgoff : base;
+	nova_dbgv("%s: start block %lu, %d blocks\n",
+			__func__, *start_blk, *num_blocks);
 	return 0;
 }
 
