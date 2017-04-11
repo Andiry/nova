@@ -727,7 +727,7 @@ struct nova_sb_info {
 	int num_snapshots;
 	/* Current epoch. volatile guarantees visibility */
 	volatile u64 s_epoch_id;
-	int snapshot_taking;
+	volatile int snapshot_taking;
 
 	int mount_snapshot;
 	u64 mount_snapshot_epoch_id;
