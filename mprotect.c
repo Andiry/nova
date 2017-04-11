@@ -178,8 +178,18 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 	return ret;
 }
 
+static int nova_get_dax_cow_range(struct super_block *sb,
+	struct vm_area_struct *vma, unsigned long address,
+	unsigned long *start_blk, int *num_blocks)
+{
+	*start_blk = vma->vm_pgoff;
+	*start_blk += (address - vma->vm_start) >> sb->s_blocksize_bits;
+	*num_blocks = 1;
+	return 0;
+}
+
 int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
-	unsigned long address, int num_blocks)
+	unsigned long address)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
@@ -197,6 +207,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	unsigned long blocknr = 0;
 	unsigned long avail_blocks;
 	unsigned long copy_blocks;
+	int num_blocks = 0;
 	u64 from_blockoff, to_blockoff;
 	size_t copied;
 	int allocated = 0;
@@ -211,13 +222,16 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	timing_t mmap_cow_time;
 	int ret = 0;
 
-	start_blk = vma->vm_pgoff;
-	start_blk += (address - vma->vm_start) >> sb->s_blocksize_bits;
-	end_blk = start_blk + num_blocks;
-	if (start_blk >= end_blk)
-		return 0;
-
 	NOVA_START_TIMING(mmap_cow_t, mmap_cow_time);
+
+	nova_get_dax_cow_range(sb, vma, address, &start_blk, &num_blocks);
+
+	end_blk = start_blk + num_blocks;
+	if (start_blk >= end_blk) {
+		NOVA_END_TIMING(mmap_cow_t, mmap_cow_time);
+		return 0;
+	}
+
 	inode_lock(inode);
 
 	if (sbi->snapshot_taking)

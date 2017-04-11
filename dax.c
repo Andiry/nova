@@ -1899,7 +1899,7 @@ static int nova_restore_page_write(struct vm_area_struct *vma,
 			vma->vm_end, address);
 
 	/* Restore single page write */
-	nova_mmap_to_new_blocks(vma, address, 1);
+	nova_mmap_to_new_blocks(vma, address);
 
 	up_write(&mm->mmap_sem);
 
