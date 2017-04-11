@@ -167,6 +167,7 @@ enum stats_category {
 	protect_head,
 	protect_tail,
 	block_csum_parity,
+	dax_cow_during_snapshot,
 
 	/* Sentinel */
 	STATS_NUM,

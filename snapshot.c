@@ -914,6 +914,7 @@ int nova_create_snapshot(struct super_block *sb)
 	NOVA_START_TIMING(create_snapshot_t, create_snapshot_time);
 
 	mutex_lock(&sbi->s_lock);
+	sbi->snapshot_taking = 1;
 
 	/* Increase the epoch id, but use the old value as snapshot id */
 	epoch_id = sbi->s_epoch_id++;
@@ -960,6 +961,7 @@ int nova_create_snapshot(struct super_block *sb)
 	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
 out:
+	sbi->snapshot_taking = 0;
 	mutex_unlock(&sbi->s_lock);
 
 	NOVA_END_TIMING(create_snapshot_t, create_snapshot_time);

@@ -186,6 +186,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_entry entry_data;
@@ -218,6 +219,9 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 
 	NOVA_START_TIMING(mmap_cow_t, mmap_cow_time);
 	inode_lock(inode);
+
+	if (sbi->snapshot_taking)
+		NOVA_STATS_ADD(dax_cow_during_snapshot, 1);
 
 	pi = nova_get_inode(sb, inode);
 
