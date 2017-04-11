@@ -200,7 +200,8 @@ static int nova_get_dax_cow_range(struct super_block *sb,
 	pgoff = (address - vma->vm_start) >> sb->s_blocksize_bits;
 	start_pgoff = pgoff & ~(base - 1);
 	*start_blk = vma->vm_pgoff + start_pgoff;
-	*num_blocks = (base > vma_blocks - pgoff) ? vma_blocks - pgoff : base;
+	*num_blocks = (base > vma_blocks - start_pgoff) ?
+			vma_blocks - start_pgoff : base;
 	nova_dbgv("%s: start block %lu, %d blocks\n",
 			__func__, *start_blk, *num_blocks);
 	return 0;

@@ -1955,10 +1955,13 @@ int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 		nova_insert_write_vma(vma);
 
 	nova_dbg_mmap4k("[%s:%d] inode %lu, MMAP 4KPAGE vm_start(0x%lx),"
-			" vm_end(0x%lx), vm pgoff %lu, vm_flags(0x%lx), "
-			"vm_page_prot(0x%lx)\n", __func__,
-			__LINE__, inode->i_ino, vma->vm_start, vma->vm_end,
-			vma->vm_pgoff, vma->vm_flags,
+			" vm_end(0x%lx), vm pgoff %lu, %lu blocks, "
+			"vm_flags(0x%lx), vm_page_prot(0x%lx)\n",
+			__func__, __LINE__,
+			inode->i_ino, vma->vm_start, vma->vm_end,
+			vma->vm_pgoff,
+			(vma->vm_end - vma->vm_start) >> PAGE_SHIFT,
+			vma->vm_flags,
 			pgprot_val(vma->vm_page_prot));
 
 	return 0;
