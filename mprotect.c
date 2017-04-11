@@ -139,7 +139,9 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
 	int ret = 0;
+	timing_t update_time;
 
+	NOVA_START_TIMING(update_pfn_t, update_time);
 	while (curr_p && curr_p != sih->log_tail) {
 		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
@@ -147,7 +149,8 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 		if (curr_p == 0) {
 			nova_err(sb, "%s: File inode %lu log is NULL!\n",
 				__func__, sih->ino);
-			return -EINVAL;
+			ret = -EINVAL;
+			break;
 		}
 
 		entry_data = (struct nova_file_write_entry *)
@@ -175,6 +178,7 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 		curr_p += entry_size;
 	}
 
+	NOVA_END_TIMING(update_pfn_t, update_time);
 	return ret;
 }
 

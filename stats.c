@@ -135,6 +135,7 @@ const char *Timingstring[TIMING_NUM] =
 	"remove_vma",
 	"set_vma_readonly",
 	"mmap_cow",
+	"udpate_pfn",
 
 	/* Rebuild */
 	"=================== Rebuild ====================",
