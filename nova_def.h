@@ -175,7 +175,7 @@ struct nova_super_block {
  * If data protection is enabled, more blocks are reserverd for checksums and
  * parities and the number is derived according to the whole storage size.
  */
-#define	RESERVED_BLOCKS		8
+#define	HEAD_RESERVED_BLOCKS	8
 
 #define	RESERVE_INODE_START	1
 #define	REPLICA_INODE_START	2
@@ -183,6 +183,8 @@ struct nova_super_block {
 #define	INODE_TABLE0_START	4
 #define	INODE_TABLE1_START	5
 
+/* For redundant super block */
+#define	TAIL_RESERVED_BLOCKS	1
 
 /* ======================= Reserved inodes ========================= */
 

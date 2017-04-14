@@ -714,7 +714,8 @@ struct nova_sb_info {
 	atomic_t	next_generation;
 	/* inode tracking */
 	unsigned long	s_inodes_used_count;
-	unsigned long	reserved_blocks;
+	unsigned long	head_reserved_blocks;
+	unsigned long	tail_reserved_blocks;
 
 	struct mutex 	s_lock;	/* protects the SB's buffer-head */
 

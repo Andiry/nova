@@ -677,7 +677,6 @@ static int nova_build_blocknode_map(struct super_block *sb,
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct scan_bitmap *bm;
 	struct scan_bitmap *final_bm;
-	unsigned long num_used_block;
 	unsigned long *src, *dst;
 	int i, j;
 	int num;
@@ -724,11 +723,6 @@ static int nova_build_blocknode_map(struct super_block *sb,
 		for (j = 0; j < num; j++)
 			dst[j] |= src[j];
 	}
-
-	/* Set initial used pages */
-	num_used_block = sbi->reserved_blocks;
-	for (i = 0; i < num_used_block; i++)
-		set_bm(i, final_bm, BM_4K);
 
 	ret = __nova_build_blocknode_map(sb, final_bm->scan_bm_4K.bitmap,
 			final_bm->scan_bm_4K.bitmap_size * 8, PAGE_SHIFT - 12);
