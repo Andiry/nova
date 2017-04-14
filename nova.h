@@ -692,6 +692,7 @@ struct nova_sb_info {
 	 */
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
+	void		*tail_addr;
 
 	unsigned long	num_blocks;
 
@@ -785,7 +786,7 @@ static inline struct nova_super_block *nova_get_redund_super(struct super_block 
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	return (struct nova_super_block *)(sbi->virt_addr + NOVA_SB_SIZE);
+	return (struct nova_super_block *)(sbi->tail_addr);
 }
 
 /* If this is part of a read-modify-write of the block,
