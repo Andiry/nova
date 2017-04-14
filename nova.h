@@ -138,6 +138,7 @@ extern unsigned int nova_dbgmask;
 #define	INVALID_CPU			(-1)
 #define	ANY_CPU				(65536)
 #define	FREE_BATCH			(16)
+#define	DEAD_ZONE_BLOCKS		(256)
 
 extern int measure_timing;
 extern int replica_metadata;

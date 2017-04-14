@@ -480,10 +480,26 @@ int nova_free_log_blocks(struct super_block *sb,
 	return ret;
 }
 
+static int not_enough_blocks(struct free_list *free_list,
+	unsigned long num_blocks, enum alloc_type atype)
+{
+	struct nova_range_node *first = free_list->first_node;
+	struct nova_range_node *last = free_list->last_node;
+
+	if (free_list->num_free_blocks < num_blocks || !first || !last)
+		return 1;
+
+	if (atype == LOG && last->range_high - first->range_low < DEAD_ZONE_BLOCKS)
+		return 1;
+
+	return 0;
+}
+
+/* Return how many blocks allocated */
 static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	struct free_list *free_list, unsigned short btype,
-	unsigned long num_blocks, unsigned long *new_blocknr,
-	int from_tail)
+	enum alloc_type atype, unsigned long num_blocks,
+	unsigned long *new_blocknr, int from_tail)
 {
 	struct rb_root *tree;
 	struct nova_range_node *curr, *next = NULL, *prev = NULL;
@@ -493,6 +509,9 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	unsigned long step = 0;
 
 	if (!free_list->first_node || free_list->num_free_blocks == 0)
+		return -ENOSPC;
+
+	if (atype == LOG && not_enough_blocks(free_list, num_blocks, atype))
 		return -ENOSPC;
 
 	tree = &(free_list->block_free_tree);
@@ -600,7 +619,6 @@ static int nova_get_candidate_free_list(struct super_block *sb)
 	return cpuid;
 }
 
-/* Return how many blocks allocated */
 static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero,
 	enum alloc_type atype, int cpuid, int from_tail)
@@ -610,8 +628,6 @@ static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long num_blocks = 0;
 	unsigned long new_blocknr = 0;
 	long ret_blocks = 0;
-	struct rb_node *temp;
-	struct nova_range_node *first;
 	int retried = 0;
 	timing_t alloc_time;
 
@@ -627,32 +643,23 @@ retry:
 	free_list = nova_get_free_list(sb, cpuid);
 	spin_lock(&free_list->s_lock);
 
-	if (free_list->num_free_blocks < num_blocks || !free_list->first_node) {
+	if (not_enough_blocks(free_list, num_blocks, atype)) {
 		nova_dbgv("%s: cpu %d, free_blocks %lu, required %lu, "
 			"blocknode %lu\n", __func__, cpuid,
 			free_list->num_free_blocks, num_blocks,
 			free_list->num_blocknode);
-		if (free_list->num_free_blocks >= num_blocks) {
-			nova_dbg("free list %d: first node is NULL "
-				"but still has %lu free blocks\n",
-				free_list->index,
-				free_list->num_free_blocks);
-			temp = rb_first(&free_list->block_free_tree);
-			first = container_of(temp, struct nova_range_node, node);
-			free_list->first_node = first;
-		} else {
-			if (retried >= 2)
-				/* Allocate anyway */
-				goto alloc;
 
-			spin_unlock(&free_list->s_lock);
-			cpuid = nova_get_candidate_free_list(sb);
-			retried++;
-			goto retry;
-		}
+		if (retried >= 2)
+			/* Allocate anyway */
+			goto alloc;
+
+		spin_unlock(&free_list->s_lock);
+		cpuid = nova_get_candidate_free_list(sb);
+		retried++;
+		goto retry;
 	}
 alloc:
-	ret_blocks = nova_alloc_blocks_in_free_list(sb, free_list, btype,
+	ret_blocks = nova_alloc_blocks_in_free_list(sb, free_list, btype, atype,
 					num_blocks, &new_blocknr, from_tail);
 
 	if (ret_blocks > 0) {
