@@ -25,17 +25,20 @@
 #include "nova_def.h"
 
 /* nova_memunlock_super() before calling! */
-static inline void nova_sync_super(struct nova_super_block *ps)
+static inline void nova_sync_super(struct super_block *sb,
+	struct nova_super_block *ps)
 {
+	struct nova_super_block *super_redund;
 	u16 crc = 0;
 
+	super_redund = nova_get_redund_super(sb);
 	ps->s_wtime = cpu_to_le32(get_seconds());
 	ps->s_sum = 0;
 	crc = crc16(~0, (__u8 *)ps + sizeof(__le16),
 			NOVA_SB_STATIC_SIZE(ps) - sizeof(__le16));
 	ps->s_sum = cpu_to_le16(crc);
 	/* Keep sync redundant super block */
-	memcpy((void *)ps + NOVA_SB_SIZE, (void *)ps,
+	memcpy((void *)super_redund, (void *)ps,
 		sizeof(struct nova_super_block));
 }
 
@@ -108,17 +111,19 @@ static inline void nova_memlock_range(struct super_block *sb, void *p,
 		__nova_memlock_range(p, len);
 }
 
-static inline void nova_memunlock_super(struct super_block *sb,
-					 struct nova_super_block *ps)
+static inline void nova_memunlock_super(struct super_block *sb)
 {
+	struct nova_super_block *ps = nova_get_super(sb);
+
 	if (nova_is_protected(sb))
 		__nova_memunlock_range(ps, NOVA_SB_SIZE);
 }
 
-static inline void nova_memlock_super(struct super_block *sb,
-				       struct nova_super_block *ps)
+static inline void nova_memlock_super(struct super_block *sb)
 {
-	nova_sync_super(ps);
+	struct nova_super_block *ps = nova_get_super(sb);
+
+	nova_sync_super(sb, ps);
 	if (nova_is_protected(sb))
 		__nova_memlock_range(ps, NOVA_SB_SIZE);
 }

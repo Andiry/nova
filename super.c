@@ -368,7 +368,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	epoch_id = nova_get_epoch_id(sb);
 
 	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
-	nova_sync_super(super);
+	nova_sync_super(sb, super);
 
 	nova_flush_buffer(super, NOVA_SB_SIZE, false);
 	nova_flush_buffer((char *)super + NOVA_SB_SIZE, sizeof(*super), false);
@@ -423,8 +423,7 @@ int nova_check_integrity(struct super_block *sb,
 {
 	struct nova_super_block *super_redund;
 
-	super_redund =
-		(struct nova_super_block *)((char *)super + NOVA_SB_SIZE);
+	super_redund = nova_get_redund_super(sb);
 
 	/* Do sanity checks on the superblock */
 	if (le32_to_cpu(super->s_magic) != NOVA_SUPER_MAGIC) {
@@ -437,14 +436,13 @@ int nova_check_integrity(struct super_block *sb,
 				"the redundant copy");
 			/* Try to auto-recover the super block */
 			if (sb)
-				nova_memunlock_super(sb, super);
+				nova_memunlock_super(sb);
 			memcpy(super, super_redund,
 				sizeof(struct nova_super_block));
 			if (sb)
-				nova_memlock_super(sb, super);
+				nova_memlock_super(sb);
 			nova_flush_buffer(super, sizeof(*super), false);
-			nova_flush_buffer((char *)super + NOVA_SB_SIZE,
-				sizeof(*super), false);
+			nova_flush_buffer(super_redund, sizeof(*super), false);
 
 		}
 	}
@@ -461,14 +459,13 @@ int nova_check_integrity(struct super_block *sb,
 				"the redundant copy");
 			/* Try to auto-recover the super block */
 			if (sb)
-				nova_memunlock_super(sb, super);
+				nova_memunlock_super(sb);
 			memcpy(super, super_redund,
 				sizeof(struct nova_super_block));
 			if (sb)
-				nova_memlock_super(sb, super);
+				nova_memlock_super(sb);
 			nova_flush_buffer(super, sizeof(*super), false);
-			nova_flush_buffer((char *)super + NOVA_SB_SIZE,
-				sizeof(*super), false);
+			nova_flush_buffer(super_redund, sizeof(*super), false);
 		}
 	}
 

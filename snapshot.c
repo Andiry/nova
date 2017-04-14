@@ -955,9 +955,9 @@ int nova_create_snapshot(struct super_block *sb)
 
 	super = nova_get_super(sb);
 
-	nova_memunlock_super(sb, super);
+	nova_memunlock_super(sb);
 	super->s_epoch_id = cpu_to_le64(epoch_id);
-	nova_memlock_super(sb, super);
+	nova_memlock_super(sb);
 	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
 out:
