@@ -108,7 +108,7 @@ static void nova_set_blocksize(struct super_block *sb, unsigned long size)
 	sb->s_blocksize = (1 << bits);
 }
 
-static int nova_get_block_info(struct super_block *sb,
+static int nova_get_nvmm_info(struct super_block *sb,
 	struct nova_sb_info *sbi)
 {
 	void *virt_addr = NULL;
@@ -508,7 +508,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	if (nova_get_block_info(sb, sbi))
+	if (nova_get_nvmm_info(sb, sbi))
 		goto out;
 
 	nova_dbg("measure timing %d, replica metadata %d, "
