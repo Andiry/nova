@@ -910,6 +910,8 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 		next_page = nova_get_block_off(sb, next_blocknr,
 				NOVA_BLOCK_TYPE_4K);
 		nova_memunlock_block(sb, curr_page);
+		nova_set_page_num_entries(sb, curr_page, 0, 0);
+		nova_set_page_invalid_entries(sb, curr_page, 0, 0);
 		nova_set_next_page_address(sb, curr_page, next_page, 0);
 		nova_memlock_block(sb, curr_page);
 		curr_page++;
@@ -918,6 +920,8 @@ static int nova_coalesce_log_pages(struct super_block *sb,
 
 	/* Last page */
 	nova_memunlock_block(sb, curr_page);
+	nova_set_page_num_entries(sb, curr_page, 0, 0);
+	nova_set_page_invalid_entries(sb, curr_page, 0, 0);
 	nova_set_next_page_address(sb, curr_page, 0, 1);
 	nova_memlock_block(sb, curr_page);
 	return 0;

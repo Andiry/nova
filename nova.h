@@ -1390,18 +1390,20 @@ static inline void nova_set_next_page_address(struct super_block *sb,
 }
 
 static inline void nova_set_page_num_entries(struct super_block *sb,
-	struct nova_inode_log_page *curr_page, int num)
+	struct nova_inode_log_page *curr_page, int num, int flush)
 {
 	curr_page->page_tail.num_entries = num;
-	nova_flush_buffer(&curr_page->page_tail,
+	if (flush)
+		nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
 }
 
 static inline void nova_set_page_invalid_entries(struct super_block *sb,
-	struct nova_inode_log_page *curr_page, int num)
+	struct nova_inode_log_page *curr_page, int num, int flush)
 {
 	curr_page->page_tail.invalid_entries = num;
-	nova_flush_buffer(&curr_page->page_tail,
+	if (flush)
+		nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
 }
 
