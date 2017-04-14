@@ -38,7 +38,7 @@ static inline void nova_sync_super(struct super_block *sb,
 			NOVA_SB_STATIC_SIZE(ps) - sizeof(__le16));
 	ps->s_sum = cpu_to_le16(crc);
 	/* Keep sync redundant super block */
-	memcpy((void *)super_redund, (void *)ps,
+	memcpy_to_pmem_nocache((void *)super_redund, (void *)ps,
 		sizeof(struct nova_super_block));
 }
 

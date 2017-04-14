@@ -367,12 +367,11 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	epoch_id = nova_get_epoch_id(sb);
 
-	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
+	nova_memunlock_range(sb, super, NOVA_SB_SIZE);
 	nova_sync_super(sb, super);
 
 	nova_flush_buffer(super, NOVA_SB_SIZE, false);
-	nova_flush_buffer((char *)super + NOVA_SB_SIZE, sizeof(*super), false);
-	nova_memlock_range(sb, super, NOVA_SB_SIZE*2);
+	nova_memlock_range(sb, super, NOVA_SB_SIZE);
 
 	nova_dbgv("Allocate root inode\n");
 	root_i = nova_get_inode_by_ino(sb, NOVA_ROOT_INO);

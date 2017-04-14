@@ -848,8 +848,6 @@ struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
 	return &sbi->free_lists[cpu];
 }
 
-#include "mprotect.h"
-
 static inline u64 nova_get_epoch_id(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -989,6 +987,8 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 
 	return ret;
 }
+
+#include "mprotect.h"
 
 /* assumes the length to be 4-byte aligned */
 static inline void memset_nt(void *dest, uint32_t dword, size_t length)
