@@ -184,8 +184,9 @@ struct nova_lite_journal_entry {
 #define	PAGE_TAIL(p)	(BLOCK_OFF(p) + LAST_ENTRY)
 
 struct nova_inode_page_tail {
+	__le32	invalid_entries;
+	__le32	num_entries;
 	__le64	epoch_id;	/* For snapshot list page */
-	__le64	padding2;
 	__le64	alter_page;	/* Corresponding page in the other log */
 	__le64	next_page;
 } __attribute((__packed__));
@@ -1386,6 +1387,50 @@ static inline void nova_set_next_page_address(struct super_block *sb,
 				sizeof(struct nova_inode_page_tail), 0);
 	if (fence)
 		PERSISTENT_BARRIER();
+}
+
+static inline void nova_set_page_num_entries(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, int num)
+{
+	curr_page->page_tail.num_entries = num;
+	nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
+}
+
+static inline void nova_set_page_invalid_entries(struct super_block *sb,
+	struct nova_inode_log_page *curr_page, int num)
+{
+	curr_page->page_tail.invalid_entries = num;
+	nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
+}
+
+static inline void nova_inc_page_num_entries(struct super_block *sb,
+	struct nova_inode_log_page *curr_page)
+{
+	curr_page->page_tail.num_entries++;
+	nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
+}
+
+static inline void nova_inc_page_invalid_entries(struct super_block *sb,
+	struct nova_inode_log_page *curr_page)
+{
+	curr_page->page_tail.invalid_entries++;
+	nova_flush_buffer(&curr_page->page_tail,
+				sizeof(struct nova_inode_page_tail), 0);
+}
+
+static inline int nova_page_num_entries(struct super_block *sb,
+	struct nova_inode_log_page *curr_page)
+{
+	return le32_to_cpu(curr_page->page_tail.num_entries);
+}
+
+static inline int nova_page_invalid_entries(struct super_block *sb,
+	struct nova_inode_log_page *curr_page)
+{
+	return le32_to_cpu(curr_page->page_tail.invalid_entries);
 }
 
 static inline void nova_set_alter_page_address(struct super_block *sb,
