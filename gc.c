@@ -93,30 +93,13 @@ static bool curr_page_invalid(struct super_block *sb,
 {
 	struct nova_inode_log_page *curr_page;
 	struct nova_inode_page_tail page_tail;
-	u64 curr_p = page_head;
 	unsigned int num_entries;
 	unsigned int invalid_entries;
-	bool ret = true;
-	size_t length;
+	bool ret;
 	timing_t check_time;
 	int rc;
 
 	NOVA_START_TIMING(check_invalid_t, check_time);
-	while (curr_p < page_head + LAST_ENTRY) {
-		if (curr_p == 0) {
-			nova_err(sb, "File inode %lu log is NULL!\n",
-					sih->ino);
-			BUG();
-		}
-
-		length = 0;
-		if (!curr_log_entry_invalid(sb, pi, sih, curr_p, &length)) {
-			sih->valid_bytes += length;
-			ret = false;
-		}
-
-		curr_p += length;
-	}
 
 	curr_page = (struct nova_inode_log_page *)
 					nova_get_block(sb, page_head);
@@ -131,13 +114,8 @@ static bool curr_page_invalid(struct super_block *sb,
 	num_entries = le32_to_cpu(page_tail.num_entries);
 	invalid_entries = le32_to_cpu(page_tail.invalid_entries);
 
-	if (ret) {
-		if (invalid_entries != num_entries) {
-			nova_dbg("Fast GC check: Page 0x%llx has %u entries, "
-				" %u invalid\n", page_head,
-				num_entries, invalid_entries);
-		}
-	} else {
+	ret = (invalid_entries == num_entries);
+	if (!ret) {
 		sih->num_entries += num_entries;
 		sih->valid_entries += num_entries - invalid_entries;
 	}
@@ -589,7 +567,6 @@ int nova_inode_log_fast_gc(struct super_block *sb,
 	NOVA_START_TIMING(fast_gc_t, gc_time);
 	curr = sih->log_head;
 	alter_curr = sih->alter_log_head;
-	sih->valid_bytes = 0;
 	sih->valid_entries = 0;
 	sih->num_entries = 0;
 
@@ -712,11 +689,15 @@ int nova_inode_log_fast_gc(struct super_block *sb,
 				nova_get_blocknr(sb, alter_curr, btype), 1);
 	}
 
-	blocks = sih->valid_bytes / LAST_ENTRY;
-	if (sih->valid_bytes % LAST_ENTRY)
-		blocks++;
-
 	NOVA_END_TIMING(fast_gc_t, gc_time);
+
+	if (sih->num_entries == 0)
+		return 0;
+
+	/* Inaccurate count, correct later */
+	blocks = (sih->valid_entries * checked_pages) / sih->num_entries;
+	if ((sih->valid_entries * checked_pages) % sih->num_entries)
+		blocks++;
 
 	if (need_thorough_gc(sb, sih, blocks, checked_pages)) {
 		nova_dbgv("Thorough GC for inode %lu: checked pages %lu, "

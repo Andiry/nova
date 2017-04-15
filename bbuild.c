@@ -47,7 +47,6 @@ void nova_init_header(struct super_block *sb,
 	sih->num_vmas = 0;
 	INIT_LIST_HEAD(&sih->list);
 	sih->i_mode = i_mode;
-	sih->valid_bytes = 0;
 	sih->valid_entries = 0;
 	sih->num_entries = 0;
 	sih->last_setattr = 0;
