@@ -192,6 +192,8 @@ static int nova_seq_show_allocator(struct seq_file *seq, void *v)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct free_list *free_list;
 	int i;
+	unsigned long log_pages = 0;
+	unsigned long data_pages = 0;
 
 	seq_printf(seq, "======== NOVA per-CPU allocator stats ========\n");
 	for (i = 0; i < sbi->cpus; i++) {
@@ -234,7 +236,16 @@ static int nova_seq_show_allocator(struct seq_file *seq, void *v)
 			free_list->freed_log_pages,
 			free_list->free_data_count,
 			free_list->freed_data_pages);
+
+		log_pages += free_list->alloc_log_pages;
+		log_pages -= free_list->freed_log_pages;
+
+		data_pages += free_list->alloc_data_pages;
+		data_pages -= free_list->freed_data_pages;
 	}
+
+	seq_printf(seq, "\nCurrently used pmem pages: log %lu, data %lu\n",
+			log_pages, data_pages);
 
 	return 0;
 }
