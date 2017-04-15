@@ -425,6 +425,7 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	entry_info.type = DIR_LOG;
 	entry_info.link_change = link_change;
 	entry_info.epoch_id = epoch_id;
+	entry_info.inplace = 1;
 
 	return nova_inplace_update_log_entry(sb, dir, dentry,
 					&entry_info);

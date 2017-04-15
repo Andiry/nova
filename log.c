@@ -267,7 +267,7 @@ static int nova_update_dentry(struct super_block *sb,
 	int link_change = entry_info->link_change;
 
 	dentry->epoch_id = entry_info->epoch_id;
-	/* Only used for remove_dentry */
+	/* Remove_dentry */
 	dentry->ino = cpu_to_le64(0);
 	dentry->invalid = 1;
 	dentry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
