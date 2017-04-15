@@ -491,8 +491,10 @@ void nova_print_curr_log_page(struct super_block *sb, u64 curr)
 	}
 
 	tail = nova_get_block(sb, end);
-	nova_dbg("Page tail. curr 0x%llx, next page 0x%llx\n",
-			start, tail->next_page);
+	nova_dbg("Page tail. curr 0x%llx, next page 0x%llx, "
+			"%u entries, %u invalid\n",
+			start, tail->next_page,
+			tail->num_entries, tail->invalid_entries);
 }
 
 void nova_print_nova_log(struct super_block *sb,
@@ -510,8 +512,11 @@ void nova_print_nova_log(struct super_block *sb,
 		if ((curr & (PAGE_SIZE - 1)) == LAST_ENTRY) {
 			struct nova_inode_page_tail *tail =
 					nova_get_block(sb, curr);
-			nova_dbg("Log tail, curr 0x%llx, next page 0x%llx\n",
-					curr, tail->next_page);
+			nova_dbg("Log tail, curr 0x%llx, next page 0x%llx, "
+					"%u entries, %u invalid\n",
+					curr, tail->next_page,
+					tail->num_entries,
+					tail->invalid_entries);
 			curr = tail->next_page;
 		} else {
 			curr = nova_print_log_entry(sb, curr);
@@ -569,8 +574,11 @@ void nova_print_nova_log_pages(struct super_block *sb,
 			sih->ino, curr, sih->log_tail);
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
 	while ((next = curr_page->page_tail.next_page) != 0) {
-		nova_dbg("Current page 0x%llx, next page 0x%llx\n",
-			curr >> PAGE_SHIFT, next >> PAGE_SHIFT);
+		nova_dbg("Current page 0x%llx, next page 0x%llx, "
+			"%u entries, %u invalid\n",
+			curr >> PAGE_SHIFT, next >> PAGE_SHIFT,
+			curr_page->page_tail.num_entries,
+			curr_page->page_tail.invalid_entries);
 		if (sih->log_tail >> PAGE_SHIFT == curr >> PAGE_SHIFT)
 			used = count;
 		curr = next;
