@@ -258,7 +258,7 @@ static int nova_update_write_entry(struct super_block *sb,
 	return 0;
 }
 
-static int nova_inplace_update_dentry(struct super_block *sb,
+static int nova_update_old_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry,
 	struct nova_log_entry_info *entry_info)
 {
@@ -335,7 +335,7 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 			break;
 		case DIR_LOG:
 			if (entry_info->inplace)
-				nova_inplace_update_dentry(sb, inode, entry,
+				nova_update_old_dentry(sb, inode, entry,
 					entry_info);
 			else
 				nova_update_new_dentry(sb, inode, entry,
