@@ -24,18 +24,28 @@
 #include "nova.h"
 
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, u64 log_block,
-	unsigned long name_blocknr, const char *symname, int len, u64 epoch_id)
+	struct inode *inode, const char *symname, int len, u64 epoch_id)
 {
-	struct nova_file_write_entry *entry, *alter_entry;
+	struct nova_file_write_entry entry_data;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_inode_log_page *log1_page;
 	struct nova_inode_update update;
-	size_t length = sizeof(struct nova_file_write_entry);
-	u64 block, block1, block2;
-	u32 time;
+	unsigned long name_blocknr = 0;
+	int allocated;
+	u64 block;
 	char *blockp;
+	u32 time;
+	int ret;
+
+	update.tail = sih->log_tail;
+	update.alter_tail = sih->alter_log_tail;
+
+	allocated = nova_new_data_blocks(sb, sih, &name_blocknr, 0, 1, 1,
+						ANY_CPU, 0);
+	if (allocated != 1 || name_blocknr == 0) {
+		ret = allocated;
+		return ret;
+	}
 
 	/* First copy name to name block */
 	block = nova_get_block_off(sb, name_blocknr, NOVA_BLOCK_TYPE_4K);
@@ -46,57 +56,20 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	blockp[len] = '\0';
 	nova_memlock_block(sb, blockp);
 
-	/* Apply a write entry to the start of log page */
-	block1 = log_block;
-	entry = (struct nova_file_write_entry *)nova_get_block(sb, block1);
-
-	nova_memunlock_block(sb, entry);
-	entry->entry_type = FILE_WRITE;
-	entry->epoch_id = epoch_id;
-	entry->pgoff = 0;
-	entry->num_pages = cpu_to_le32(1);
-	entry->invalid_pages = 0;
-	entry->block = cpu_to_le64(nova_get_block_off(sb, name_blocknr,
-							NOVA_BLOCK_TYPE_4K));
+	/* Apply a write entry to the log page */
 	time = CURRENT_TIME_SEC.tv_sec;
-	entry->mtime = cpu_to_le32(time);
-	entry->size = cpu_to_le64(len + 1);
-	nova_update_entry_csum(entry);
+	nova_init_file_write_entry(sb, sih, &entry_data, epoch_id, 0, 1,
+					name_blocknr, time, len + 1);
 
-	nova_memlock_block(sb, entry);
-
-	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
-	sih->log_head = block1;
-	update.tail = block1 + length;
-
-	update.alter_tail = 0;
-	if (replica_metadata) {
-		block2 = next_log_page(sb, block1);
-		log1_page = (struct nova_inode_log_page *)nova_get_block(sb,
-							block1);
-		nova_memunlock_block(sb, log1_page);
-		nova_set_next_page_address(sb, log1_page, 0, 1);
-
-		alter_entry = (struct nova_file_write_entry *)nova_get_block(sb,
-							block2);
-		memcpy_to_pmem_nocache(alter_entry, entry, length);
-		nova_update_alter_pages(sb, pi, block1, block2);
-		pi->alter_log_head = block2;
-		nova_memlock_block(sb, log1_page);
-		sih->alter_log_head = block2;
-		update.alter_tail = block2 + length;
-	}
-
-	sih->log_pages = 1;
-	sih->i_blocks = 2;
-
-	if (replica_metadata) {
-		sih->log_pages++;
-		sih->i_blocks++;
+	ret = nova_append_file_write_entry(sb, pi, inode, &entry_data, &update);
+	if (ret) {
+		nova_dbg("%s: append file write entry failed %d\n",
+					__func__, ret);
+		nova_free_data_blocks(sb, sih, name_blocknr, 1);
+		return ret;
 	}
 
 	nova_memunlock_inode(sb, pi);
-	pi->log_head = block1;
 	nova_update_inode(sb, inode, pi, &update, 1);
 	nova_memlock_inode(sb, pi);
 

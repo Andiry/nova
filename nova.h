@@ -404,11 +404,6 @@ static inline void nova_update_alter_tail(struct nova_inode *pi, u64 new_tail)
 	NOVA_END_TIMING(update_tail_t, update_time);
 }
 
-/* symlink.c */
-int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, u64 log_block,
-	unsigned long name_blocknr, const char *symname, int len, u64 epoch_id);
-
 /* Inline functions start here */
 
 /* Mask out flags that are inappropriate for the given type of inode. */
@@ -1903,6 +1898,8 @@ void *nova_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 	ssize_t size);
 
 /* symlink.c */
+int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, const char *symname, int len, u64 epoch_id);
 extern const struct inode_operations nova_symlink_inode_operations;
 
 /* sysfs.c */

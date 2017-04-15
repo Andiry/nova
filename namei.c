@@ -223,10 +223,6 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	struct nova_inode_info_header *sih;
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
-	u64 log_block = 0;
-	unsigned long name_blocknr = 0;
-	int allocated;
-	int num_logs;
 	struct nova_inode_update update;
 	u64 ino;
 	u64 epoch_id;
@@ -238,12 +234,12 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 
 	pidir = nova_get_inode(sb, dir);
 	if (!pidir)
-		goto out_fail1;
+		goto out_fail;
 
 	epoch_id = nova_get_epoch_id(sb);
 	ino = nova_new_nova_inode(sb, &pi_addr);
 	if (ino == 0)
-		goto out_fail1;
+		goto out_fail;
 
 	nova_dbgv("%s: name %s, symname %s\n", __func__,
 				dentry->d_name.name, symname);
@@ -253,41 +249,24 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	update.alter_tail = 0;
 	err = nova_add_dentry(dentry, ino, 0, &update, epoch_id);
 	if (err)
-		goto out_fail1;
+		goto out_fail;
 
 	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino,
 					S_IFLNK|S_IRWXUGO, len, 0,
 					&dentry->d_name, epoch_id);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
-		goto out_fail1;
+		goto out_fail;
 	}
 
 	pi = nova_get_inode(sb, inode);
 
-	num_logs = 1;
-	if (replica_metadata)
-		num_logs = 2;
-
 	si = NOVA_I(inode);
 	sih = &si->header;
 
-	allocated = nova_allocate_inode_log_pages(sb, sih,
-					num_logs, &log_block, ANY_CPU, 0);
-	if (allocated != num_logs || log_block == 0) {
-		err = allocated;
-		goto out_fail1;
-	}
-
-	allocated = nova_new_data_blocks(sb, sih, &name_blocknr, 0, 1, 1,
-						ANY_CPU, 0);
-	if (allocated != 1 || name_blocknr == 0) {
-		err = allocated;
-		goto out_fail2;
-	}
-
-	nova_block_symlink(sb, pi, inode, log_block, name_blocknr,
-				symname, len, epoch_id);
+	err = nova_block_symlink(sb, pi, inode, symname, len, epoch_id);
+	if (err)
+		goto out_fail;
 
 	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
@@ -298,9 +277,7 @@ out:
 	NOVA_END_TIMING(symlink_t, symlink_time);
 	return err;
 
-out_fail2:
-	nova_free_log_blocks(sb, sih, log_block >> PAGE_SHIFT, 2);
-out_fail1:
+out_fail:
 	nova_err(sb, "%s return %d\n", __func__, err);
 	goto out;
 }
