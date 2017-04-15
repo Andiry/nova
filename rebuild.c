@@ -250,7 +250,7 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 	int ret = 0;
 
 	if (data_csum == 0 && data_parity == 0)
-		goto out;
+		return 0;
 
 	ret = memcpy_from_pmem(&fake_entry, entry, size);
 	if (ret < 0)
@@ -258,16 +258,14 @@ static int nova_reset_mmap_csum_parity(struct super_block *sb,
 
 	if (fake_entry.invalid == 1) {
 		/* Dead entry */
-		goto out;
+		return 0;
 	}
 
 	end_pgoff = fake_entry.pgoff + fake_entry.num_pages;
 	nova_reset_csum_parity_range(sb, sih, NULL, fake_entry.pgoff,
 			end_pgoff, 0, 0);
 
-out:
-	if (ret == 0)
-		ret = nova_invalidate_logentry(sb, entry, MMAP_WRITE, 0);
+	ret = nova_invalidate_logentry(sb, entry, MMAP_WRITE, 0);
 
 	return ret;
 }

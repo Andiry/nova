@@ -1417,10 +1417,13 @@ static inline void nova_inc_page_num_entries(struct super_block *sb,
 				sizeof(struct nova_inode_page_tail), 0);
 }
 
+u64 nova_print_log_entry(struct super_block *sb, u64 curr);
+
 static inline void nova_inc_page_invalid_entries(struct super_block *sb,
 	u64 curr)
 {
 	struct nova_inode_log_page *curr_page;
+	u64 old_curr = curr;
 
 	curr = BLOCK_OFF(curr);
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
@@ -1432,6 +1435,7 @@ static inline void nova_inc_page_invalid_entries(struct super_block *sb,
 				curr,
 				curr_page->page_tail.num_entries,
 				curr_page->page_tail.invalid_entries);
+		nova_print_log_entry(sb, old_curr);
 	}
 
 	nova_flush_buffer(&curr_page->page_tail,
@@ -1926,7 +1930,6 @@ void nova_get_IO_stats(void);
 void nova_print_timing_stats(struct super_block *sb);
 void nova_clear_stats(struct super_block *sb);
 void nova_print_inode(struct nova_inode *pi);
-u64 nova_print_log_entry(struct super_block *sb, u64 curr);
 void nova_print_inode_log(struct super_block *sb, struct inode *inode);
 void nova_print_inode_log_pages(struct super_block *sb, struct inode *inode);
 int nova_check_inode_logs(struct super_block *sb, struct nova_inode *pi);
