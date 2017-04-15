@@ -147,7 +147,8 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	struct nova_dentry *de_entry, u64 self_ino, u64 parent_ino,
 	u64 epoch_id)
 {
-	struct nova_dentry *start = de_entry;
+	void *start = de_entry;
+	struct nova_inode_log_page *curr_page = start;
 	unsigned int length;
 	unsigned short de_len;
 
@@ -180,6 +181,8 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	strncpy(de_entry->name, "..\0", 3);
 	nova_update_entry_csum(de_entry);
 	length += de_len;
+
+	nova_set_page_num_entries(sb, curr_page, 2, 1);
 
 	nova_flush_buffer(start, length, 0);
 	return length;

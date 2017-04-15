@@ -21,34 +21,50 @@ static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
 {
+	struct nova_file_write_entry *fw_entry;
+	int invalid = 0;
+
 	switch (type) {
 		case FILE_WRITE:
+			fw_entry = (struct nova_file_write_entry *)entry;
 			if (reassign)
-				((struct nova_file_write_entry *)entry)->reassigned = 1;
+				fw_entry->reassigned = 1;
 			if (num_free)
-				((struct nova_file_write_entry *)entry)->invalid_pages
-							+= num_free;
+				fw_entry->invalid_pages += num_free;
+			if (fw_entry->invalid_pages == fw_entry->num_pages)
+				invalid = 1;
 			break;
 		case DIR_LOG:
-			if (reassign)
+			if (reassign) {
 				((struct nova_dentry *)entry)->reassigned = 1;
-			else
+			} else {
 				((struct nova_dentry *)entry)->invalid = 1;
+				invalid = 1;
+			}
 			break;
 		case SET_ATTR:
 			((struct nova_setattr_logentry *)entry)->invalid = 1;
+			invalid = 1;
 			break;
 		case LINK_CHANGE:
 			((struct nova_link_change_entry *)entry)->invalid = 1;
+			invalid = 1;
 			break;
 		case MMAP_WRITE:
 			((struct nova_mmap_entry *)entry)->invalid = 1;
+			invalid = 1;
 			break;
 		case SNAPSHOT_INFO:
 			((struct nova_snapshot_info_entry *)entry)->deleted = 1;
+			invalid = 1;
 			break;
 		default:
 			break;
+	}
+
+	if (invalid) {
+		u64 addr = nova_get_addr_off(NOVA_SB(sb), entry);
+		nova_inc_page_invalid_entries(sb, addr);
 	}
 
 	nova_update_entry_csum(entry);
@@ -264,6 +280,7 @@ static int nova_update_old_dentry(struct super_block *sb,
 {
 	unsigned short links_count;
 	int link_change = entry_info->link_change;
+	u64 addr;
 
 	dentry->epoch_id = entry_info->epoch_id;
 	/* Remove_dentry */
@@ -277,6 +294,9 @@ static int nova_update_old_dentry(struct super_block *sb,
 	else
 		links_count += link_change;
 	dentry->links_count = cpu_to_le16(links_count);
+
+	addr = nova_get_addr_off(NOVA_SB(sb), dentry);
+	nova_inc_page_invalid_entries(sb, addr);
 
 	/* Update checksum */
 	nova_update_entry_csum(dentry);
@@ -398,6 +418,7 @@ static int nova_append_log_entry(struct super_block *sb,
 	nova_memunlock_range(sb, entry, size);
 	memset(entry, 0, size);
 	nova_update_log_entry(sb, inode, entry, entry_info);
+	nova_inc_page_num_entries(sb, curr_p);
 	nova_memlock_range(sb, entry, size);
 	update->curr_entry = curr_p;
 	update->tail = curr_p + size;

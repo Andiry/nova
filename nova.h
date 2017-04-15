@@ -1404,17 +1404,36 @@ static inline void nova_set_page_invalid_entries(struct super_block *sb,
 }
 
 static inline void nova_inc_page_num_entries(struct super_block *sb,
-	struct nova_inode_log_page *curr_page)
+	u64 curr)
 {
+	struct nova_inode_log_page *curr_page;
+
+	curr = BLOCK_OFF(curr);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
+
 	curr_page->page_tail.num_entries++;
 	nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
 }
 
 static inline void nova_inc_page_invalid_entries(struct super_block *sb,
-	struct nova_inode_log_page *curr_page)
+	u64 curr)
 {
+	struct nova_inode_log_page *curr_page;
+	u64 old_curr = curr;
+
+	curr = BLOCK_OFF(curr);
+	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
+
 	curr_page->page_tail.invalid_entries++;
+	if (curr_page->page_tail.invalid_entries >
+			curr_page->page_tail.num_entries) {
+		nova_dbg("Page 0x%llx has %u entries, %u invalid\n",
+				curr,
+				curr_page->page_tail.num_entries,
+				curr_page->page_tail.invalid_entries);
+	}
+
 	nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
 }

@@ -91,6 +91,7 @@ static bool curr_page_invalid(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 page_head)
 {
+	struct nova_inode_log_page *curr_page;
 	u64 curr_p = page_head;
 	bool ret = true;
 	size_t length;
@@ -111,6 +112,18 @@ static bool curr_page_invalid(struct super_block *sb,
 		}
 
 		curr_p += length;
+	}
+
+	if (ret) {
+		curr_page = (struct nova_inode_log_page *)
+					nova_get_block(sb, page_head);
+		if (curr_page->page_tail.invalid_entries !=
+				curr_page->page_tail.num_entries) {
+			nova_dbg("1Page 0x%llx has %u entries, %u invalid\n",
+				page_head,
+				curr_page->page_tail.num_entries,
+				curr_page->page_tail.invalid_entries);
+		}
 	}
 
 	NOVA_END_TIMING(check_invalid_t, check_time);
@@ -346,6 +359,7 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 			nova_memunlock_block(sb, nova_get_block(sb, new_curr));
 			memcpy_to_pmem_nocache(nova_get_block(sb, new_curr),
 				nova_get_block(sb, curr_p), length);
+			nova_inc_page_num_entries(sb, new_curr);
 			nova_memlock_block(sb, nova_get_block(sb, new_curr));
 			nova_gc_assign_new_entry(sb, pi, sih, curr_p, new_curr);
 			new_curr += length;
