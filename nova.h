@@ -315,10 +315,11 @@ struct nova_log_entry_info {
 	enum nova_entry_type type;
 	struct iattr *attr;
 	struct nova_inode_update *update;
-	void *data;
+	void *data;	/* struct dentry */
 	u64 epoch_id;
 	u64 curr_p;	/* output */
-	u64 file_size;
+	u64 file_size;	/* de_len for dentry */
+	u64 ino;
 	u32 time;
 	int link_change;
 	int inplace;	/* For file write entry */
@@ -1695,6 +1696,10 @@ int nova_insert_dir_radix_tree(struct super_block *sb,
 int nova_remove_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name, int namelen,
 	int replay, struct nova_dentry **create_dentry);
+int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *dir, struct dentry *dentry, u64 ino,
+	unsigned short de_len, struct nova_inode_update *update,
+	int link_change, u64 epoch_id);
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 epoch_id);
 int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,

@@ -143,100 +143,6 @@ void nova_delete_dir_tree(struct super_block *sb,
 
 /* ========================= Entry operations ============================= */
 
-static void nova_append_dentry(struct inode *dir, struct dentry *dentry,
-	struct nova_dentry *entry, u64 ino, unsigned short de_len,
-	int link_change, u64 epoch_id)
-{
-	struct super_block *sb = dir->i_sb;
-	unsigned short links_count;
-
-	nova_memunlock_range(sb, dentry, de_len);
-	memset(entry, 0, de_len);
-	entry->entry_type = DIR_LOG;
-	entry->epoch_id = epoch_id;
-	entry->ino = cpu_to_le64(ino);
-	entry->name_len = dentry->d_name.len;
-	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
-				dentry->d_name.len);
-	entry->name[dentry->d_name.len] = '\0';
-	entry->reassigned = 0;
-	entry->invalid = 0;
-	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-	entry->size = cpu_to_le64(dir->i_size);
-
-	links_count = cpu_to_le16(dir->i_nlink);
-	if (links_count == 0 && link_change == -1)
-		links_count = 0;
-	else
-		links_count += link_change;
-	entry->links_count = cpu_to_le16(links_count);
-
-	/* Update actual de_len */
-	entry->de_len = cpu_to_le16(de_len);
-
-	/* Update checksum */
-	nova_update_entry_csum(entry);
-
-	nova_dbg_verbose("dir entry: ino %llu, entry len %u, "
-			"name len %u, reassigned %u, csum 0x%x\n",
-			entry->ino, entry->de_len,
-			entry->name_len, entry->reassigned, entry->csum);
-
-	nova_memlock_range(sb, dentry, de_len);
-	nova_flush_buffer(entry, de_len, 0);
-}
-
-/* Append a nova_dentry to the current nova_inode_log_page. */
-static int nova_append_dir_inode_entry(struct super_block *sb,
-	struct nova_inode *pidir, struct inode *dir,
-	u64 ino, struct dentry *dentry, unsigned short de_len,
-	struct nova_inode_update *update,
-	int link_change, u64 epoch_id)
-{
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = &si->header;
-	struct nova_dentry *entry;
-	u64 curr_p;
-	size_t size = de_len;
-	int extended = 0;
-	timing_t append_time;
-
-	NOVA_START_TIMING(append_dir_entry_t, append_time);
-
-	curr_p = nova_get_append_head(sb, pidir, sih, update->tail, size,
-						MAIN_LOG, 0, &extended);
-	if (curr_p == 0)
-		return -ENOSPC;
-
-	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
-
-	nova_append_dentry(dir, dentry, entry, ino, de_len,
-						link_change, epoch_id);
-	update->curr_entry = curr_p;
-	update->tail = update->curr_entry + de_len;
-
-	if (replica_metadata == 0)
-		goto out;
-
-	curr_p = nova_get_append_head(sb, pidir, sih, update->alter_tail,
-						size, ALTER_LOG, 0, &extended);
-	if (curr_p == 0)
-		return -ENOSPC;
-
-	entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
-
-	nova_append_dentry(dir, dentry, entry, ino, de_len,
-						link_change, epoch_id);
-	update->alter_entry = curr_p;
-
-	update->alter_tail = update->alter_entry + de_len;
-
-out:
-	dir->i_blocks = sih->i_blocks;
-	NOVA_END_TIMING(append_dir_entry_t, append_time);
-	return 0;
-}
-
 static unsigned int nova_init_dentry(struct super_block *sb,
 	struct nova_dentry *de_entry, u64 self_ino, u64 parent_ino,
 	u64 epoch_id)
@@ -389,8 +295,8 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
 	loglen = NOVA_DIR_LOG_REC_LEN(namelen);
-	ret = nova_append_dir_inode_entry(sb, pidir, dir, ino,
-				dentry,	loglen, update,
+	ret = nova_append_dentry(sb, pidir, dir, dentry,
+				ino, loglen, update,
 				inc_link, epoch_id);
 
 	if (ret) {
@@ -486,8 +392,8 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	}
 
 	loglen = NOVA_DIR_LOG_REC_LEN(entry->len);
-	ret = nova_append_dir_inode_entry(sb, pidir, dir, 0,
-				dentry, loglen, update,
+	ret = nova_append_dentry(sb, pidir, dir, dentry,
+				0, loglen, update,
 				dec_link, epoch_id);
 
 	if (ret) {
