@@ -591,6 +591,8 @@ struct nova_inode_info_header {
 	unsigned long low_dirty;	/* Mmap dirty low range */
 	unsigned long high_dirty;	/* Mmap dirty high range */
 	unsigned long valid_bytes;	/* For thorough GC */
+	unsigned long valid_entries;	/* For thorough GC */
+	unsigned long num_entries;	/* For thorough GC */
 	u64 last_setattr;		/* Last setattr entry */
 	u64 last_link_change;		/* Last link change entry */
 	u64 last_dentry;		/* Last updated dentry */
@@ -1420,7 +1422,6 @@ static inline void nova_inc_page_invalid_entries(struct super_block *sb,
 	u64 curr)
 {
 	struct nova_inode_log_page *curr_page;
-	u64 old_curr = curr;
 
 	curr = BLOCK_OFF(curr);
 	curr_page = (struct nova_inode_log_page *)nova_get_block(sb, curr);
@@ -1436,18 +1437,6 @@ static inline void nova_inc_page_invalid_entries(struct super_block *sb,
 
 	nova_flush_buffer(&curr_page->page_tail,
 				sizeof(struct nova_inode_page_tail), 0);
-}
-
-static inline int nova_page_num_entries(struct super_block *sb,
-	struct nova_inode_log_page *curr_page)
-{
-	return le32_to_cpu(curr_page->page_tail.num_entries);
-}
-
-static inline int nova_page_invalid_entries(struct super_block *sb,
-	struct nova_inode_log_page *curr_page)
-{
-	return le32_to_cpu(curr_page->page_tail.invalid_entries);
 }
 
 static inline void nova_set_alter_page_address(struct super_block *sb,

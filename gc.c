@@ -92,10 +92,14 @@ static bool curr_page_invalid(struct super_block *sb,
 	u64 page_head)
 {
 	struct nova_inode_log_page *curr_page;
+	struct nova_inode_page_tail page_tail;
 	u64 curr_p = page_head;
+	unsigned int num_entries;
+	unsigned int invalid_entries;
 	bool ret = true;
 	size_t length;
 	timing_t check_time;
+	int rc;
 
 	NOVA_START_TIMING(check_invalid_t, check_time);
 	while (curr_p < page_head + LAST_ENTRY) {
@@ -114,16 +118,28 @@ static bool curr_page_invalid(struct super_block *sb,
 		curr_p += length;
 	}
 
-	if (ret) {
-		curr_page = (struct nova_inode_log_page *)
+	curr_page = (struct nova_inode_log_page *)
 					nova_get_block(sb, page_head);
-		if (curr_page->page_tail.invalid_entries !=
-				curr_page->page_tail.num_entries) {
-			nova_dbg("1Page 0x%llx has %u entries, %u invalid\n",
-				page_head,
-				curr_page->page_tail.num_entries,
-				curr_page->page_tail.invalid_entries);
+	rc = memcpy_from_pmem(&page_tail, &curr_page->page_tail,
+					sizeof(struct nova_inode_page_tail));
+	if (rc) {
+		/* FIXME: Recover use replica log */
+		nova_err(sb, "check page failed\n");
+		return false;
+	}
+
+	num_entries = le32_to_cpu(page_tail.num_entries);
+	invalid_entries = le32_to_cpu(page_tail.invalid_entries);
+
+	if (ret) {
+		if (invalid_entries != num_entries) {
+			nova_dbg("Fast GC check: Page 0x%llx has %u entries, "
+				" %u invalid\n", page_head,
+				num_entries, invalid_entries);
 		}
+	} else {
+		sih->num_entries += num_entries;
+		sih->valid_entries += num_entries - invalid_entries;
 	}
 
 	NOVA_END_TIMING(check_invalid_t, check_time);
@@ -574,6 +590,8 @@ int nova_inode_log_fast_gc(struct super_block *sb,
 	curr = sih->log_head;
 	alter_curr = sih->alter_log_head;
 	sih->valid_bytes = 0;
+	sih->valid_entries = 0;
+	sih->num_entries = 0;
 
 	num_logs = 1;
 	if (replica_metadata)
