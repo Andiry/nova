@@ -175,9 +175,11 @@ ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 	timing_t dax_read_time;
 
 	NOVA_START_TIMING(dax_read_t, dax_read_time);
-	inode_lock_shared(inode);
+	if (inplace_data_updates)
+		inode_lock_shared(inode);
 	res = do_dax_mapping_read(filp, buf, len, ppos);
-	inode_unlock_shared(inode);
+	if (inplace_data_updates)
+		inode_unlock_shared(inode);
 	NOVA_END_TIMING(dax_read_t, dax_read_time);
 	return res;
 }
