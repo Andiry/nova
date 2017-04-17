@@ -343,16 +343,22 @@ static int nova_initialize_snapshot_info(struct super_block *sb,
 	struct snapshot_list *list;
 	int i;
 	int ret;
+	timing_t init_snapshot_time;
+
+	NOVA_START_TIMING(init_snapshot_info_t, init_snapshot_time);
 
 	info = nova_alloc_snapshot_info(sb);
-	if (!info)
-		return -ENOMEM;
+	if (!info) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	info->lists = kzalloc(sbi->cpus * sizeof(struct snapshot_list),
 							GFP_KERNEL);
 
 	if (!info->lists) {
 		nova_free_snapshot_info(info);
+		ret = -ENOMEM;
 		goto fail;
 	}
 
@@ -368,7 +374,9 @@ static int nova_initialize_snapshot_info(struct super_block *sb,
 	}
 
 	*ret_info = info;
-	return 0;
+out:
+	NOVA_END_TIMING(init_snapshot_info_t, init_snapshot_time);
+	return ret;
 
 fail:
 	for (i = 0; i < sbi->cpus; i++) {
@@ -381,7 +389,7 @@ fail:
 	nova_free_snapshot_info(info);
 
 	*ret_info = NULL;
-	return -ENOMEM;
+	goto out;
 }
 
 static void nova_write_snapshot_list_entry(struct super_block *sb,

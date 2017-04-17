@@ -145,6 +145,7 @@ enum timing_category {
 	/* Snapshot */
 	snapshot_title_t,
 	create_snapshot_t,
+	init_snapshot_info_t,
 	delete_snapshot_t,
 	append_snapshot_file_t,
 	append_snapshot_inode_t,

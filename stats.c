@@ -146,6 +146,7 @@ const char *Timingstring[TIMING_NUM] =
 	/* Snapshot */
 	"=================== Snapshot ===================",
 	"create_snapshot",
+	"init_snapshot_info",
 	"delete_snapshot",
 	"append_snapshot_filedata",
 	"append_snapshot_inode",
