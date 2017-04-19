@@ -97,6 +97,9 @@ static u32 nova_calc_entry_csum(void *entry)
 	u32 csum = 0;
 	size_t entry_len, check_len;
 	void *csum_addr, *remain;
+	timing_t calc_time;
+
+	NOVA_START_TIMING(calc_entry_csum_t, calc_time);
 
 	/* Entry is checksummed excluding its csum field. */
 	type = nova_get_entry_type(entry);
@@ -155,6 +158,7 @@ static u32 nova_calc_entry_csum(void *entry)
 		}
 	}
 
+	NOVA_END_TIMING(calc_entry_csum_t, calc_time);
 	return csum;
 }
 

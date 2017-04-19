@@ -106,6 +106,7 @@ enum timing_category {
 	protect_memcpy_t,
 	protect_file_data_t,
 	verify_csum_t,
+	calc_entry_csum_t,
 	restore_data_t,
 	reset_mapping_t,
 	reset_vma_t,

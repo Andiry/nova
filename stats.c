@@ -107,6 +107,7 @@ const char *Timingstring[TIMING_NUM] =
 	"protect_memcpy",
 	"protect_file_data",
 	"verify_csum",
+	"calc_entry_csum",
 	"restore_file_data",
 	"reset_mapping",
 	"reset_vma",
