@@ -215,7 +215,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	struct super_block *sb = inode->i_sb;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode *pi;
-	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entry, entryd;
 	struct nova_file_write_entry entry_data;
 	struct nova_inode_update update;
 	unsigned long start_blk, end_blk;
@@ -279,6 +279,13 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 			if (start_blk >= end_blk)
 				break;
 		}
+
+		if (!nova_verify_entry_csum(sb, entry, &entryd)) {
+			nova_dbg("%s: nova entry checksum error\n", __func__);
+			ret = -EIO;
+			goto out;
+		}
+		entry = &entryd;
 
 		if (entry->epoch_id == epoch_id) {
 			/* Someone has done it for us. */

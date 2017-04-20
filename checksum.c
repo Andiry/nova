@@ -253,7 +253,7 @@ flush:
 }
 
 static bool is_entry_matched(struct super_block *sb, void *entry,
-	size_t *ret_size)
+	size_t *ret_size, void *entryd)
 {
 	u32 checksum;
 	u32 entry_csum;
@@ -261,7 +261,7 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 	bool match = false;
 	int ret;
 
-	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, NULL);
+	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, entryd);
 	if (ret)
 		return match;
 
@@ -280,7 +280,7 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 }
 
 static bool nova_try_alter_entry(struct super_block *sb, void *entry,
-	bool original_match)
+	bool original_match, void *entryd)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *alter_entry;
@@ -292,7 +292,7 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry,
 	alter_curr = alter_log_entry(sb, curr);
 	alter_entry = (void *)nova_get_block(sb, alter_curr);
 
-	match = is_entry_matched(sb, alter_entry, &size);
+	match = is_entry_matched(sb, alter_entry, &size, entryd);
 
 	if (!match) {
 		nova_dbg("%s failed\n", __func__);
@@ -334,12 +334,12 @@ int nova_update_alter_entry(struct super_block *sb, void *entry)
 }
 
 /* Verify the log entry checksum. */
-bool nova_verify_entry_csum(struct super_block *sb, void *entry)
+bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
 {
 	size_t size;
 	bool match;
 
-	match = is_entry_matched(sb, entry, &size);
+	match = is_entry_matched(sb, entry, &size, entryd);
 
 	if (replica_metadata == 0)
 		return match;
@@ -349,7 +349,7 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry)
 				"recover from the alternative entry.\n",
 				__func__);
 
-	match = nova_try_alter_entry(sb, entry, match);
+	match = nova_try_alter_entry(sb, entry, match, entryd);
 
 	return match;
 }

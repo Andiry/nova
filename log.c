@@ -117,6 +117,7 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 	unsigned long pgoff, unsigned int num_free,
 	bool delete_dead, u64 epoch_id)
 {
+	struct nova_file_write_entry entryd;
 	unsigned long old_nvmm;
 	int ret;
 	timing_t free_time;
@@ -125,7 +126,11 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 		return 0;
 
 	NOVA_START_TIMING(free_old_t, free_time);
-	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
+	if (!nova_verify_entry_csum(sb, entry, &entryd)) {
+		nova_dbg("%s: nova entry checksum error\n", __func__);
+		return -EIO;
+	}
+	old_nvmm = get_nvmm(sb, sih, &entryd, pgoff);
 
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
@@ -517,12 +522,17 @@ out:
 static int nova_invalidate_setattr_entry(struct super_block *sb,
 	u64 last_setattr)
 {
-	struct nova_setattr_logentry *old_entry;
+	struct nova_setattr_logentry *old_entry, old_entryd;
 	void *addr;
 	int ret;
 
 	addr = (void *)nova_get_block(sb, last_setattr);
 	old_entry = (struct nova_setattr_logentry *)addr;
+	if (!nova_verify_entry_csum(sb, old_entry, &old_entryd)) {
+		nova_dbg("%s: nova entry checksum error\n", __func__);
+		return -EIO;
+	}
+	old_entry = &old_entryd;
 	/* Do not invalidate setsize entries */
 	if (!old_entry_freeable(sb, old_entry->epoch_id) ||
 			(old_entry->attr & ATTR_SIZE))
@@ -534,6 +544,7 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 		return ret;
 	}
 
+	old_entry = (struct nova_setattr_logentry *)addr;
 	ret = nova_invalidate_logentry(sb, old_entry, SET_ATTR, 0);
 
 	return ret;
@@ -649,7 +660,7 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
-	struct nova_link_change_entry *old_entry;
+	struct nova_link_change_entry *old_entry, old_entryd;
 	void *addr;
 	int ret;
 
@@ -658,6 +669,11 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 
 	addr = (void *)nova_get_block(sb, old_link_change);
 	old_entry = (struct nova_link_change_entry *)addr;
+	if (!nova_verify_entry_csum(sb, old_entry, &old_entryd)) {
+		nova_dbg("%s: nova entry checksum error\n", __func__);
+		return -EIO;
+	}
+	old_entry = &old_entryd;
 	if (!old_entry_freeable(sb, old_entry->epoch_id))
 		return 0;
 
@@ -667,6 +683,7 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 		return ret;
 	}
 
+	old_entry = (struct nova_link_change_entry *)addr;
 	ret = nova_invalidate_logentry(sb, old_entry, LINK_CHANGE, 0);
 
 	return ret;

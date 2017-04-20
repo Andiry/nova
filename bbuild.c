@@ -1082,7 +1082,7 @@ again:
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
-		if (!nova_verify_entry_csum(sb, addr)) {
+		if (!nova_verify_entry_csum(sb, addr, NULL)) {
 			nova_err(sb, "%s: entry checksum fail "
 					"inode %llu entry addr 0x%llx\n",
 					__func__, ino, (u64)addr);

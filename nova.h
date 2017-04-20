@@ -1049,19 +1049,25 @@ void nova_print_nova_log_pages(struct super_block *sb,
 
 static inline unsigned long get_nvmm(struct super_block *sb,
 	struct nova_inode_info_header *sih,
-	struct nova_file_write_entry *pmem_data, unsigned long pgoff)
+	struct nova_file_write_entry *entry, unsigned long pgoff)
 {
+	/* entry is already verified before this call and resides in dram
+	 * or we can do memcpy_from_pmem here but have to avoid double copy and
+	 * verification of the entry.*/
+	struct nova_file_write_entry *data = entry;
+
+	/*
 	struct nova_file_write_entry datat, *data;
 	int rc;
 
 	rc = memcpy_from_pmem(&datat, pmem_data,
 				sizeof(struct nova_file_write_entry));
 	if (rc) {
-		/* FIXME: use alternate log */
 		NOVA_ASSERT(0);
 		return 0;
 	}
 	data = &datat;
+	*/
 
 	if (data->pgoff > pgoff || (unsigned long)data->pgoff +
 			(unsigned long)data->num_pages <= pgoff) {
@@ -1646,7 +1652,7 @@ int nova_recovery(struct super_block *sb);
 
 /* checksum.c */
 void nova_update_entry_csum(void *entry);
-bool nova_verify_entry_csum(struct super_block *sb, void *entry);
+bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd);
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes, int zero);

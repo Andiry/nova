@@ -432,7 +432,7 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
-		if (!nova_verify_entry_csum(sb, addr)) {
+		if (!nova_verify_entry_csum(sb, addr, NULL)) {
 			nova_err(sb, "%s: entry checksum fail "
 					"inode %llu entry addr 0x%llx\n",
 					__func__, ino, (u64)addr);
@@ -633,7 +633,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
-		if (!nova_verify_entry_csum(sb, addr)) {
+		if (!nova_verify_entry_csum(sb, addr, NULL)) {
 			nova_err(sb, "%s: entry checksum fail "
 				"inode %llu entry addr 0x%llx\n",
 				__func__, ino, (u64)addr);
@@ -798,7 +798,7 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 		}
 
 		addr = (void *)nova_get_block(sb, curr_p);
-		if (!nova_verify_entry_csum(sb, addr)) {
+		if (!nova_verify_entry_csum(sb, addr, NULL)) {
 			nova_err(sb, "%s: entry checksum fail "
 					"inode %llu entry addr 0x%llx\n",
 					__func__, ino, (u64)addr);

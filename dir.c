@@ -626,6 +626,10 @@ static int nova_readdir_fast(struct file *file, struct dir_context *ctx)
 		}
 
 		entry = (struct nova_dentry *)nova_get_block(sb, curr_p);
+		if (!nova_verify_entry_csum(sb, entry, NULL)) {
+			nova_dbg("%s: nova entry checksum error\n", __func__);
+			return -EIO;
+		}
 		nova_dbgv("curr_p: 0x%llx, type %d, ino %llu, "
 			"name %s, namelen %u, rec len %u\n", curr_p,
 			entry->entry_type, le64_to_cpu(entry->ino),
