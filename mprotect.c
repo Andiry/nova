@@ -49,6 +49,9 @@ static inline void wprotect_enable(void)
 int nova_writeable(void *vaddr, unsigned long size, int rw)
 {
 	static unsigned long flags;
+	timing_t wprotect_time;
+
+	NOVA_START_TIMING(wprotect_t, wprotect_time);
 	if (rw) {
 		local_irq_save(flags);
 		wprotect_disable();
@@ -56,6 +59,7 @@ int nova_writeable(void *vaddr, unsigned long size, int rw)
 		wprotect_enable();
 		local_irq_restore(flags);
 	}
+	NOVA_END_TIMING(wprotect_t, wprotect_time);
 	return 0;
 }
 
