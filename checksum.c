@@ -18,64 +18,82 @@
 #include "nova.h"
 
 static int nova_get_entry_csum(struct super_block *sb, void *entry,
-	u32 *entry_csum, size_t *size)
+	u32 *entry_csum, size_t *size, void *entryd)
 {
-	struct nova_dentry fake_dentry;
-	struct nova_file_write_entry fake_wentry;
-	struct nova_setattr_logentry fake_sentry;
-	struct nova_link_change_entry fake_lcentry;
-	struct nova_mmap_entry fake_mmapentry;
-	struct nova_snapshot_info_entry fake_snentry;
+	struct nova_dentry fake_dentry, *dentry;
+	struct nova_file_write_entry fake_wentry, *wentry;
+	struct nova_setattr_logentry fake_sentry, *sentry;
+	struct nova_link_change_entry fake_lcentry, *lcentry;
+	struct nova_mmap_entry fake_mmapentry, *mmapentry;
+	struct nova_snapshot_info_entry fake_snentry, *snentry;
 	int ret = 0;
 	u8 type;
 
 	type = nova_get_entry_type(entry);
 	switch (type) {
 		case DIR_LOG:
-			ret = memcpy_from_pmem(&fake_dentry, entry,
+			dentry = (struct nova_dentry *) entryd;
+			if (!dentry) dentry = &fake_dentry;
+
+			ret = memcpy_from_pmem(dentry, entry,
 						NOVA_DENTRY_HEADER_LEN);
 			if (ret < 0)
 				break;
-			*size = fake_dentry.de_len;
-			ret = memcpy_from_pmem(&fake_dentry, entry, *size);
+			*size = dentry->de_len;
+			ret = memcpy_from_pmem(dentry, entry, *size);
 			if (ret < 0)
 				break;
-			*entry_csum = fake_dentry.csum;
+			*entry_csum = dentry->csum;
 			break;
 		case FILE_WRITE:
+			wentry = (struct nova_file_write_entry *) entryd;
+			if (!wentry) wentry = &fake_wentry;
+
 			*size = sizeof(struct nova_file_write_entry);
-			ret = memcpy_from_pmem(&fake_wentry, entry, *size);
+			ret = memcpy_from_pmem(wentry, entry, *size);
 			if (ret < 0)
 				break;
-			*entry_csum = fake_wentry.csum;
+			*entry_csum = wentry->csum;
 			break;
 		case SET_ATTR:
+			sentry = (struct nova_setattr_logentry *) entryd;
+			if (!sentry) sentry = &fake_sentry;
+
 			*size = sizeof(struct nova_setattr_logentry);
-			ret = memcpy_from_pmem(&fake_sentry, entry, *size);
+			ret = memcpy_from_pmem(sentry, entry, *size);
 			if (ret < 0)
 				break;
-			*entry_csum = fake_sentry.csum;
+			*entry_csum = sentry->csum;
 			break;
 		case LINK_CHANGE:
+			lcentry = (struct nova_link_change_entry *) entryd;
+			if (!lcentry) lcentry = &fake_lcentry;
+
 			*size = sizeof(struct nova_link_change_entry);
-			ret = memcpy_from_pmem(&fake_lcentry, entry, *size);
+			ret = memcpy_from_pmem(lcentry, entry, *size);
 			if (ret < 0)
 				break;
-			*entry_csum = fake_lcentry.csum;
+			*entry_csum = lcentry->csum;
 			break;
 		case MMAP_WRITE:
+			mmapentry = (struct nova_mmap_entry *) entryd;
+			if (!mmapentry) mmapentry = &fake_mmapentry;
+
 			*size = sizeof(struct nova_mmap_entry);
-			ret = memcpy_from_pmem(&fake_mmapentry, entry, *size);
+			ret = memcpy_from_pmem(mmapentry, entry, *size);
 			if (ret < 0)
 				break;
-			*entry_csum = fake_mmapentry.csum;
+			*entry_csum = mmapentry->csum;
 			break;
 		case SNAPSHOT_INFO:
+			snentry = (struct nova_snapshot_info_entry *) entryd;
+			if (!snentry) snentry = &fake_snentry;
+
 			*size = sizeof(struct nova_snapshot_info_entry);
-			ret = memcpy_from_pmem(&fake_snentry, entry, *size);
+			ret = memcpy_from_pmem(snentry, entry, *size);
 			if (ret < 0)
 				break;
-			*entry_csum = fake_snentry.csum;
+			*entry_csum = snentry->csum;
 			break;
 		default:
 			*entry_csum = 0;
@@ -243,7 +261,7 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 	bool match = false;
 	int ret;
 
-	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size);
+	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, NULL);
 	if (ret)
 		return match;
 
@@ -307,7 +325,7 @@ int nova_update_alter_entry(struct super_block *sb, void *entry)
 	alter_curr = alter_log_entry(sb, curr);
 	alter_entry = (void *)nova_get_block(sb, alter_curr);
 
-	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size);
+	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, NULL);
 	if (ret)
 		return ret;
 
@@ -348,7 +366,7 @@ int nova_check_alter_entry(struct super_block *sb, u64 curr)
 		return 0;
 
 	addr = (void *)nova_get_block(sb, curr);
-	ret = nova_get_entry_csum(sb, addr, &entry_csum, &size);
+	ret = nova_get_entry_csum(sb, addr, &entry_csum, &size, NULL);
 	if (ret)
 		return ret;
 
