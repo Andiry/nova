@@ -1660,10 +1660,6 @@ int nova_update_pgoff_csum(struct super_block *sb,
 bool nova_verify_data_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr,
 	size_t offset, size_t bytes);
-int nova_copy_partial_block_csum(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long index, size_t offset, unsigned long dst_blknr,
-	bool is_end_blk);
 int nova_update_truncated_block_csum(struct super_block *sb,
 	struct inode *inode, loff_t newsize);
 int nova_data_csum_init_free_list(struct super_block *sb,
