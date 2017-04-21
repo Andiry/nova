@@ -338,11 +338,14 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
 {
 	size_t size;
 	bool match;
+	timing_t verify_time;
+
+	NOVA_START_TIMING(verify_entry_csum_t, verify_time);
 
 	match = is_entry_matched(sb, entry, &size, entryd);
 
 	if (replica_metadata == 0)
-		return match;
+		goto out;
 
 	if (!match)
 		nova_dbg("%s: nova entry mismatch detected, trying to "
@@ -350,7 +353,8 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
 				__func__);
 
 	match = nova_try_alter_entry(sb, entry, match, entryd);
-
+out:
+	NOVA_END_TIMING(verify_entry_csum_t, verify_time);
 	return match;
 }
 
@@ -660,7 +664,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 	int error;
 	timing_t verify_time;
 
-	NOVA_START_TIMING(verify_csum_t, verify_time);
+	NOVA_START_TIMING(verify_data_csum_t, verify_time);
 
 	/* Only a whole stripe can be checksum verified.
 	 * strps: # of stripes to be checked since offset. */
@@ -773,7 +777,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 
 	}
 
-	NOVA_END_TIMING(verify_csum_t, verify_time);
+	NOVA_END_TIMING(verify_data_csum_t, verify_time);
 
 	return match;
 }
