@@ -72,6 +72,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	nova_memunlock_inode(sb, pi);
 	nova_update_inode(sb, inode, pi, &update, 1);
 	nova_memlock_inode(sb, pi);
+	sih->trans_id++;
 
 	return 0;
 }

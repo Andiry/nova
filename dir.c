@@ -330,11 +330,14 @@ static int nova_inplace_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
 	u64 epoch_id)
 {
+	struct nova_inode_info *si = NOVA_I(dir);
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_log_entry_info entry_info;
 
 	entry_info.type = DIR_LOG;
 	entry_info.link_change = link_change;
 	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
 	entry_info.inplace = 1;
 
 	return nova_inplace_update_log_entry(sb, dir, dentry,

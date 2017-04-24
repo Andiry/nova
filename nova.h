@@ -239,6 +239,7 @@ struct nova_file_write_entry {
 	__le32	mtime;
 	__le64	size;
 	__le64	epoch_id;
+	__le64	trans_id;
 	__le32	csumpadding;
 	__le32	csum;
 } __attribute((__packed__));
@@ -259,12 +260,13 @@ struct nova_dentry {
 	__le64	ino;			/* inode no pointed to by this entry */
 	__le64	size;
 	__le64	epoch_id;
+	__le64	trans_id;
 	char	name[NOVA_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
 #define NOVA_DIR_PAD			8	/* Align to 8 bytes boundary */
 #define NOVA_DIR_ROUND			(NOVA_DIR_PAD - 1)
-#define NOVA_DENTRY_HEADER_LEN		40
+#define NOVA_DENTRY_HEADER_LEN		48
 #define NOVA_DIR_LOG_REC_LEN(name_len) \
 	(((name_len + 1) + NOVA_DENTRY_HEADER_LEN \
 	 + NOVA_DIR_ROUND) & ~NOVA_DIR_ROUND)
@@ -281,6 +283,7 @@ struct nova_setattr_logentry {
 	__le32	ctime;
 	__le64	size;
 	__le64	epoch_id;
+	__le64	trans_id;
 	u8	invalid;
 	u8	paddings[3];
 	__le32	csum;
@@ -295,6 +298,7 @@ struct nova_link_change_entry {
 	__le32	flags;
 	__le32	generation;
 	__le64	epoch_id;
+	__le64	trans_id;
 	__le32	csumpadding;
 	__le32	csum;
 } __attribute((__packed__));
@@ -317,6 +321,7 @@ struct nova_log_entry_info {
 	struct nova_inode_update *update;
 	void *data;	/* struct dentry */
 	u64 epoch_id;
+	u64 trans_id;
 	u64 curr_p;	/* output */
 	u64 file_size;	/* de_len for dentry */
 	u64 ino;

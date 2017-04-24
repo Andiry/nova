@@ -398,6 +398,7 @@ void nova_init_file_write_entry(struct super_block *sb,
 	entry->reassigned = 0;
 	entry->updating = 0;
 	entry->epoch_id = epoch_id;
+	entry->trans_id = sih->trans_id;
 	entry->pgoff = cpu_to_le64(pgoff);
 	entry->num_pages = cpu_to_le32(num_pages);
 	entry->invalid_pages = 0;
@@ -1017,6 +1018,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 
 			entry_info.type = FILE_WRITE;
 			entry_info.epoch_id = epoch_id;
+			entry_info.trans_id = sih->trans_id;
 			entry_info.time = time;
 			entry_info.file_size = file_size;
 			entry_info.inplace = 1;
