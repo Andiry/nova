@@ -370,10 +370,11 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 {
 	nova_dbg("file write entry @ 0x%llx: epoch %llu, paoff %llu, pages %u, "
 			"blocknr %llu, reassigned %u, invalid count %u, "
-			"size %llu\n",
+			"size %llu, mtime %u\n",
 			curr, entry->epoch_id, entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,
-			entry->reassigned, entry->invalid_pages, entry->size);
+			entry->reassigned, entry->invalid_pages, entry->size,
+			entry->mtime);
 }
 
 static inline void nova_print_set_attr_entry(struct super_block *sb,
@@ -389,9 +390,9 @@ static inline void nova_print_link_change_entry(struct super_block *sb,
 	u64 curr, struct nova_link_change_entry *entry)
 {
 	nova_dbg("link change entry @ 0x%llx: epoch %llu, invalid %u, "
-			"links %u, flags %u\n",
+			"links %u, flags %u, ctime %u\n",
 			curr, entry->epoch_id, entry->invalid, entry->links,
-			entry->flags);
+			entry->flags, entry->ctime);
 }
 
 static inline void nova_print_mmap_entry(struct super_block *sb,
@@ -417,12 +418,13 @@ static inline size_t nova_print_dentry(struct super_block *sb,
 {
 	nova_dbg("dir logentry @ 0x%llx: epoch %llu, reassigned %u, "
 			"invalid %u, inode %llu, links %u, namelen %u, "
-			"rec len %u, name %s\n",
+			"rec len %u, name %s, mtime %u\n",
 			curr, entry->epoch_id,
 			entry->reassigned, entry->invalid,
 			le64_to_cpu(entry->ino),
 			entry->links_count, entry->name_len,
-			le16_to_cpu(entry->de_len), entry->name);
+			le16_to_cpu(entry->de_len), entry->name,
+			entry->mtime);
 
 	return le16_to_cpu(entry->de_len);
 }
