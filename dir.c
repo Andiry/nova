@@ -156,6 +156,7 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	memset(de_entry, 0, de_len);
 	de_entry->entry_type = DIR_LOG;
 	de_entry->epoch_id = epoch_id;
+	de_entry->trans_id = 0;
 	de_entry->ino = cpu_to_le64(self_ino);
 	de_entry->name_len = 1;
 	de_entry->de_len = cpu_to_le16(de_len);
@@ -172,6 +173,7 @@ static unsigned int nova_init_dentry(struct super_block *sb,
 	memset(de_entry, 0, de_len);
 	de_entry->entry_type = DIR_LOG;
 	de_entry->epoch_id = epoch_id;
+	de_entry->trans_id = 0;
 	de_entry->ino = cpu_to_le64(parent_ino);
 	de_entry->name_len = 2;
 	de_entry->de_len = cpu_to_le16(de_len);
