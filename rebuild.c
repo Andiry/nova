@@ -99,6 +99,7 @@ static int nova_init_inode_rebuild(struct super_block *sb,
 	reb->i_generation = le32_to_cpu(fake_pi.i_generation);
 	reb->i_links_count = le16_to_cpu(fake_pi.i_links_count);
 	reb->i_mode = le16_to_cpu(fake_pi.i_mode);
+	reb->trans_id = 0;
 
 	return rc;
 }
@@ -143,6 +144,7 @@ static int nova_rebuild_inode_finish(struct super_block *sb,
 
 	sih->i_size = le64_to_cpu(reb->i_size);
 	sih->i_mode = le64_to_cpu(reb->i_mode);
+	sih->trans_id = reb->trans_id + 1;
 
 	nova_memunlock_inode(sb, pi);
 	nova_update_inode_with_rebuild(sb, reb, pi);
@@ -362,7 +364,7 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 
 static void nova_rebuild_handle_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
-	struct nova_file_write_entry *entry, u64 *curr_epoch_id)
+	struct nova_file_write_entry *entry)
 {
 	if (entry->num_pages != entry->invalid_pages) {
 		/*
@@ -372,11 +374,11 @@ static void nova_rebuild_handle_write_entry(struct super_block *sb,
 		nova_assign_write_entry(sb, sih, entry, false);
 	}
 
-	if (entry->epoch_id >= *curr_epoch_id) {
+	if (entry->trans_id >= sih->trans_id) {
 		nova_rebuild_file_time_and_size(sb, reb,
 					entry->mtime, entry->mtime,
 					entry->size);
-		*curr_epoch_id = entry->epoch_id;
+		reb->trans_id = entry->trans_id;
 	}
 
 	if (entry->updating) {
@@ -399,7 +401,6 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode_rebuild rebuild, *reb;
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
-	u64 curr_epoch_id = 0;
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
@@ -453,12 +454,12 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 				nova_apply_setattr_entry(sb, reb, sih,
 								attr_entry);
 				sih->last_setattr = curr_p;
-				if (attr_entry->epoch_id >= curr_epoch_id) {
+				if (attr_entry->trans_id >= reb->trans_id) {
 					nova_rebuild_file_time_and_size(sb, reb,
 							attr_entry->mtime,
 							attr_entry->ctime,
 							attr_entry->size);
-					curr_epoch_id = attr_entry->epoch_id;
+					reb->trans_id = attr_entry->trans_id;
 				}
 
 				/* Update sih->i_size for setattr operation */
@@ -476,7 +477,7 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 			case FILE_WRITE:
 				entry = (struct nova_file_write_entry *)addr;
 				nova_rebuild_handle_write_entry(sb, sih, reb,
-						entry, &curr_epoch_id);
+						entry);
 				curr_p += sizeof(struct nova_file_write_entry);
 				break;
 			case MMAP_WRITE:
@@ -528,7 +529,7 @@ static void nova_reassign_last_dentry(struct super_block *sb,
 		old_dentry = (struct nova_dentry *)nova_get_block(sb,
 							sih->last_dentry);
 		dentry = (struct nova_dentry *)nova_get_block(sb, curr_p);
-		if (dentry->epoch_id >= old_dentry->epoch_id)
+		if (dentry->trans_id >= old_dentry->trans_id)
 			sih->last_dentry = curr_p;
 	}
 }
@@ -556,7 +557,7 @@ static inline int nova_replay_remove_dentry(struct super_block *sb,
 
 static int nova_rebuild_handle_dentry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
-	struct nova_dentry *entry, u64 curr_p, u64 *curr_epoch_id)
+	struct nova_dentry *entry, u64 curr_p)
 {
 	int ret = 0;
 
@@ -580,9 +581,9 @@ static int nova_rebuild_handle_dentry(struct super_block *sb,
 		return ret;
 	}
 
-	if (entry->epoch_id >= *curr_epoch_id) {
+	if (entry->trans_id >= reb->trans_id) {
 		nova_rebuild_dir_time_and_size(sb, reb, entry);
-		*curr_epoch_id = entry->epoch_id;
+		reb->trans_id = entry->trans_id;
 	}
 
 	return ret;
@@ -602,7 +603,6 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	timing_t rebuild_time;
 	void *addr;
 	u64 curr_p;
-	u64 curr_epoch_id = 0;
 	u8 type;
 	int ret;
 
@@ -659,10 +659,10 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			case LINK_CHANGE:
 				lc_entry =
 					(struct nova_link_change_entry *)addr;
-				if (lc_entry->epoch_id >= curr_epoch_id) {
+				if (lc_entry->trans_id >= reb->trans_id) {
 					nova_apply_link_change_entry(sb, reb,
 								lc_entry);
-					curr_epoch_id = lc_entry->epoch_id;
+					reb->trans_id = lc_entry->trans_id;
 				}
 				sih->last_link_change = curr_p;
 				curr_p += sizeof(struct nova_link_change_entry);
@@ -670,7 +670,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			case DIR_LOG:
 				entry = (struct nova_dentry *)addr;
 				ret = nova_rebuild_handle_dentry(sb, sih, reb,
-						entry, curr_p, &curr_epoch_id);
+						entry, curr_p);
 				if (ret)
 					goto out;
 				de_len = le16_to_cpu(entry->de_len);

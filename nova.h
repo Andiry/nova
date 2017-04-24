@@ -620,6 +620,7 @@ struct nova_inode_rebuild {
 	u32	i_generation;	/* File version (for NFS) */
 	u16	i_links_count;	/* Links count */
 	u16	i_mode;		/* File mode */
+	u64 	trans_id;
 };
 
 struct nova_inode_info {
