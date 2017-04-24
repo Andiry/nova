@@ -582,7 +582,7 @@ out:
 }
 
 static ssize_t nova_cow_file_write(struct file *filp,
-	const char __user *buf,	size_t len, loff_t *ppos, bool need_lock)
+	const char __user *buf,	size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -624,8 +624,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 	NOVA_START_TIMING(cow_write_t, cow_write_time);
 
 	sb_start_write(inode->i_sb);
-	if (need_lock)
-		inode_lock(inode);
+	inode_lock(inode);
 
 	if (!access_ok(VERIFY_READ, buf, len)) {
 		ret = -EFAULT;
@@ -770,8 +769,7 @@ out:
 		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,
 						begin_tail, update.tail);
 
-	if (need_lock)
-		inode_unlock(inode);
+	inode_unlock(inode);
 	sb_end_write(inode->i_sb);
 	NOVA_END_TIMING(cow_write_t, cow_write_time);
 	NOVA_STATS_ADD(cow_write_bytes, written);
@@ -861,7 +859,7 @@ out:
 }
 
 ssize_t nova_inplace_file_write(struct file *filp,
-	const char __user *buf,	size_t len, loff_t *ppos, bool need_mutex)
+	const char __user *buf,	size_t len, loff_t *ppos)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
@@ -901,8 +899,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 	NOVA_START_TIMING(inplace_write_t, inplace_write_time);
 
 	sb_start_write(inode->i_sb);
-	if (need_mutex)
-		inode_lock(inode);
+	inode_lock(inode);
 
 	if (!access_ok(VERIFY_READ, buf, len)) {
 		ret = -EFAULT;
@@ -1084,8 +1081,7 @@ out:
 		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,
 						begin_tail, update.tail);
 
-	if (need_mutex)
-		inode_unlock(inode);
+	inode_unlock(inode);
 	sb_end_write(inode->i_sb);
 	NOVA_END_TIMING(inplace_write_t, inplace_write_time);
 	NOVA_STATS_ADD(inplace_write_bytes, written);
@@ -1096,9 +1092,9 @@ ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
 	if (inplace_data_updates) {
-		return nova_inplace_file_write(filp, buf, len, ppos, true);
+		return nova_inplace_file_write(filp, buf, len, ppos);
 	} else {
-		return nova_cow_file_write(filp, buf, len, ppos, true);
+		return nova_cow_file_write(filp, buf, len, ppos);
 	}
 }
 
