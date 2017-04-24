@@ -312,6 +312,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 	sih->last_dentry = curr_entry;
 	ret = nova_insert_dir_radix_tree(sb, sih, name, namelen, direntry);
 
+	sih->trans_id++;
 	NOVA_END_TIMING(add_dentry_t, add_dentry_time);
 	return ret;
 }
@@ -391,6 +392,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 			update->tail = sih->log_tail;
 			update->alter_tail = sih->alter_log_tail;
 		}
+		sih->trans_id++;
 		goto out;
 	}
 
@@ -409,6 +411,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	update->delete_dentry = (struct nova_dentry *)nova_get_block(sb,
 						curr_entry);
 	sih->last_dentry = curr_entry;
+	sih->trans_id++;
 out:
 	NOVA_END_TIMING(remove_dentry_t, remove_dentry_time);
 	return ret;

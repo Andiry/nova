@@ -52,6 +52,7 @@ void nova_init_header(struct super_block *sb,
 	sih->last_setattr = 0;
 	sih->last_link_change = 0;
 	sih->last_dentry = 0;
+	sih->trans_id = 0;
 	sih->log_head = 0;
 	sih->log_tail = 0;
 	sih->alter_log_head = 0;

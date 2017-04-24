@@ -764,6 +764,7 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		sih->i_size = pos;
 	}
 
+	sih->trans_id++;
 out:
 	if (ret < 0)
 		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,
@@ -1076,6 +1077,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		sih->i_size = pos;
 	}
 
+	sih->trans_id++;
 out:
 	if (ret < 0)
 		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,
@@ -1211,6 +1213,7 @@ again:
 		goto out;
 
 	inode->i_blocks = sih->i_blocks;
+	sih->trans_id++;
 
 //	set_buffer_new(bh);
 out:
@@ -1857,6 +1860,7 @@ static int nova_insert_write_vma(struct vm_area_struct *vma)
 	if (sih->num_vmas == 1)
 		insert = 1;
 
+	sih->trans_id++;
 out:
 	inode_unlock(inode);
 

@@ -387,6 +387,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	}
 
 //	nova_print_nova_log(sb, pi);
+	sih->trans_id++;
 
 out:
 	if (ret < 0)

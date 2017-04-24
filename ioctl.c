@@ -24,6 +24,8 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_update update;
@@ -88,6 +90,7 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			nova_memlock_inode(sb, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
+		sih->trans_id++;
 		inode_unlock(inode);
 flags_out:
 		mnt_drop_write_file(filp);
@@ -125,6 +128,7 @@ flags_out:
 			nova_memlock_inode(sb, pi);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
+		sih->trans_id++;
 		inode_unlock(inode);
 setversion_out:
 		mnt_drop_write_file(filp);

@@ -595,6 +595,7 @@ struct nova_inode_info_header {
 	u64 last_setattr;		/* Last setattr entry */
 	u64 last_link_change;		/* Last link change entry */
 	u64 last_dentry;		/* Last updated dentry */
+	u64 trans_id;			/* Transaction ID */
 	u64 log_head;			/* Log head pointer */
 	u64 log_tail;			/* Log tail pointer */
 	u64 alter_log_head;		/* Alternate log head pointer */

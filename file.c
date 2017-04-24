@@ -491,6 +491,7 @@ next:
 	nova_update_alter_inode(sb, inode, pi);
 	nova_memlock_inode(sb, pi);
 
+	sih->trans_id++;
 out:
 	if (ret < 0)
 		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,

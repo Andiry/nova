@@ -744,6 +744,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 		update->alter_tail = sih->alter_log_tail;
 
 		*old_linkc = 0;
+		sih->trans_id++;
 		goto out;
 	}
 
@@ -759,6 +760,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 
 	*old_linkc = sih->last_link_change;
 	sih->last_link_change = entry_info.curr_p;
+	sih->trans_id++;
 out:
 	NOVA_END_TIMING(append_link_change_t, append_time);
 	return ret;

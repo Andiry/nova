@@ -1238,6 +1238,8 @@ int nova_getattr(struct vfsmount *mnt, struct dentry *dentry,
 int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 {
 	struct inode *inode = dentry->d_inode;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	int ret;
@@ -1281,6 +1283,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 		nova_setsize(inode, oldsize, attr->ia_size, epoch_id);
 	}
 
+	sih->trans_id++;
 out:
 	NOVA_END_TIMING(setattr_t, setattr_time);
 	return ret;
