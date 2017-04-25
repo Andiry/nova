@@ -396,7 +396,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	while (num_blocks > 0) {
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
 						start_blk, &entry, 1, epoch_id,
-						&inplace);
+						&inplace, 1);
 
 		if (entry && inplace) {
 			if (entry->size < new_size) {

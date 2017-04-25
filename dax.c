@@ -778,6 +778,26 @@ out:
 	return ret;
 }
 
+static bool nova_get_verify_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry,
+	struct nova_file_write_entry *entryd,
+	int locked)
+{
+	int ret = 0;
+
+	if (locked == 0) {
+		/* Someone else may be updating the entry. Skip check */
+		ret = memcpy_from_pmem(entryd, entry,
+				sizeof(struct nova_file_write_entry));
+		if (ret < 0)
+			return false;
+
+		return true;
+	}
+
+	return nova_verify_entry_csum(sb, entry, entryd);
+}
+
 /*
  * Check if there is an existing entry for target page offset.
  * Used for inplace write, direct IO, DAX-mmap and fallocate.
@@ -785,7 +805,7 @@ out:
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
 	struct nova_file_write_entry **ret_entry, int check_next, u64 epoch_id,
-	int *inplace)
+	int *inplace, int locked)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
@@ -800,7 +820,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	*inplace = 0;
 	entry = nova_get_write_entry(sb, sih, start_blk);
 	if (entry) {
-		if (!nova_verify_entry_csum(sb, entry, &entryd)) {
+		if (!nova_get_verify_entry(sb, entry, &entryd, locked)) {
 			nova_dbg("%s: nova entry checksum error\n", __func__);
 			goto out;
 		}
@@ -824,7 +844,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		/* Possible Hole */
 		entry = nova_find_next_entry(sb, sih, start_blk);
 		if (entry) {
-			if (!nova_verify_entry_csum(sb, entry, &entryd)) {
+			if (!nova_get_verify_entry(sb, entry, &entryd, locked)) {
 				nova_dbg("%s: nova entry checksum error\n",
 								__func__);
 				goto out;
@@ -942,7 +962,7 @@ ssize_t nova_inplace_file_write(struct file *filp,
 
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
 						start_blk, &entry, 1, epoch_id,
-						&inplace);
+						&inplace, 1);
 
 		if (entry && inplace) {
 			/* We can do inplace write. Find contiguous blocks */
@@ -1148,7 +1168,7 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
 					iblock, &entry, check_next, epoch_id,
-					&inplace);
+					&inplace, locked);
 
 	if (entry) {
 		if (create == 0 || inplace) {
