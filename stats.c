@@ -370,13 +370,13 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 {
 	nova_dbg("file write entry @ 0x%llx: epoch %llu, trans %llu, "
 			"paoff %llu, pages %u, "
-			"blocknr %llu, reassigned %u, invalid count %u, "
-			"size %llu, mtime %u\n",
+			"blocknr %llu, reassigned %u, updating %u, "
+			"invalid count %u, size %llu, mtime %u\n",
 			curr, entry->epoch_id, entry->trans_id,
 			entry->pgoff, entry->num_pages,
 			entry->block >> PAGE_SHIFT,
-			entry->reassigned, entry->invalid_pages, entry->size,
-			entry->mtime);
+			entry->reassigned, entry->updating,
+			entry->invalid_pages, entry->size, entry->mtime);
 }
 
 static inline void nova_print_set_attr_entry(struct super_block *sb,
