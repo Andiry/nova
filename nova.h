@@ -23,6 +23,7 @@
 #include <linux/time.h>
 #include <linux/rtc.h>
 #include <linux/mm.h>
+#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/sched.h>
@@ -742,6 +743,7 @@ struct nova_sb_info {
 
 	struct task_struct *snapshot_cleaner_thread;
 	wait_queue_head_t snapshot_cleaner_wait;
+	wait_queue_head_t snapshot_mmap_wait;
 	void *curr_clean_snapshot_info;
 
 	/* DAX-mmap snapshot */
