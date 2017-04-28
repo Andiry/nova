@@ -971,6 +971,7 @@ int nova_create_snapshot(struct super_block *sb)
 out:
 	sbi->snapshot_taking = 0;
 	mutex_unlock(&sbi->s_lock);
+	wake_up_interruptible(&sbi->snapshot_mmap_wait);
 
 	NOVA_END_TIMING(create_snapshot_t, create_snapshot_time);
 	return ret;
@@ -1403,6 +1404,7 @@ int nova_snapshot_init(struct super_block *sb)
 	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
 
 	INIT_RADIX_TREE(&sbi->snapshot_info_tree, GFP_ATOMIC);
+	init_waitqueue_head(&sbi->snapshot_mmap_wait);
 	ret = nova_snapshot_cleaner_init(sbi);
 
 	return ret;
