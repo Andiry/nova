@@ -253,13 +253,14 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 		return 0;
 	}
 
-	inode_lock(inode);
-
 	if (sbi->snapshot_taking) {
+		/* Block CoW mmap until snapshot taken completes */
 		NOVA_STATS_ADD(dax_cow_during_snapshot, 1);
 		wait_event_interruptible(sbi->snapshot_mmap_wait,
 					sbi->snapshot_taking == 0);
 	}
+
+	inode_lock(inode);
 
 	pi = nova_get_inode(sb, inode);
 
