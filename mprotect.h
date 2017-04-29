@@ -24,6 +24,27 @@
 #include <linux/fs.h>
 #include "nova_def.h"
 
+extern void nova_error_mng(struct super_block *sb, const char *fmt, ...);
+
+static inline int nova_range_check(struct super_block *sb, void *p,
+					 unsigned long len)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (p < sbi->virt_addr ||
+			p + len > sbi->virt_addr + sbi->initsize) {
+		nova_err(sb, "access pmem out of range: pmem range %p - %p, "
+				"access range %p - %p\n",
+				sbi->virt_addr,
+				sbi->virt_addr + sbi->initsize,
+				p, p + len);
+		dump_stack();
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 /* nova_memunlock_super() before calling! */
 static inline void nova_sync_super(struct super_block *sb,
 	struct nova_super_block *ps)
@@ -100,6 +121,9 @@ __nova_memlock_range(void *p, unsigned long len)
 static inline void nova_memunlock_range(struct super_block *sb, void *p,
 					 unsigned long len)
 {
+	if (nova_range_check(sb, p, len))
+		return;
+
 	if (nova_is_protected(sb))
 		__nova_memunlock_range(p, len);
 }
@@ -149,6 +173,10 @@ static inline void nova_memlock_reserved(struct super_block *sb,
 static inline void nova_memunlock_journal(struct super_block *sb)
 {
 	void *addr = nova_get_block(sb, NOVA_DEF_BLOCK_SIZE_4K * JOURNAL_START);
+
+	if (nova_range_check(sb, addr, NOVA_DEF_BLOCK_SIZE_4K))
+		return;
+
 	if (nova_is_protected(sb))
 		__nova_memunlock_range(addr, NOVA_DEF_BLOCK_SIZE_4K);
 }
@@ -163,6 +191,9 @@ static inline void nova_memlock_journal(struct super_block *sb)
 static inline void nova_memunlock_inode(struct super_block *sb,
 					 struct nova_inode *pi)
 {
+	if (nova_range_check(sb, pi, NOVA_INODE_SIZE))
+		return;
+
 	if (nova_is_protected(sb))
 		__nova_memunlock_range(pi, NOVA_INODE_SIZE);
 }
@@ -177,6 +208,9 @@ static inline void nova_memlock_inode(struct super_block *sb,
 
 static inline void nova_memunlock_block(struct super_block *sb, void *bp)
 {
+	if (nova_range_check(sb, bp, sb->s_blocksize))
+		return;
+
 	if (nova_is_protected(sb))
 		__nova_memunlock_range(bp, sb->s_blocksize);
 }
