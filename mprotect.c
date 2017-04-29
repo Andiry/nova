@@ -196,7 +196,9 @@ static int nova_get_dax_cow_range(struct super_block *sb,
 	unsigned long start_pgoff;
 
 	vma_blocks = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
-	if (vma_blocks >= 4096)	// 16k
+
+	/* Read ahead, avoid sequential page faults */
+	if (vma_blocks >= 4096)
 		base = 4096;
 
 	pgoff = (address - vma->vm_start) >> sb->s_blocksize_bits;
