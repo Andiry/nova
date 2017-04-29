@@ -1608,7 +1608,6 @@ static inline void *nova_get_parity_addr(struct super_block *sb,
 }
 
 /* Function Prototypes */
-extern void nova_error_mng(struct super_block *sb, const char *fmt, ...);
 
 /* balloc.c */
 int nova_alloc_block_free_lists(struct super_block *sb);
