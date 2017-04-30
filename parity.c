@@ -263,27 +263,27 @@ out:
  * the caller will also check if any checksum restoration is necessary.
  */
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
-        unsigned int bad_strp_id, u32 csum, u32 csum1, u32 *csum_good)
+        unsigned int badstrip_id, void *badstrip, int nvmmerr, u32 csum0,
+        u32 csum1, u32 *csum_good)
 {
 	unsigned int i, num_strps;
 	size_t strp_size = NOVA_STRIPE_SIZE;
 	unsigned int strp_shift = NOVA_STRIPE_SHIFT;
 	size_t blockoff, offset;
-	unsigned long bad_strp_nr;
-	u8 *blockptr, *bad_strp, *blockbuf, *stripe, *parity;
+	u8 *blockptr, *stripptr, *block, *parity, *strip;
 	u32 csum_calc;
+	bool success = false;
 	timing_t restore_time;
 	int ret = 0;
 
 	NOVA_START_TIMING(restore_data_t, restore_time);
 	blockoff = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_4K);
 	blockptr = nova_get_block(sb, blockoff);
-	bad_strp = blockptr + (bad_strp_id << strp_shift);
-	bad_strp_nr = (blockoff + (bad_strp_id << strp_shift)) >> strp_shift;
+	stripptr = blockptr + (badstrip_id << strp_shift);
 
-	stripe = kmalloc(strp_size, GFP_KERNEL);
-	blockbuf = kmalloc(sb->s_blocksize, GFP_KERNEL);
-	if (stripe == NULL || blockbuf == NULL) {
+	block = kmalloc(sb->s_blocksize, GFP_KERNEL);
+	strip = kmalloc(strp_size, GFP_KERNEL);
+	if (block == NULL || strip == NULL) {
 		nova_err(sb, "%s: buffer allocation error\n", __func__);
 		ret = -ENOMEM;
 		goto out;
@@ -299,28 +299,52 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	num_strps = sb->s_blocksize >> strp_shift;
 	for (i = 0; i < num_strps; i++) {
 		offset = i << strp_shift;
-		if (i == bad_strp_id)
-			ret = memcpy_from_pmem(blockbuf + offset,
-							parity, strp_size);
+		if (i == badstrip_id)
+			/* parity strip has media errors */
+			ret = memcpy_from_pmem(block + offset,
+						parity, strp_size);
 		else
-			ret = memcpy_from_pmem(blockbuf + offset,
+			/* another data strip has media errors */
+			ret = memcpy_from_pmem(block + offset,
 						blockptr + offset, strp_size);
 		if (ret < 0) {
-			nova_err(sb, "%s: unrecoverable media error\n",
-							__func__);
+			/* media error happens during recovery */
+			nova_err(sb, "%s: unrecoverable media error detected\n",
+					__func__);
 			goto out;
 		}
 	}
 
-	nova_calculate_block_parity(sb, stripe, blockbuf);
+	nova_calculate_block_parity(sb, strip, block);
+	for (i = 0; i < strp_size; i++) {
+		/* i indicates the amount of good bytes in badstrip.
+		 * if corruption is contained within one strip, the i = 0 pass
+		 * can restore the strip; otherwise we need to test every i to
+		 * check if there is a unaligned but recoverable corruption,
+		 * i.e. a scribble corrupting two adjacent strips but the
+		 * scribble size is no larger than the strip size. */
+		memcpy(strip, badstrip, i);
 
-	csum_calc = nova_crc32c(NOVA_INIT_CSUM, stripe, strp_size);
+		csum_calc = nova_crc32c(NOVA_INIT_CSUM, strip, strp_size);
+		if (csum_calc == csum0 || csum_calc == csum1) {
+			success = true;
+			break;
+		}
 
-	if (csum_calc == csum || csum_calc == csum1) {
+		/* media error, no good bytes in badstrip */
+		if (nvmmerr) break;
+
+		/* corruption happens to the last strip must be contained within
+		 * the strip; if the corruption goes beyond the block boundary,
+		 * that's not the concern of this recovery call. */
+		if (badstrip_id == num_strps - 1) break;
+	}
+
+	if (success) {
 		/* recovery success, repair the bad nvmm data */
-		nova_memunlock_range(sb, bad_strp, strp_size);
-	        memcpy_to_pmem_nocache(bad_strp, stripe, strp_size);
-		nova_memlock_range(sb, bad_strp, strp_size);
+		nova_memunlock_range(sb, stripptr, strp_size);
+	        memcpy_to_pmem_nocache(stripptr, strip, strp_size);
+		nova_memlock_range(sb, stripptr, strp_size);
 
 		/* return the good checksum */
 		*csum_good = csum_calc;
@@ -330,8 +354,8 @@ int nova_restore_data(struct super_block *sb, unsigned long blocknr,
 	}
 
 out:
-	if (stripe != NULL) kfree(stripe);
-	if (blockbuf != NULL) kfree(blockbuf);
+	if (block != NULL) kfree(block);
+	if (strip != NULL) kfree(strip);
 
 	NOVA_END_TIMING(restore_data_t, restore_time);
 	return ret;
