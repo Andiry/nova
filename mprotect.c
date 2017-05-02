@@ -71,16 +71,38 @@ int nova_dax_mem_protect(struct super_block *sb, void *vaddr,
 	return nova_writeable(vaddr, size, rw);
 }
 
+static inline int nova_get_vma_overlap_range(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct vm_area_struct *vma,
+	struct nova_file_write_entry *entry, unsigned long *start_pgoff,
+	unsigned long *num_pages)
+{
+	unsigned long vma_pgoff, entry_pgoff;
+	unsigned long vma_pages, entry_pages;
+	unsigned long end_pgoff;
+
+	vma_pgoff = vma->vm_pgoff;
+	entry_pgoff = entry->pgoff;
+	vma_pages = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
+	entry_pages = entry->num_pages;
+
+	if (vma_pgoff + vma_pages <= entry_pgoff ||
+				entry_pgoff + entry_pages <= vma_pgoff)
+		return 0;
+
+	*start_pgoff = vma_pgoff > entry_pgoff ? vma_pgoff : entry_pgoff;
+	end_pgoff = (vma_pgoff + vma_pages) > (entry_pgoff + entry_pages) ?
+			entry_pgoff + entry_pages : vma_pgoff + vma_pages;
+	*num_pages = end_pgoff - *start_pgoff;
+	return 1;
+}
+
 static int nova_update_dax_mapping(struct super_block *sb,
-	struct vm_area_struct *vma, struct nova_file_write_entry *entry)
+	struct nova_inode_info_header *sih, struct vm_area_struct *vma,
+	struct nova_file_write_entry *entry, unsigned long start_pgoff,
+	unsigned long num_pages)
 {
 	struct address_space *mapping = vma->vm_file->f_mapping;
-	struct inode *inode = mapping->host;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
 	void **pentry;
-	unsigned long start_pgoff = entry->pgoff;
-	unsigned int num = entry->num_pages;
 	unsigned long curr_pgoff;
 	unsigned long blocknr, start_blocknr;
 	unsigned long value, new_value;
@@ -89,7 +111,7 @@ static int nova_update_dax_mapping(struct super_block *sb,
 
 	start_blocknr = nova_get_blocknr(sb, entry->block, sih->i_blk_type);
 	spin_lock_irq(&mapping->tree_lock);
-	for (i = 0; i < num; i++) {
+	for (i = 0; i < num_pages; i++) {
 		curr_pgoff = start_pgoff + i;
 		blocknr = start_blocknr + i;
 
@@ -114,7 +136,9 @@ static int nova_update_dax_mapping(struct super_block *sb,
 }
 
 static int nova_update_entry_pfn(struct super_block *sb,
-	struct vm_area_struct *vma, struct nova_file_write_entry *entry)
+	struct nova_inode_info_header *sih, struct vm_area_struct *vma,
+	struct nova_file_write_entry *entry, unsigned long start_pgoff,
+	unsigned long num_pages)
 {
 	unsigned long newflags;
 	unsigned long addr;
@@ -122,9 +146,9 @@ static int nova_update_entry_pfn(struct super_block *sb,
 	unsigned long pfn;
 	pgprot_t new_prot;
 
-	addr = vma->vm_start + ((entry->pgoff - vma->vm_pgoff) << PAGE_SHIFT);
-	pfn = nova_get_pfn(sb, entry->block);
-	size = entry->num_pages << PAGE_SHIFT;
+	addr = vma->vm_start + ((start_pgoff - vma->vm_pgoff) << PAGE_SHIFT);
+	pfn = nova_get_pfn(sb, entry->block) + start_pgoff - entry->pgoff;
+	size = num_pages << PAGE_SHIFT;
 
 	nova_dbgv("%s: addr 0x%lx, size 0x%lx\n", __func__,
 			addr, size);
@@ -139,14 +163,18 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 	struct vm_area_struct *vma, struct nova_inode_info_header *sih,
 	u64 begin_tail)
 {
-	struct nova_file_write_entry *entry_data;
+	struct nova_file_write_entry *entry, entry_data;
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
+	unsigned long start_pgoff, num_pages;
 	int ret = 0;
 	timing_t update_time;
 
 	NOVA_START_TIMING(update_pfn_t, update_time);
 	while (curr_p && curr_p != sih->log_tail) {
+		start_pgoff = 0;
+		num_pages = 0;
+
 		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
 
@@ -157,23 +185,38 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 			break;
 		}
 
-		entry_data = (struct nova_file_write_entry *)
+		entry = (struct nova_file_write_entry *)
 					nova_get_block(sb, curr_p);
-
-		if (nova_get_entry_type(entry_data) != FILE_WRITE) {
-			nova_dbg("%s: entry type is not write? %d\n",
-				__func__, nova_get_entry_type(entry_data));
+		ret = memcpy_from_pmem(&entry_data, entry, entry_size);
+		if (ret) {
+			/* FIXME: try alter entry */
 			curr_p += entry_size;
 			continue;
 		}
 
-		ret = nova_update_dax_mapping(sb, vma, entry_data);
+		if (nova_get_entry_type(&entry_data) != FILE_WRITE) {
+			nova_dbg("%s: entry type is not write? %d\n",
+				__func__, nova_get_entry_type(&entry_data));
+			curr_p += entry_size;
+			continue;
+		}
+
+		ret = nova_get_vma_overlap_range(sb, sih, vma, &entry_data,
+						&start_pgoff, &num_pages);
+		if (ret == 0) {
+			curr_p += entry_size;
+			continue;
+		}
+
+		ret = nova_update_dax_mapping(sb, sih, vma, &entry_data,
+						start_pgoff, num_pages);
 		if (ret) {
 			nova_err(sb, "update DAX mapping return %d\n", ret);
 			break;
 		}
 
-		ret = nova_update_entry_pfn(sb, vma, entry_data);
+		ret = nova_update_entry_pfn(sb, sih, vma, &entry_data,
+						start_pgoff, num_pages);
 		if (ret) {
 			nova_err(sb, "update_pfn return %d\n", ret);
 			break;
