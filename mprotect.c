@@ -159,22 +159,47 @@ static int nova_update_entry_pfn(struct super_block *sb,
 	return remap_pfn_range(vma, addr, pfn, size, new_prot);
 }
 
-static int nova_dax_mmap_update_pfn(struct super_block *sb,
+static int nova_dax_mmap_update_mapping(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct vm_area_struct *vma,
+	struct nova_file_write_entry *entry_data)
+{
+	unsigned long start_pgoff, num_pages = 0;
+	int ret;
+
+	ret = nova_get_vma_overlap_range(sb, sih, vma, entry_data,
+						&start_pgoff, &num_pages);
+	if (ret == 0) {
+		return ret;
+	}
+
+	ret = nova_update_dax_mapping(sb, sih, vma, entry_data,
+						start_pgoff, num_pages);
+	if (ret) {
+		nova_err(sb, "update DAX mapping return %d\n", ret);
+		return ret;
+	}
+
+	ret = nova_update_entry_pfn(sb, sih, vma, entry_data,
+						start_pgoff, num_pages);
+	if (ret) {
+		nova_err(sb, "update_pfn return %d\n", ret);
+	}
+
+	return ret;
+}
+
+static int nova_dax_cow_mmap_handler(struct super_block *sb,
 	struct vm_area_struct *vma, struct nova_inode_info_header *sih,
 	u64 begin_tail)
 {
 	struct nova_file_write_entry *entry, entry_data;
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
-	unsigned long start_pgoff, num_pages;
 	int ret = 0;
 	timing_t update_time;
 
 	NOVA_START_TIMING(update_pfn_t, update_time);
 	while (curr_p && curr_p != sih->log_tail) {
-		start_pgoff = 0;
-		num_pages = 0;
-
 		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
 
@@ -201,26 +226,9 @@ static int nova_dax_mmap_update_pfn(struct super_block *sb,
 			continue;
 		}
 
-		ret = nova_get_vma_overlap_range(sb, sih, vma, &entry_data,
-						&start_pgoff, &num_pages);
-		if (ret == 0) {
-			curr_p += entry_size;
-			continue;
-		}
-
-		ret = nova_update_dax_mapping(sb, sih, vma, &entry_data,
-						start_pgoff, num_pages);
-		if (ret) {
-			nova_err(sb, "update DAX mapping return %d\n", ret);
+		ret = nova_dax_mmap_update_mapping(sb, sih, vma, &entry_data);
+		if (ret)
 			break;
-		}
-
-		ret = nova_update_entry_pfn(sb, sih, vma, &entry_data,
-						start_pgoff, num_pages);
-		if (ret) {
-			nova_err(sb, "update_pfn return %d\n", ret);
-			break;
-		}
 
 		curr_p += entry_size;
 	}
@@ -430,7 +438,7 @@ int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
 	}
 
 	/* Update pfn and prot */
-	ret = nova_dax_mmap_update_pfn(sb, vma, sih, begin_tail);
+	ret = nova_dax_cow_mmap_handler(sb, vma, sih, begin_tail);
 	if (ret) {
 		goto out;
 	}
