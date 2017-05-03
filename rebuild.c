@@ -350,6 +350,9 @@ int nova_reset_vma_csum_parity(struct super_block *sb,
 	start_index = vma->vm_pgoff;
 	end_index = vma->vm_pgoff + num_pages;
 
+	nova_dbgv("%s: inode %lu, pgoff %lu - %lu\n",
+			__func__, inode->i_ino, start_index, end_index);
+
 	ret = nova_reset_mapping_csum_parity(sb, inode, mapping,
 					start_index, end_index);
 

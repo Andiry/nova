@@ -1984,11 +1984,18 @@ static int nova_restore_page_write(struct vm_area_struct *vma,
 
 static void nova_vma_open(struct vm_area_struct *vma)
 {
-	nova_dbgv("[%s:%d] MMAP 4KPAGE vm_start(0x%lx),"
-			" vm_end(0x%lx), vm_flags(0x%lx), "
-			"vm_page_prot(0x%lx)\n", __func__,
-			__LINE__, vma->vm_start, vma->vm_end,
-			vma->vm_flags, pgprot_val(vma->vm_page_prot));
+	struct address_space *mapping = vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+
+	nova_dbg_mmap4k("[%s:%d] inode %lu, MMAP 4KPAGE vm_start(0x%lx),"
+			" vm_end(0x%lx), vm pgoff %lu, %lu blocks, "
+			"vm_flags(0x%lx), vm_page_prot(0x%lx)\n",
+			__func__, __LINE__,
+			inode->i_ino, vma->vm_start, vma->vm_end,
+			vma->vm_pgoff,
+			(vma->vm_end - vma->vm_start) >> PAGE_SHIFT,
+			vma->vm_flags,
+			pgprot_val(vma->vm_page_prot));
 
 	if (mmap_cow || data_csum || data_parity)
 		nova_insert_write_vma(vma);
