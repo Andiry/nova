@@ -518,7 +518,10 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
 		inode->i_op = &nova_file_inode_operations;
-		inode->i_fop = &nova_dax_file_operations;
+		if (inplace_data_updates)
+			inode->i_fop = &nova_dax_file_operations;
+		else
+			inode->i_fop = &nova_dax_cow_file_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &nova_dir_inode_operations;
@@ -1086,7 +1089,10 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		case TYPE_CREATE:
 			inode->i_op = &nova_file_inode_operations;
 			inode->i_mapping->a_ops = &nova_aops_dax;
-			inode->i_fop = &nova_dax_file_operations;
+			if (inplace_data_updates)
+				inode->i_fop = &nova_dax_file_operations;
+			else
+				inode->i_fop = &nova_dax_cow_file_operations;
 			break;
 		case TYPE_MKNOD:
 			init_special_inode(inode, mode, rdev);

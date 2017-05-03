@@ -616,6 +616,22 @@ const struct file_operations nova_dax_file_operations = {
 #endif
 };
 
+/* No write_iter support for CoW */
+const struct file_operations nova_dax_cow_file_operations = {
+	.llseek			= nova_llseek,
+	.read			= nova_dax_file_read,
+	.write			= nova_dax_file_write,
+	.mmap			= nova_dax_file_mmap,
+	.open			= nova_open,
+	.fsync			= nova_fsync,
+	.flush			= nova_flush,
+	.unlocked_ioctl		= nova_ioctl,
+	.fallocate		= nova_fallocate,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl		= nova_compat_ioctl,
+#endif
+};
+
 const struct inode_operations nova_file_inode_operations = {
 	.setattr	= nova_notify_change,
 	.getattr	= nova_getattr,
