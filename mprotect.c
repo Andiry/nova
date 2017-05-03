@@ -108,6 +108,9 @@ static int nova_update_dax_mapping(struct super_block *sb,
 	unsigned long value, new_value;
 	int i;
 	int ret = 0;
+	timing_t update_time;
+
+	NOVA_START_TIMING(update_mapping_t, update_time);
 
 	start_blocknr = nova_get_blocknr(sb, entry->block, sih->i_blk_type);
 	spin_lock_irq(&mapping->tree_lock);
@@ -132,6 +135,8 @@ static int nova_update_dax_mapping(struct super_block *sb,
 	}
 
 	spin_unlock_irq(&mapping->tree_lock);
+
+	NOVA_END_TIMING(update_mapping_t, update_time);
 	return ret;
 }
 
@@ -145,6 +150,10 @@ static int nova_update_entry_pfn(struct super_block *sb,
 	unsigned long size;
 	unsigned long pfn;
 	pgprot_t new_prot;
+	int ret;
+	timing_t update_time;
+
+	NOVA_START_TIMING(update_pfn_t, update_time);
 
 	addr = vma->vm_start + ((start_pgoff - vma->vm_pgoff) << PAGE_SHIFT);
 	pfn = nova_get_pfn(sb, entry->block) + start_pgoff - entry->pgoff;
@@ -156,7 +165,10 @@ static int nova_update_entry_pfn(struct super_block *sb,
 	newflags = vma->vm_flags | VM_WRITE;
 	new_prot = vm_get_page_prot(newflags);
 
-	return remap_pfn_range(vma, addr, pfn, size, new_prot);
+	ret = remap_pfn_range(vma, addr, pfn, size, new_prot);
+
+	NOVA_END_TIMING(update_pfn_t, update_time);
+	return ret;
 }
 
 static int nova_dax_mmap_update_mapping(struct super_block *sb,
@@ -198,7 +210,7 @@ static int nova_dax_cow_mmap_handler(struct super_block *sb,
 	int ret = 0;
 	timing_t update_time;
 
-	NOVA_START_TIMING(update_pfn_t, update_time);
+	NOVA_START_TIMING(mmap_handler_t, update_time);
 	while (curr_p && curr_p != sih->log_tail) {
 		if (is_last_entry(curr_p, entry_size))
 			curr_p = next_log_page(sb, curr_p);
@@ -233,7 +245,7 @@ static int nova_dax_cow_mmap_handler(struct super_block *sb,
 		curr_p += entry_size;
 	}
 
-	NOVA_END_TIMING(update_pfn_t, update_time);
+	NOVA_END_TIMING(mmap_handler_t, update_time);
 	return ret;
 }
 

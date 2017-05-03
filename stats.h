@@ -137,7 +137,9 @@ enum timing_category {
 	remove_vma_t,
 	set_vma_read_t,
 	mmap_cow_t,
+	update_mapping_t,
 	update_pfn_t,
+	mmap_handler_t,
 
 	/* Rebuild */
 	rebuild_title_t,
