@@ -371,7 +371,7 @@ static inline void nova_print_file_write_entry(struct super_block *sb,
 	u64 curr, struct nova_file_write_entry *entry)
 {
 	nova_dbg("file write entry @ 0x%llx: epoch %llu, trans %llu, "
-			"paoff %llu, pages %u, "
+			"pgoff %llu, pages %u, "
 			"blocknr %llu, reassigned %u, updating %u, "
 			"invalid count %u, size %llu, mtime %u\n",
 			curr, entry->epoch_id, entry->trans_id,
@@ -406,7 +406,7 @@ static inline void nova_print_mmap_entry(struct super_block *sb,
 	u64 curr, struct nova_mmap_entry *entry)
 {
 	nova_dbg("mmap write entry @ 0x%llx: epoch %llu, invalid %u, "
-			"paoff %llu, pages %llu\n",
+			"pgoff %llu, pages %llu\n",
 			curr, entry->epoch_id, entry->invalid,
 			entry->pgoff, entry->num_pages);
 }
