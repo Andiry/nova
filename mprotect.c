@@ -71,19 +71,17 @@ int nova_dax_mem_protect(struct super_block *sb, void *vaddr,
 	return nova_writeable(vaddr, size, rw);
 }
 
-static inline int nova_get_vma_overlap_range(struct super_block *sb,
+int nova_get_vma_overlap_range(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct vm_area_struct *vma,
-	struct nova_file_write_entry *entry, unsigned long *start_pgoff,
-	unsigned long *num_pages)
+	unsigned long entry_pgoff, unsigned long entry_pages,
+	unsigned long *start_pgoff, unsigned long *num_pages)
 {
-	unsigned long vma_pgoff, entry_pgoff;
-	unsigned long vma_pages, entry_pages;
+	unsigned long vma_pgoff;
+	unsigned long vma_pages;
 	unsigned long end_pgoff;
 
 	vma_pgoff = vma->vm_pgoff;
-	entry_pgoff = entry->pgoff;
 	vma_pages = (vma->vm_end - vma->vm_start) >> sb->s_blocksize_bits;
-	entry_pages = entry->num_pages;
 
 	if (vma_pgoff + vma_pages <= entry_pgoff ||
 				entry_pgoff + entry_pages <= vma_pgoff)
@@ -178,7 +176,8 @@ static int nova_dax_mmap_update_mapping(struct super_block *sb,
 	unsigned long start_pgoff, num_pages = 0;
 	int ret;
 
-	ret = nova_get_vma_overlap_range(sb, sih, vma, entry_data,
+	ret = nova_get_vma_overlap_range(sb, sih, vma, entry_data->pgoff,
+						entry_data->num_pages,
 						&start_pgoff, &num_pages);
 	if (ret == 0) {
 		return ret;

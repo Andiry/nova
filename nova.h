@@ -1858,6 +1858,18 @@ int nova_assign_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry,
 	bool free);
 
+/* mprotect.c */
+extern int nova_dax_mem_protect(struct super_block *sb,
+				 void *vaddr, unsigned long size, int rw);
+int nova_get_vma_overlap_range(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct vm_area_struct *vma,
+	unsigned long entry_pgoff, unsigned long entry_pages,
+	unsigned long *start_pgoff, unsigned long *num_pages);
+int nova_mmap_to_new_blocks(struct vm_area_struct *vma,
+	unsigned long address);
+bool nova_find_pgoff_in_vma(struct inode *inode, unsigned long pgoff);
+int nova_set_vmas_readonly(struct super_block *sb);
+
 /* namei.c */
 extern const struct inode_operations nova_dir_inode_operations;
 extern const struct inode_operations nova_special_inode_operations;
