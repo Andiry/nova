@@ -184,6 +184,8 @@ static int nova_dax_mmap_update_mapping(struct super_block *sb,
 		return ret;
 	}
 
+	NOVA_STATS_ADD(mapping_updated_pages, num_pages);
+
 	ret = nova_update_dax_mapping(sb, sih, vma, entry_data,
 						start_pgoff, num_pages);
 	if (ret) {
