@@ -616,7 +616,7 @@ const struct file_operations nova_dax_file_operations = {
 #endif
 };
 
-/* No write_iter support for CoW */
+/* No write_iter support for CoW and WP */
 const struct file_operations nova_dax_cow_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
