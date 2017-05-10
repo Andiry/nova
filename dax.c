@@ -1008,8 +1008,9 @@ static ssize_t nova_cow_file_write(struct file *filp,
 		nova_dbgv("COW write overlaps with vma: "
 				"inode %lu, pgoff %lu, %lu blocks\n",
 				inode->i_ino, start_blk, num_blocks);
-		ret = -EACCES;
+		NOVA_STATS_ADD(cow_overlap_mmap, 1);
 		try_inplace = 1;
+		ret = -EACCES;
 		goto out;
 	}
 

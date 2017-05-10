@@ -176,6 +176,7 @@ enum stats_category {
 	block_csum_parity,
 	dax_cow_during_snapshot,
 	mapping_updated_pages,
+	cow_overlap_mmap,
 
 	/* Sentinel */
 	STATS_NUM,

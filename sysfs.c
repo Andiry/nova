@@ -161,9 +161,11 @@ static int nova_seq_IO_show(struct seq_file *seq, void *v)
 	seq_printf(seq, "Block csum parity %llu\n", IOstats[block_csum_parity]);
 	seq_printf(seq, "Page fault %llu, dax cow fault %llu, "
 			"dax cow fault during snapshot creation %llu, "
+			"CoW write overlap mmap range %llu, "
 			"mapping/pfn updated pages %llu\n",
 			Countstats[mmap_fault_t], Countstats[mmap_cow_t],
 			IOstats[dax_cow_during_snapshot],
+			IOstats[cow_overlap_mmap],
 			IOstats[mapping_updated_pages]);
 
 	seq_printf(seq, "\n");
