@@ -616,11 +616,51 @@ const struct file_operations nova_dax_file_operations = {
 #endif
 };
 
-/* No write_iter support for CoW and WP */
-const struct file_operations nova_dax_cow_file_operations = {
+static ssize_t nova_wrap_rw_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	struct file *filp = iocb->ki_filp;
+	ssize_t ret = -EIO;
+	ssize_t written = 0;
+	unsigned long seg;
+	unsigned long nr_segs = iter->nr_segs;
+	const struct iovec *iv = iter->iov;
+
+	nova_dbgv("%s %s: %lu segs\n", __func__,
+			iov_iter_rw(iter) == READ ? "read" : "write",
+			nr_segs);
+	iv = iter->iov;
+	for (seg = 0; seg < nr_segs; seg++) {
+		if (iov_iter_rw(iter) == READ) {
+			ret = nova_dax_file_read(filp, iv->iov_base,
+					iv->iov_len, &iocb->ki_pos);
+		} else if (iov_iter_rw(iter) == WRITE) {
+			ret = nova_dax_file_write(filp, iv->iov_base,
+					iv->iov_len, &iocb->ki_pos);
+		}
+		if (ret < 0)
+			goto err;
+
+		if (iter->count > iv->iov_len)
+			iter->count -= iv->iov_len;
+		else
+			iter->count = 0;
+
+		written += ret;
+		iter->nr_segs--;
+		iv++;
+	}
+	ret = written;
+err:
+	return ret;
+}
+
+/* Wrap read/write_iter for DP, CoW and WP */
+const struct file_operations nova_wrap_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
 	.write			= nova_dax_file_write,
+	.read_iter		= nova_wrap_rw_iter,
+	.write_iter		= nova_wrap_rw_iter,
 	.mmap			= nova_dax_file_mmap,
 	.open			= nova_open,
 	.fsync			= nova_fsync,

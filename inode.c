@@ -521,7 +521,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 		if (inplace_data_updates && wprotect == 0)
 			inode->i_fop = &nova_dax_file_operations;
 		else
-			inode->i_fop = &nova_dax_cow_file_operations;
+			inode->i_fop = &nova_wrap_file_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &nova_dir_inode_operations;
@@ -1092,7 +1092,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 			if (inplace_data_updates && wprotect == 0)
 				inode->i_fop = &nova_dax_file_operations;
 			else
-				inode->i_fop = &nova_dax_cow_file_operations;
+				inode->i_fop = &nova_wrap_file_operations;
 			break;
 		case TYPE_MKNOD:
 			init_special_inode(inode, mode, rdev);
@@ -1314,55 +1314,6 @@ void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 		inode_has_no_xattr(inode);
 	inode->i_flags |= S_DAX;
 }
-
-#if 0
-static ssize_t nova_direct_IO(struct kiocb *iocb,
-	struct iov_iter *iter, loff_t offset)
-{
-	struct file *filp = iocb->ki_filp;
-	loff_t end = offset;
-	size_t count = iov_iter_count(iter);
-	ssize_t ret = -EINVAL;
-	ssize_t written = 0;
-	unsigned long seg;
-	unsigned long nr_segs = iter->nr_segs;
-	const struct iovec *iv = iter->iov;
-	timing_t dio_time;
-
-	NOVA_START_TIMING(direct_IO_t, dio_time);
-	end = offset + count;
-
-	nova_dbgv("%s: %lu segs\n", __func__, nr_segs);
-	iv = iter->iov;
-	for (seg = 0; seg < nr_segs; seg++) {
-		if (iov_iter_rw(iter) == READ) {
-			ret = nova_dax_file_read(filp, iv->iov_base,
-					iv->iov_len, &offset);
-		} else if (iov_iter_rw(iter) == WRITE) {
-			ret = nova_cow_file_write(filp, iv->iov_base,
-					iv->iov_len, &offset, false);
-		}
-		if (ret < 0)
-			goto err;
-
-		if (iter->count > iv->iov_len)
-			iter->count -= iv->iov_len;
-		else
-			iter->count = 0;
-
-		written += ret;
-		iter->nr_segs--;
-		iv++;
-	}
-	if (offset != end)
-		printk(KERN_ERR "nova: direct_IO: end = %lld"
-			"but offset = %lld\n", end, offset);
-	ret = written;
-err:
-	NOVA_END_TIMING(direct_IO_t, dio_time);
-	return ret;
-}
-#endif
 
 static int nova_legacy_get_blocks(struct inode *inode, sector_t iblock,
 	struct buffer_head *bh, int create)
