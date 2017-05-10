@@ -1883,7 +1883,8 @@ int nova_update_block_csum_parity(struct super_block *sb,
 	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes);
 int nova_restore_data(struct super_block *sb, unsigned long blocknr,
-        unsigned int bad_strp_id, u32 csum, u32 csum1, u32 *csum_good);
+        unsigned int badstrip_id, void *badstrip, int nvmmerr, u32 csum0,
+        u32 csum1, u32 *csum_good);
 int nova_update_truncated_block_parity(struct super_block *sb,
 	struct inode *inode, loff_t newsize);
 int nova_data_parity_init_free_list(struct super_block *sb,
