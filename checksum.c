@@ -102,6 +102,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 				" for checksum, 0x%llx\n", __func__, type,
 				(u64)entry);
 			ret = -EIO;
+			dump_stack();
 			break;
 	}
 
@@ -262,8 +263,10 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 	int ret;
 
 	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, entryd);
-	if (ret)
+	if (ret) {
+		nova_err(sb, "unmatch entry %p\n", entry);
 		return match;
+	}
 
 	*ret_size = size;
 
@@ -295,7 +298,8 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry,
 	match = is_entry_matched(sb, alter_entry, &size, entryd);
 
 	if (!match) {
-		nova_dbg("%s failed\n", __func__);
+		nova_dbg("%s failed, original match %d\n",
+				__func__, original_match ? 1 : 0);
 		if (original_match) {
 			memcpy_to_pmem_nocache(alter_entry, entry, size);
 			match = original_match;
@@ -347,10 +351,11 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
 	if (replica_metadata == 0)
 		goto out;
 
-	if (!match)
-		nova_dbg("%s: nova entry mismatch detected, trying to "
+	if (!match) {
+		nova_dbg("%s: nova entry %p mismatch detected, trying to "
 				"recover from the alternative entry.\n",
-				__func__);
+				__func__, entry);
+	}
 
 	match = nova_try_alter_entry(sb, entry, match, entryd);
 out:
@@ -721,6 +726,7 @@ bool nova_verify_data_csum(struct super_block *sb,
 			if (error) {
 				nova_dbg("%s: nova data recovery fails!\n",
 						__func__);
+				dump_stack();
 				break;
 			}
 
