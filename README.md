@@ -27,6 +27,7 @@ NOVA works on the 4.10-rc8 version of x86-64 Linux kernel.
 
 To build NOVA, first apply patches under kernel-patches directory to your kernel source,
 and compile the kernel with DAX support (`CONFIG_FS_DAX`) and NVDIMM support enabled (`CONFIG_BLK_DEV_PMEM`).
+
 Then you can build nova by running a
 
 ~~~
@@ -37,7 +38,6 @@ command.
 
 ## Running NOVA
 NOVA runs on a physically contiguous memory region that is not used by the Linux kernel.
-
 After you compile the kernel, you can reserve the memory space by booting the kernel with `memmap` command line option.
 
 For instance, adding `memmap=16G!8G` to the kernel boot parameters will reserve 16GB memory starting from 8GB address, and the kernel will create a `pmem0` block device under the `/dev` directory.
