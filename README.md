@@ -23,9 +23,10 @@ For more details about the design and implementation of NOVA, please see this pa
 Published in FAST 2016
 
 ## Building NOVA
-NOVA works on the 4.3 and 4.4 versions of x86-64 Linux kernel.
+NOVA works on the 4.10-rc8 version of x86-64 Linux kernel.
 
-To build NOVA, simply run a
+To build NOVA, first apply patches under kernel-patches directory to your kernel source and compile the kernel,
+and then in nova directory run a
 
 ~~~
 #make
@@ -93,8 +94,6 @@ Users should not write to the file system after mounting a snapshot.
 * NOVA only works on x86-64 kernels.
 * NOVA does not currently support extended attributes or ACL.
 * NOVA requires the underlying block device to support DAX (Direct Access) feature.
-* Applications can write to a file, or mmap a file and load/store the file directly, but not at the same time, i.e. writing to a mmaped file is disallowed, because write is copy-on-write (out-of-place) while mmap is DAX (in-place).
-* NOVA currently supports up to 256 snapshots.
 
 [NVSL]: http://nvsl.ucsd.edu/ "http://nvsl.ucsd.edu"
 [POSIXtest]: http://www.tuxera.com/community/posix-test-suite/ 
