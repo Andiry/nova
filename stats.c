@@ -134,6 +134,8 @@ const char *Timingstring[TIMING_NUM] =
 	/* Mmap */
 	"=============== MMap operations ================",
 	"mmap_page_fault",
+	"mmap_pmd_fault",
+	"mmap_pfn_mkwrite",
 	"insert_vma",
 	"remove_vma",
 	"set_vma_readonly",

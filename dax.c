@@ -1767,11 +1767,11 @@ static int nova_dax_pmd_fault(struct vm_area_struct *vma, unsigned long addr,
 	int ret = 0;
 	timing_t fault_time;
 
-	NOVA_START_TIMING(mmap_fault_t, fault_time);
+	NOVA_START_TIMING(pmd_fault_t, fault_time);
 
 	ret = dax_iomap_pmd_fault(vma, addr, pmd, flags, &nova_iomap_ops_lock);
 
-	NOVA_END_TIMING(mmap_fault_t, fault_time);
+	NOVA_END_TIMING(pmd_fault_t, fault_time);
 	return ret;
 }
 
@@ -1783,7 +1783,7 @@ static int nova_dax_pfn_mkwrite(struct vm_area_struct *vma,
 	int ret = 0;
 	timing_t fault_time;
 
-	NOVA_START_TIMING(mmap_fault_t, fault_time);
+	NOVA_START_TIMING(pfn_mkwrite_t, fault_time);
 
 	inode_lock(inode);
 	size = (i_size_read(inode) + PAGE_SIZE - 1) >> PAGE_SHIFT;
@@ -1793,7 +1793,7 @@ static int nova_dax_pfn_mkwrite(struct vm_area_struct *vma,
 		ret = dax_pfn_mkwrite(vma, vmf);
 	inode_unlock(inode);
 
-	NOVA_END_TIMING(mmap_fault_t, fault_time);
+	NOVA_END_TIMING(pfn_mkwrite_t, fault_time);
 	return ret;
 }
 

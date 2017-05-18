@@ -133,6 +133,8 @@ enum timing_category {
 	/* Mmap */
 	mmap_title_t,
 	mmap_fault_t,
+	pmd_fault_t,
+	pfn_mkwrite_t,
 	insert_vma_t,
 	remove_vma_t,
 	set_vma_read_t,
