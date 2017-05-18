@@ -177,6 +177,8 @@ enum stats_category {
 	dax_cow_during_snapshot,
 	mapping_updated_pages,
 	cow_overlap_mmap,
+	dax_new_blocks,
+	inplace_new_blocks,
 
 	/* Sentinel */
 	STATS_NUM,

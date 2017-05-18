@@ -883,6 +883,7 @@ static ssize_t nova_inplace_file_write(struct file *filp,
 		nova_memunlock_inode(sb, pi);
 		nova_update_inode(sb, inode, pi, &update, 1);
 		nova_memlock_inode(sb, pi);
+		NOVA_STATS_ADD(inplace_new_blocks, 1);
 
 		/* Update file tree */
 		ret = nova_reassign_file_tree(sb, sih, begin_tail);
@@ -1276,6 +1277,7 @@ again:
 
 	inode->i_blocks = sih->i_blocks;
 	sih->trans_id++;
+	NOVA_STATS_ADD(dax_new_blocks, 1);
 
 //	set_buffer_new(bh);
 out:
