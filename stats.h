@@ -44,6 +44,7 @@ enum timing_category {
 	add_dentry_t,
 	remove_dentry_t,
 	setattr_t,
+	setsize_t,
 
 	/* I/O operations */
 	io_title_t,

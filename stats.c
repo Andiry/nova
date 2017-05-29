@@ -45,6 +45,7 @@ const char *Timingstring[TIMING_NUM] =
 	"add_dentry",
 	"remove_dentry",
 	"setattr",
+	"setsize",
 
 	/* I/O operations */
 	"================ I/O operations ================",

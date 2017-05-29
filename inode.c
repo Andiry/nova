@@ -1199,12 +1199,15 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
+	timing_t setsize_time;
 
 	/* We only support truncate regular file */
 	if (!(S_ISREG(inode->i_mode))) {
 		nova_err(inode->i_sb, "%s:wrong file mode %x\n", inode->i_mode);
 		return;
 	}
+
+	NOVA_START_TIMING(setsize_t, setsize_time);
 
 	inode_dio_wait(inode);
 
@@ -1227,6 +1230,7 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 
 	truncate_pagecache(inode, newsize);
 	nova_truncate_file_blocks(inode, newsize, oldsize, epoch_id);
+	NOVA_END_TIMING(setsize_t, setsize_time);
 }
 
 int nova_getattr(struct vfsmount *mnt, struct dentry *dentry,
