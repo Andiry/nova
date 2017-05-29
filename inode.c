@@ -1255,12 +1255,14 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	timing_t setattr_time;
 
 	NOVA_START_TIMING(setattr_t, setattr_time);
-	if (!pi)
-		return -EACCES;
+	if (!pi) {
+		ret = -EACCES;
+		goto out;
+	}
 
 	ret = setattr_prepare(dentry, attr);
 	if (ret)
-		return ret;
+		goto out;
 
 	/* Update inode with attr except for size */
 	setattr_copy(inode, attr);
@@ -1273,7 +1275,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	ia_valid = ia_valid & attr_mask;
 
 	if (ia_valid == 0)
-		return ret;
+		goto out;
 
 	ret = nova_handle_setattr_operation(sb, inode, pi, ia_valid,
 					attr, epoch_id);
