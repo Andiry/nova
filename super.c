@@ -496,6 +496,12 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	sbi = kzalloc(sizeof(struct nova_sb_info), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
+	sbi->nova_sb = kzalloc(sizeof(struct nova_super_block), GFP_KERNEL);
+	if (!sbi->nova_sb) {
+		kfree(sbi);
+		return -ENOMEM;
+	}
+
 	sb->s_fs_info = sbi;
 	sbi->sb = sb;
 
@@ -702,6 +708,7 @@ out:
 
 	nova_sysfs_exit(sb);
 
+	kfree(sbi->nova_sb);
 	kfree(sbi);
 	return retval;
 }
@@ -839,6 +846,7 @@ static void nova_put_super(struct super_block *sb)
 
 	nova_sysfs_exit(sb);
 
+	kfree(sbi->nova_sb);
 	kfree(sbi);
 	sb->s_fs_info = NULL;
 }
