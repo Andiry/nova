@@ -50,31 +50,18 @@ static inline void nova_sync_super(struct super_block *sb,
 	struct nova_super_block *ps)
 {
 	struct nova_super_block *super_redund;
-	u16 crc = 0;
+	u32 crc = 0;
 
 	super_redund = nova_get_redund_super(sb);
 	ps->s_wtime = cpu_to_le32(get_seconds());
 	ps->s_sum = 0;
-	crc = crc16(~0, (__u8 *)ps + sizeof(__le16),
-			NOVA_SB_STATIC_SIZE(ps) - sizeof(__le16));
-	ps->s_sum = cpu_to_le16(crc);
+	crc = nova_crc32c(~0, (__u8 *)ps + sizeof(__le32),
+			NOVA_SB_STATIC_SIZE(ps) - sizeof(__le32));
+	ps->s_sum = cpu_to_le32(crc);
 	/* Keep sync redundant super block */
 	memcpy_to_pmem_nocache((void *)super_redund, (void *)ps,
 		sizeof(struct nova_super_block));
 }
-
-#if 0
-/* nova_memunlock_inode() before calling! */
-static inline void nova_sync_inode(struct nova_inode *pi)
-{
-	u16 crc = 0;
-
-	pi->i_sum = 0;
-	crc = crc16(~0, (__u8 *)pi + sizeof(__le16), NOVA_INODE_SIZE -
-		    sizeof(__le16));
-	pi->i_sum = cpu_to_le16(crc);
-}
-#endif
 
 extern int nova_writeable(void *vaddr, unsigned long size, int rw);
 

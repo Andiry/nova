@@ -27,7 +27,6 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/sched.h>
-#include <linux/crc16.h>
 #include <linux/mutex.h>
 #include <linux/pagemap.h>
 #include <linux/backing-dev.h>
@@ -476,10 +475,10 @@ static inline u32 nova_crc32c(u32 crc, const u8 *data, size_t len)
 
 static inline int nova_calc_sb_checksum(u8 *data, int n)
 {
-	u16 crc = 0;
+	u32 crc = 0;
 
-	crc = crc16(~0, (__u8 *)data + sizeof(__le16), n - sizeof(__le16));
-	if (*((__le16 *)data) == cpu_to_le16(crc))
+	crc = nova_crc32c(~0, (__u8 *)data + sizeof(__le32), n - sizeof(__le32));
+	if (*((__le32 *)data) == cpu_to_le32(crc))
 		return 0;
 	else
 		return 1;

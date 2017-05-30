@@ -135,8 +135,7 @@ struct nova_inode {
 struct nova_super_block {
 	/* static fields. they never change after file system creation.
 	 * checksum only validates up to s_start_dynamic field below */
-	__le16		s_sum;			/* checksum of this sb */
-	__le16		s_padding16;
+	__le32		s_sum;			/* checksum of this sb */
 	__le32		s_magic;		/* magic signature */
 	__le32		s_padding32;
 	__le32		s_blocksize;		/* blocksize in bytes */
