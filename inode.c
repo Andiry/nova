@@ -235,63 +235,7 @@ int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
 	return 0;
 }
 
-static int nova_delete_cache_tree(struct super_block *sb,
-	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr)
-{
-	unsigned long addr;
-	unsigned long i;
-	int deleted = 0;
-	void *ret;
-
-	nova_dbgv("%s: inode %lu, mmap pages %lu, start %lu, last %lu\n",
-			__func__, sih->ino, sih->mmap_pages,
-			start_blocknr, last_blocknr);
-
-	for (i = start_blocknr; i <= last_blocknr; i++) {
-		addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
-		if (addr) {
-			ret = radix_tree_delete(&sih->cache_tree, i);
-			nova_free_data_blocks(sb, sih, addr >> PAGE_SHIFT, 1);
-			sih->mmap_pages--;
-			deleted++;
-		}
-	}
-
-	nova_dbgv("%s: inode %lu, deleted mmap pages %d\n",
-			__func__, sih->ino, deleted);
-
-	if (sih->mmap_pages == 0) {
-		sih->low_dirty = ULONG_MAX;
-		sih->high_dirty = 0;
-	}
-
-	return 0;
-}
-
-static int nova_zero_cache_tree(struct super_block *sb,
-	struct nova_inode_info_header *sih, unsigned long start_blocknr)
-{
-	unsigned long block;
-	unsigned long i;
-	void *addr;
-
-	nova_dbgv("%s: inode %lu, mmap pages %lu, start %lu, last %lu, "
-			"size %lu", __func__, sih->ino, sih->mmap_pages,
-			start_blocknr, sih->high_dirty, sih->i_size);
-
-	for (i = start_blocknr; i <= sih->high_dirty; i++) {
-		block = (unsigned long)radix_tree_lookup(&sih->cache_tree, i);
-		if (block) {
-			addr = nova_get_block(sb, block);
-			memset(addr, 0, PAGE_SIZE);
-		}
-	}
-
-	return 0;
-}
-
-static int nova_traverse_delete_file_tree(struct super_block *sb,
+int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
 	unsigned long last_blocknr, bool delete_nvmm, bool delete_dead,
 	u64 epoch_id)
@@ -303,6 +247,9 @@ static int nova_traverse_delete_file_tree(struct super_block *sb,
 	unsigned int num_free = 0;
 	int freed = 0;
 	void *ret;
+	timing_t delete_time;
+
+	NOVA_START_TIMING(delete_file_tree_t, delete_time);
 
 	/* Handle EOF blocks */
 	do {
@@ -344,31 +291,8 @@ static int nova_traverse_delete_file_tree(struct super_block *sb,
 	nova_dbgv("Inode %lu: delete file tree from pgoff %lu to %lu, "
 			"%d blocks freed\n",
 			sih->ino, start_blocknr, last_blocknr, freed);
-	return freed;
-}
-
-int nova_delete_file_tree(struct super_block *sb,
-	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
-	bool delete_dead, u64 epoch_id)
-{
-	int freed = 0;
-	timing_t delete_time;
-
-	NOVA_START_TIMING(delete_file_tree_t, delete_time);
-
-	if (delete_mmap && sih->mmap_pages)
-		nova_delete_cache_tree(sb, sih, start_blocknr,
-						last_blocknr);
-
-	if (sih->mmap_pages && start_blocknr <= sih->high_dirty)
-		nova_zero_cache_tree(sb, sih, start_blocknr);
-
-	freed = nova_traverse_delete_file_tree(sb, sih, start_blocknr,
-			last_blocknr, delete_nvmm, delete_dead, epoch_id);
 
 	NOVA_END_TIMING(delete_file_tree_t, delete_time);
-
 	return freed;
 }
 
@@ -384,7 +308,7 @@ static int nova_free_dram_resource(struct super_block *sb,
 	if (S_ISREG(sih->i_mode)) {
 		last_blocknr = nova_get_last_blocknr(sb, sih);
 		freed = nova_delete_file_tree(sb, sih, 0,
-					last_blocknr, false, true, false, 0);
+					last_blocknr, false, false, 0);
 	} else {
 		nova_delete_dir_tree(sb, sih);
 		freed = 1;
@@ -422,7 +346,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 		return;
 
 	freed = nova_delete_file_tree(sb, sih, first_blocknr,
-				last_blocknr, true, false, false, epoch_id);
+				last_blocknr, true, false, epoch_id);
 
 	inode->i_blocks -= (freed * (1 << (data_bits -
 				sb->s_blocksize_bits)));
@@ -861,7 +785,7 @@ static int nova_free_inode_resource(struct super_block *sb,
 		last_blocknr = nova_get_last_blocknr(sb, sih);
 		nova_dbgv("%s: file ino %lu\n", __func__, sih->ino);
 		freed = nova_delete_file_tree(sb, sih, 0,
-					last_blocknr, true, true, true, 0);
+					last_blocknr, true, true, 0);
 		break;
 	case S_IFDIR:
 		nova_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
@@ -872,7 +796,7 @@ static int nova_free_inode_resource(struct super_block *sb,
 		nova_dbgv("%s: symlink ino %lu\n",
 				__func__, sih->ino);
 		freed = nova_delete_file_tree(sb, sih, 0, 0,
-						true, true, true, 0);
+						true, true, 0);
 		break;
 	default:
 		nova_dbgv("%s: special ino %lu\n",

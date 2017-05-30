@@ -46,7 +46,7 @@ static void nova_apply_setattr_entry(struct super_block *sb,
 			last_blocknr = 0;
 
 		freed = nova_delete_file_tree(sb, sih, first_blocknr,
-					last_blocknr, false, false, false, 0);
+					last_blocknr, false, false, 0);
 	}
 }
 

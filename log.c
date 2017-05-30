@@ -203,26 +203,6 @@ void nova_clear_last_page_tail(struct super_block *sb,
 		nova_update_truncated_block_csum(sb, inode, newsize);
 	if (data_parity > 0)
 		nova_update_truncated_block_parity(sb, inode, newsize);
-
-	/* Clear mmap page */
-	if (sih->mmap_pages && pgoff <= sih->high_dirty &&
-			pgoff >= sih->low_dirty) {
-		nvmm = (unsigned long)radix_tree_lookup(&sih->cache_tree,
-							pgoff);
-		if (nvmm) {
-			nvmm_addr = nova_get_block(sb, nvmm);
-			nova_memunlock_range(sb, nvmm_addr + offset, length);
-			memset(nvmm_addr + offset, 0, length);
-			nova_memlock_range(sb, nvmm_addr + offset, length);
-
-			if (data_csum > 0)
-				nova_update_truncated_block_csum(sb, inode,
-								newsize);
-			if (data_parity > 0)
-				nova_update_truncated_block_parity(sb, inode,
-								newsize);
-		}
-	}
 }
 
 static void nova_update_setattr_entry(struct inode *inode,

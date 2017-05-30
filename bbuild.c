@@ -34,15 +34,11 @@ void nova_init_header(struct super_block *sb,
 	struct nova_inode_info_header *sih, u16 i_mode)
 {
 	sih->log_pages = 0;
-	sih->mmap_pages = 0;
-	sih->low_dirty = ULONG_MAX;
-	sih->high_dirty = 0;
 	sih->i_size = 0;
 	sih->i_blocks = 0;
 	sih->pi_addr = 0;
 	sih->alter_pi_addr = 0;
 	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
-	INIT_RADIX_TREE(&sih->cache_tree, GFP_ATOMIC);
 	sih->vma_tree = RB_ROOT;
 	sih->num_vmas = 0;
 	INIT_LIST_HEAD(&sih->list);
@@ -1350,7 +1346,7 @@ static int failure_thread_func(void *data)
 	if (max_size) {
 		last_blocknr = (max_size - 1) >> PAGE_SHIFT;
 		nova_delete_file_tree(sb, &sih, 0, last_blocknr,
-						false, false, false, 0);
+						false, false, 0);
 	}
 
 	finished[cpuid] = 1;

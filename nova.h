@@ -570,7 +570,6 @@ static inline bool nova_range_node_checksum_ok(struct nova_range_node *node)
 
 struct nova_inode_info_header {
 	struct radix_tree_root tree;	/* Dir name entry tree root */
-	struct radix_tree_root cache_tree;	/* Mmap cache tree root */
 	struct rb_root vma_tree;	/* Write vmas */
 	struct list_head list;		/* SB list of mmap sih */
 	int num_vmas;
@@ -581,9 +580,6 @@ struct nova_inode_info_header {
 	unsigned long ino;
 	unsigned long pi_addr;
 	unsigned long alter_pi_addr;
-	unsigned long mmap_pages;	/* Num of mmap pages */
-	unsigned long low_dirty;	/* Mmap dirty low range */
-	unsigned long high_dirty;	/* Mmap dirty high range */
 	unsigned long valid_entries;	/* For thorough GC */
 	unsigned long num_entries;	/* For thorough GC */
 	u64 last_setattr;		/* Last setattr entry */
@@ -1100,18 +1096,6 @@ static inline u64 nova_find_nvmm_block(struct super_block *sb,
 
 	nvmm = get_nvmm(sb, sih, entry, blocknr);
 	return nvmm << PAGE_SHIFT;
-}
-
-static inline unsigned long nova_get_cache_addr(struct super_block *sb,
-	struct nova_inode_info *si, unsigned long blocknr)
-{
-	struct nova_inode_info_header *sih = &si->header;
-	unsigned long addr;
-
-	addr = (unsigned long)radix_tree_lookup(&sih->cache_tree, blocknr);
-	nova_dbgv("%s: inode %lu, blocknr %lu, addr 0x%lx\n",
-		__func__, sih->ino, blocknr, addr);
-	return addr;
 }
 
 static inline unsigned int
@@ -1765,7 +1749,7 @@ extern unsigned long nova_find_region(struct inode *inode, loff_t *offset,
 		int hole);
 int nova_delete_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long start_blocknr,
-	unsigned long last_blocknr, bool delete_nvmm, bool delete_mmap,
+	unsigned long last_blocknr, bool delete_nvmm,
 	bool delete_dead, u64 trasn_id);
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
