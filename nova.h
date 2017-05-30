@@ -688,7 +688,8 @@ struct nova_sb_info {
 	 */
 	phys_addr_t	phys_addr;
 	void		*virt_addr;
-	void		*tail_addr;
+	void		*replica_basic_inodes_addr;
+	void		*replica_sb_addr;
 
 	unsigned long	num_blocks;
 
@@ -783,7 +784,7 @@ static inline struct nova_super_block *nova_get_redund_super(struct super_block 
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
-	return (struct nova_super_block *)(sbi->tail_addr);
+	return (struct nova_super_block *)(sbi->replica_sb_addr);
 }
 
 /* If this is part of a read-modify-write of the block,
@@ -1134,7 +1135,9 @@ static inline u64 nova_get_basic_inode_addr(struct super_block *sb,
 static inline u64 nova_get_alter_basic_inode_addr(struct super_block *sb,
 	u64 inode_number)
 {
-	return 	(NOVA_DEF_BLOCK_SIZE_4K * REPLICA_INODE_START) +
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	return nova_get_addr_off(sbi, sbi->replica_basic_inodes_addr) +
 			inode_number * NOVA_INODE_SIZE;
 }
 

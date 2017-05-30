@@ -168,13 +168,12 @@ struct nova_super_block {
 #define	HEAD_RESERVED_BLOCKS	8
 
 #define	RESERVE_INODE_START	1
-#define	REPLICA_INODE_START	2
 #define	JOURNAL_START		3
 #define	INODE_TABLE0_START	4
 #define	INODE_TABLE1_START	5
 
-/* For redundant super block */
-#define	TAIL_RESERVED_BLOCKS	1
+/* For redundant super block and replica basic inodes */
+#define	TAIL_RESERVED_BLOCKS	2
 
 /* ======================= Reserved inodes ========================= */
 

@@ -133,8 +133,9 @@ static int nova_get_nvmm_info(struct super_block *sb,
 	sbi->virt_addr = virt_addr;
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
-	sbi->tail_addr = virt_addr + size -
+	sbi->replica_basic_inodes_addr = virt_addr + size -
 			(sbi->tail_reserved_blocks << PAGE_SHIFT);
+	sbi->replica_sb_addr = virt_addr + size - PAGE_SIZE;
 
 	nova_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr %p, size %ld\n",
 		__func__, sbi->s_bdev->bd_disk->disk_name,
