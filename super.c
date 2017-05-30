@@ -337,10 +337,6 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	nova_memunlock_reserved(sb, super);
 	/* clear out super-block and inode table */
 	memset_nt(super, 0, sbi->head_reserved_blocks * sbi->blocksize);
-	super->s_size = cpu_to_le64(size);
-	super->s_blocksize = cpu_to_le32(blocksize);
-	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
-	super->s_epoch_id = 0;
 
 	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	pi->nova_ino = NOVA_BLOCKNODE_INO;
@@ -366,11 +362,13 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	epoch_id = nova_get_epoch_id(sb);
 
-	nova_memunlock_range(sb, super, NOVA_SB_SIZE);
-	nova_sync_super(sb, super);
+	sbi->nova_sb->s_size = cpu_to_le64(size);
+	sbi->nova_sb->s_blocksize = cpu_to_le32(blocksize);
+	sbi->nova_sb->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
+	sbi->nova_sb->s_epoch_id = 0;
+	nova_update_super_crc(sb);
 
-	nova_flush_buffer(super, NOVA_SB_SIZE, false);
-	nova_memlock_range(sb, super, NOVA_SB_SIZE);
+	nova_sync_super(sb);
 
 	nova_dbgv("Allocate root inode\n");
 	root_i = nova_get_inode_by_ino(sb, NOVA_ROOT_INO);
@@ -417,65 +415,55 @@ static void nova_root_check(struct super_block *sb, struct nova_inode *root_pi)
 		nova_warn("root is not a directory!\n");
 }
 
-int nova_check_integrity(struct super_block *sb,
-			  struct nova_super_block *super)
+/* Check super block magic and checksum */
+static int nova_check_super(struct super_block *sb,
+	struct nova_super_block *ps)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int rc;
+
+	rc = memcpy_from_pmem(sbi->nova_sb, ps,
+				sizeof(struct nova_super_block));
+
+	if (rc < 0)
+		return rc;
+
+	if (le32_to_cpu(sbi->nova_sb->s_magic) != NOVA_SUPER_MAGIC)
+		return -EIO;
+
+	if (nova_check_super_checksum(sb))
+		return -EIO;
+
+	return 0;
+}
+
+static int nova_check_integrity(struct super_block *sb)
+{
+	struct nova_super_block *super = nova_get_super(sb);
 	struct nova_super_block *super_redund;
+	int rc;
 
 	super_redund = nova_get_redund_super(sb);
 
 	/* Do sanity checks on the superblock */
-	if (le32_to_cpu(super->s_magic) != NOVA_SUPER_MAGIC) {
-		if (le32_to_cpu(super_redund->s_magic) != NOVA_SUPER_MAGIC) {
+	rc = nova_check_super(sb, super);
+	if (rc < 0) {
+		rc = nova_check_super(sb, super_redund);
+		if (rc < 0) {
 			printk(KERN_ERR "Can't find a valid nova partition\n");
-			goto out;
+			return rc;
 		} else {
-			nova_warn
-				("Error in super block: try to repair it with "
-				"the redundant copy");
-			/* Try to auto-recover the super block */
-			if (sb)
-				nova_memunlock_super(sb);
-			memcpy(super, super_redund,
-				sizeof(struct nova_super_block));
-			if (sb)
-				nova_memlock_super(sb);
-			nova_flush_buffer(super, sizeof(*super), false);
-			nova_flush_buffer(super_redund, sizeof(*super), false);
-
+			nova_warn("Error in super block: try to repair it with "
+				"the other copy\n");
 		}
 	}
 
-	/* Read the superblock */
-	if (nova_calc_sb_checksum((u8 *)super, NOVA_SB_STATIC_SIZE(super))) {
-		if (nova_calc_sb_checksum((u8 *)super_redund,
-					NOVA_SB_STATIC_SIZE(super_redund))) {
-			printk(KERN_ERR "checksum error in super block\n");
-			goto out;
-		} else {
-			nova_warn
-				("Error in super block: try to repair it with "
-				"the redundant copy");
-			/* Try to auto-recover the super block */
-			if (sb)
-				nova_memunlock_super(sb);
-			memcpy(super, super_redund,
-				sizeof(struct nova_super_block));
-			if (sb)
-				nova_memlock_super(sb);
-			nova_flush_buffer(super, sizeof(*super), false);
-			nova_flush_buffer(super_redund, sizeof(*super), false);
-		}
-	}
-
-	return 1;
-out:
+	nova_sync_super(sb);
 	return 0;
 }
 
 static int nova_fill_super(struct super_block *sb, void *data, int silent)
 {
-	struct nova_super_block *super;
 	struct nova_inode *root_pi;
 	struct nova_sb_info *sbi = NULL;
 	struct inode *root_i = NULL;
@@ -590,18 +578,15 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		root_pi = nova_init(sb, sbi->initsize);
 		if (IS_ERR(root_pi))
 			goto out;
-		super = nova_get_super(sb);
 		goto setup_sb;
 	}
 
 	nova_dbg_verbose("checking physical address 0x%016llx for nova image\n",
 		  (u64)sbi->phys_addr);
 
-	super = nova_get_super(sb);
-
-	if (nova_check_integrity(sb, super) == 0) {
+	if (nova_check_integrity(sb) < 0) {
 		nova_dbg("Memory contains invalid nova %x:%x\n",
-				le32_to_cpu(super->s_magic), NOVA_SUPER_MAGIC);
+			le32_to_cpu(sbi->nova_sb->s_magic), NOVA_SUPER_MAGIC);
 		goto out;
 	}
 
@@ -619,7 +604,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		}
 	}
 
-	blocksize = le32_to_cpu(super->s_blocksize);
+	blocksize = le32_to_cpu(sbi->nova_sb->s_blocksize);
 	nova_set_blocksize(sb, blocksize);
 
 	nova_dbg_verbose("blocksize %lu\n", blocksize);
@@ -632,7 +617,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* Set it all up.. */
 setup_sb:
-	sb->s_magic = le32_to_cpu(super->s_magic);
+	sb->s_magic = le32_to_cpu(sbi->nova_sb->s_magic);
 	sb->s_op = &nova_sops;
 	sb->s_maxbytes = nova_max_size(sb->s_blocksize_bits);
 	sb->s_time_gran = 1;
@@ -659,18 +644,7 @@ setup_sb:
 	}
 
 	if (!(sb->s_flags & MS_RDONLY)) {
-		u64 mnt_write_time;
-		/* update mount time and write time atomically. */
-		mnt_write_time = (get_seconds() & 0xFFFFFFFF);
-		mnt_write_time = mnt_write_time | (mnt_write_time << 32);
-
-		nova_memunlock_range(sb, &super->s_mtime, 8);
-		nova_memcpy_atomic(&super->s_mtime, &mnt_write_time, 8);
-		nova_memlock_range(sb, &super->s_mtime, 8);
-
-		nova_flush_buffer(&super->s_mtime, 8, false);
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
+		nova_update_mount_time(sb);
 	}
 
 	clear_opt(sbi->s_mount_opt, MOUNTING);
@@ -767,7 +741,6 @@ int nova_remount(struct super_block *sb, int *mntflags, char *data)
 {
 	unsigned long old_sb_flags;
 	unsigned long old_mount_opt;
-	struct nova_super_block *ps;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	int ret = -EINVAL;
 
@@ -783,19 +756,7 @@ int nova_remount(struct super_block *sb, int *mntflags, char *data)
 		      ((sbi->s_mount_opt & NOVA_MOUNT_POSIX_ACL) ? MS_POSIXACL : 0);
 
 	if ((*mntflags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
-		u64 mnt_write_time;
-		ps = nova_get_super(sb);
-		/* update mount time and write time atomically. */
-		mnt_write_time = (get_seconds() & 0xFFFFFFFF);
-		mnt_write_time = mnt_write_time | (mnt_write_time << 32);
-
-		nova_memunlock_range(sb, &ps->s_mtime, 8);
-		nova_memcpy_atomic(&ps->s_mtime, &mnt_write_time, 8);
-		nova_memlock_range(sb, &ps->s_mtime, 8);
-
-		nova_flush_buffer(&ps->s_mtime, 8, false);
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
+		nova_update_mount_time(sb);
 	}
 
 	mutex_unlock(&sbi->s_lock);

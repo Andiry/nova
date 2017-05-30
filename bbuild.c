@@ -497,7 +497,6 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
 	struct nova_inode_info_header sih;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_super_block *super;
 	struct free_list *free_list;
 	unsigned long num_blocknode = 0;
 	unsigned long num_pages;
@@ -527,22 +526,6 @@ void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 		nova_dbg("Error saving blocknode mappings: %d\n", allocated);
 		return;
 	}
-
-	/*
-	 * save the total allocated blocknode mappings
-	 * in super block
-	 * No transaction is needed as we will recover the fields
-	 * via failure recovery
-	 */
-	super = nova_get_super(sb);
-
-	nova_memunlock_super(sb);
-
-	super->s_wtime = cpu_to_le32(get_seconds());
-	super->s_epoch_id = cpu_to_le64(sbi->s_epoch_id);
-
-	nova_memlock_super(sb);
-	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
 
 	temp_tail = new_block;
 	for (i = 0; i < sbi->cpus; i++) {
@@ -1556,7 +1539,7 @@ static bool nova_try_normal_recovery(struct super_block *sb)
 int nova_recovery(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_super_block *super = nova_get_super(sb);
+	struct nova_super_block *super = sbi->nova_sb;
 	unsigned long initsize = le64_to_cpu(super->s_size);
 	bool value = false;
 	int ret = 0;

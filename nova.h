@@ -473,17 +473,6 @@ static inline u32 nova_crc32c(u32 crc, const u8 *data, size_t len)
 	return csum;
 }
 
-static inline int nova_calc_sb_checksum(u8 *data, int n)
-{
-	u32 crc = 0;
-
-	crc = nova_crc32c(~0, (__u8 *)data + sizeof(__le32), n - sizeof(__le32));
-	if (*((__le32 *)data) == cpu_to_le32(crc))
-		return 0;
-	else
-		return 1;
-}
-
 static inline int nova_update_inode_checksum(struct nova_inode *pi)
 {
 	u32 crc = 0;
@@ -1932,8 +1921,6 @@ extern struct super_block *nova_read_super(struct super_block *sb, void *data,
 	int silent);
 extern int nova_statfs(struct dentry *d, struct kstatfs *buf);
 extern int nova_remount(struct super_block *sb, int *flags, char *data);
-int nova_check_integrity(struct super_block *sb,
-	struct nova_super_block *super);
 void *nova_ioremap(struct super_block *sb, phys_addr_t phys_addr,
 	ssize_t size);
 

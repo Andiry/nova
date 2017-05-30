@@ -142,8 +142,6 @@ struct nova_super_block {
 	__le64		s_size;			/* total size of fs in bytes */
 	char		s_volume_name[16];	/* volume name */
 
-	__le64		s_start_dynamic;
-
 	/* all the dynamic fields should go here */
 	__le64		s_epoch_id;		/* Epoch ID */
 
@@ -151,14 +149,7 @@ struct nova_super_block {
 	 * changed. we use an 8 byte write to update both of them atomically */
 	__le32		s_mtime;		/* mount time */
 	__le32		s_wtime;		/* write time */
-	/* fields for fast mount support. Always keep them together */
-	__le64		s_num_free_blocks;
 } __attribute((__packed__));
-
-#define NOVA_SB_STATIC_SIZE(ps) ((u64)&ps->s_start_dynamic - (u64)ps)
-
-/* the above fast mount fields take total 32 bytes in the super block */
-#define NOVA_FAST_MOUNT_FIELD_SIZE  (36)
 
 
 /* ======================= Reserved blocks ========================= */

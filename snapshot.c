@@ -912,7 +912,6 @@ static int nova_append_snapshot_info_log(struct super_block *sb,
 int nova_create_snapshot(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_super_block *super;
 	struct snapshot_info *info = NULL;
 	u64 timestamp = 0;
 	u64 epoch_id;
@@ -961,12 +960,11 @@ int nova_create_snapshot(struct super_block *sb)
 
 	nova_set_vmas_readonly(sb);
 
-	super = nova_get_super(sb);
+	sbi->nova_sb->s_wtime = cpu_to_le32(get_seconds());
+	sbi->nova_sb->s_epoch_id = cpu_to_le64(epoch_id);
+	nova_update_super_crc(sb);
 
-	nova_memunlock_super(sb);
-	super->s_epoch_id = cpu_to_le64(epoch_id);
-	nova_memlock_super(sb);
-	nova_flush_buffer(super, NOVA_SB_SIZE, 0);
+	nova_sync_super(sb);
 
 out:
 	sbi->snapshot_taking = 0;
