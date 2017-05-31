@@ -33,7 +33,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_file_write_entry *entry, entryd;
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc, entry_copy;
 	pgoff_t index, end_index;
 	unsigned long offset;
 	loff_t isize, pos;
@@ -62,6 +63,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	if (len <= 0)
 		goto out;
 
+	entryc = (metadata_csum == 0) ? entry : &entry_copy;
+
 	end_index = (isize - 1) >> PAGE_SHIFT;
 	do {
 		unsigned long nr, left;
@@ -87,28 +90,28 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 			zero = 1;
 			goto memcpy;
 		}
-		if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-			nova_dbg("%s: nova entry checksum error\n", __func__);
+
+		if (metadata_csum == 0)
+			entryc = entry;
+		else if (!nova_verify_entry_csum(sb, entry, entryc))
 			return -EIO;
-		}
-		entry = &entryd;
 
 		/* Find contiguous blocks */
-		if (index < entry->pgoff ||
-			index - entry->pgoff >= entry->num_pages) {
+		if (index < entryc->pgoff ||
+			index - entryc->pgoff >= entryc->num_pages) {
 			nova_err(sb, "%s ERROR: %lu, entry pgoff %llu, num %u, "
 				"blocknr %llu\n", __func__, index, entry->pgoff,
 				entry->num_pages, entry->block >> PAGE_SHIFT);
 			return -EINVAL;
 		}
-		if (entry->reassigned == 0) {
-			nr = (entry->num_pages - (index - entry->pgoff))
+		if (entryc->reassigned == 0) {
+			nr = (entryc->num_pages - (index - entryc->pgoff))
 				* PAGE_SIZE;
 		} else {
 			nr = PAGE_SIZE;
 		}
 
-		nvmm = get_nvmm(sb, sih, entry, index);
+		nvmm = get_nvmm(sb, sih, entryc, index);
 		dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 
 memcpy:
@@ -218,7 +221,7 @@ static inline int nova_handle_partial_block(struct super_block *sb,
 	size_t offset, size_t length, void* kmem)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_file_write_entry entryd;
+	struct nova_file_write_entry *entryc, entry_copy;
 
 	nova_memunlock_block(sb, kmem);
 	if (entry == NULL) {
@@ -230,12 +233,15 @@ static inline int nova_handle_partial_block(struct super_block *sb,
 					sbi->zeroed_page, length);
 	} else {
 		/* Copy from original block */
-		if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-			nova_dbg("%s: nova entry checksum error\n", __func__);
-			return -EIO;
+		if (metadata_csum == 0)
+			entryc = entry;
+		else {
+			entryc = &entry_copy;
+			if (!nova_verify_entry_csum(sb, entry, entryc))
+				return -EIO;
 		}
-		entry = &entryd;
-		nova_copy_partial_block(sb, sih, entry, index,
+
+		nova_copy_partial_block(sb, sih, entryc, index,
 					offset, length, kmem);
 	}
 	nova_memlock_block(sb, kmem);
@@ -299,9 +305,12 @@ int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 begin_tail)
 {
 	void *addr;
-	struct nova_file_write_entry *entry, entryd;
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc, entry_copy;
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
+
+	entryc = (metadata_csum == 0) ? entry : &entry_copy;
 
 	while (curr_p && curr_p != sih->log_tail) {
 		if (is_last_entry(curr_p, entry_size))
@@ -316,21 +325,19 @@ int nova_reassign_file_tree(struct super_block *sb,
 		addr = (void *) nova_get_block(sb, curr_p);
 		entry = (struct nova_file_write_entry *) addr;
 
-		if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-			nova_dbg("%s: nova entry checksum error\n", __func__);
+		if (metadata_csum == 0)
+			entryc = entry;
+		else if (!nova_verify_entry_csum(sb, entry, entryc))
 			return -EIO;
-		}
-		entry = &entryd;
 
-		if (nova_get_entry_type(entry) != FILE_WRITE) {
+		if (nova_get_entry_type(entryc) != FILE_WRITE) {
 			nova_dbg("%s: entry type is not write? %d\n",
 				__func__, nova_get_entry_type(entry));
 			curr_p += entry_size;
 			continue;
 		}
 
-		entry = (struct nova_file_write_entry *) addr;
-		nova_assign_write_entry(sb, sih, entry, true);
+		nova_assign_write_entry(sb, sih, entry, entryc, true);
 		curr_p += entry_size;
 	}
 
@@ -342,7 +349,8 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 	int allocated, u64 begin_tail, u64 end_tail)
 {
 	void *addr;
-	struct nova_file_write_entry *entry, entryd;
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc, entry_copy;
 	u64 curr_p = begin_tail;
 	size_t entry_size = sizeof(struct nova_file_write_entry);
 
@@ -351,6 +359,8 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 
 	if (begin_tail == 0 || end_tail == 0)
 		return 0;
+
+	entryc = (metadata_csum == 0) ? entry : &entry_copy;
 
 	while (curr_p != end_tail) {
 		if (is_last_entry(curr_p, entry_size))
@@ -365,21 +375,20 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 		addr = (void *) nova_get_block(sb, curr_p);
 		entry = (struct nova_file_write_entry *) addr;
 
-		if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-			nova_dbg("%s: nova entry checksum error\n", __func__);
+		if (metadata_csum == 0)
+			entryc = entry;
+		else if (!nova_verify_entry_csum(sb, entry, entryc))
 			return -EIO;
-		}
-		entry = &entryd;
 
-		if (nova_get_entry_type(entry) != FILE_WRITE) {
+		if (nova_get_entry_type(entryc) != FILE_WRITE) {
 			nova_dbg("%s: entry type is not write? %d\n",
 				__func__, nova_get_entry_type(entry));
 			curr_p += entry_size;
 			continue;
 		}
 
-		blocknr = entry->block >> PAGE_SHIFT;
-		nova_free_data_blocks(sb, sih, blocknr, entry->num_pages);
+		blocknr = entryc->block >> PAGE_SHIFT;
+		nova_free_data_blocks(sb, sih, blocknr, entryc->num_pages);
 		curr_p += entry_size;
 	}
 
@@ -418,7 +427,8 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 	unsigned long blocksize = sb->s_blocksize;
 	unsigned int blocksize_bits = sb->s_blocksize_bits;
 	u8 *blockbuf, *blockptr;
-	struct nova_file_write_entry *entry, entryd;
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc, entry_copy;
 	bool mapped, nvmm_ok;
 	int ret = 0;
 	timing_t protect_file_data_time, memcpy_time;
@@ -451,19 +461,19 @@ static int nova_protect_file_data(struct super_block *sb, struct inode *inode,
 		goto out;
 	}
 
+	entryc = (metadata_csum == 0) ? entry : &entry_copy;
+
 	if (offset != 0) {
 		NOVA_STATS_ADD(protect_head, 1);
 		entry = nova_get_write_entry(sb, sih, start_blk);
 		if (entry != NULL) {
-			if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-				nova_dbg("%s: nova entry checksum error\n",
-								__func__);
+			if (metadata_csum == 0)
+				entryc = entry;
+			else if (!nova_verify_entry_csum(sb, entry, entryc))
 				return -EIO;
-			}
-			entry = &entryd;
 
 			/* make sure data in the partial block head is good */
-			nvmm = get_nvmm(sb, sih, entry, start_blk);
+			nvmm = get_nvmm(sb, sih, entryc, start_blk);
 			nvmmoff = nova_get_block_off(sb, nvmm, sih->i_blk_type);
 			blockptr = (u8 *) nova_get_block(sb, nvmmoff);
 
@@ -526,15 +536,13 @@ eblk:
 		NOVA_STATS_ADD(protect_tail, 1);
 		entry = nova_get_write_entry(sb, sih, end_blk);
 		if (entry != NULL) {
-			if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-				nova_dbg("%s: nova entry checksum error\n",
-								__func__);
+			if (metadata_csum == 0)
+				entryc = entry;
+			else if (!nova_verify_entry_csum(sb, entry, entryc))
 				return -EIO;
-			}
-			entry = &entryd;
 
 			/* make sure data in the partial block tail is good */
-			nvmm = get_nvmm(sb, sih, entry, end_blk);
+			nvmm = get_nvmm(sb, sih, entryc, end_blk);
 			nvmmoff = nova_get_block_off(sb, nvmm, sih->i_blk_type);
 			blockptr = (u8 *) nova_get_block(sb, nvmmoff);
 
@@ -582,14 +590,17 @@ out:
 
 static bool nova_get_verify_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry,
-	struct nova_file_write_entry *entryd,
+	struct nova_file_write_entry *entryc,
 	int locked)
 {
 	int ret = 0;
 
+	if (metadata_csum == 0)
+		return true;
+
 	if (locked == 0) {
 		/* Someone else may be updating the entry. Skip check */
-		ret = memcpy_from_pmem(entryd, entry,
+		ret = memcpy_from_pmem(entryc, entry,
 				sizeof(struct nova_file_write_entry));
 		if (ret < 0)
 			return false;
@@ -597,7 +608,7 @@ static bool nova_get_verify_entry(struct super_block *sb,
 		return true;
 	}
 
-	return nova_verify_entry_csum(sb, entry, entryd);
+	return nova_verify_entry_csum(sb, entry, entryc);
 }
 
 /*
@@ -606,12 +617,14 @@ static bool nova_get_verify_entry(struct super_block *sb,
  */
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
-	struct nova_file_write_entry **ret_entry, int check_next, u64 epoch_id,
+	struct nova_file_write_entry **ret_entry,
+	struct nova_file_write_entry *ret_entryc, int check_next, u64 epoch_id,
 	int *inplace, int locked)
 {
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
-	struct nova_file_write_entry *entry, entryd;
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
 	timing_t check_time;
@@ -621,39 +634,41 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	*ret_entry = NULL;
 	*inplace = 0;
 	entry = nova_get_write_entry(sb, sih, start_blk);
+
+	entryc = (metadata_csum == 0) ? entry : ret_entryc;
+
 	if (entry) {
-		if (!nova_get_verify_entry(sb, entry, &entryd, locked)) {
-			nova_dbg("%s: nova entry checksum error\n", __func__);
+		if (metadata_csum == 0)
+			entryc = entry;
+		else if (!nova_get_verify_entry(sb, entry, entryc, locked))
 			goto out;
-		}
+
 		*ret_entry = entry;
-		entry = &entryd;
 
 		/* We can do inplace write. Find contiguous blocks */
-		if (entry->reassigned == 0)
-			ent_blks = entry->num_pages -
-					(start_blk - entry->pgoff);
+		if (entryc->reassigned == 0)
+			ent_blks = entryc->num_pages -
+					(start_blk - entryc->pgoff);
 		else
 			ent_blks = 1;
 
 		if (ent_blks > num_blocks)
 			ent_blks = num_blocks;
 
-		if (entry->epoch_id == epoch_id)
+		if (entryc->epoch_id == epoch_id)
 			*inplace = 1;
 
 	} else if (check_next) {
 		/* Possible Hole */
 		entry = nova_find_next_entry(sb, sih, start_blk);
 		if (entry) {
-			if (!nova_get_verify_entry(sb, entry, &entryd, locked)) {
-				nova_dbg("%s: nova entry checksum error\n",
-								__func__);
+			if (metadata_csum == 0)
+				entryc = entry;
+			else if (!nova_get_verify_entry(sb, entry, entryc,
+							locked))
 				goto out;
-			}
-			entry = &entryd;
 
-			next_pgoff = entry->pgoff;
+			next_pgoff = entryc->pgoff;
 			if (next_pgoff <= start_blk) {
 				nova_err(sb, "iblock %lu, entry pgoff %lu, "
 						" num pages %lu\n", start_blk,
@@ -692,6 +707,7 @@ static ssize_t nova_inplace_file_write(struct file *filp,
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
 	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc, entry_copy;
 	struct nova_file_write_entry entry_data;
 	struct nova_inode_update update;
 	ssize_t     written = 0;
@@ -763,12 +779,14 @@ static ssize_t nova_inplace_file_write(struct file *filp,
 		start_blk = pos >> sb->s_blocksize_bits;
 
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
-						start_blk, &entry, 1, epoch_id,
-						&inplace, 1);
+						start_blk, &entry, &entry_copy,
+						1, epoch_id, &inplace, 1);
+
+		entryc = (metadata_csum == 0) ? entry : &entry_copy;
 
 		if (entry && inplace) {
 			/* We can do inplace write. Find contiguous blocks */
-			blocknr = get_nvmm(sb, sih, entry, start_blk);
+			blocknr = get_nvmm(sb, sih, entryc, start_blk);
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
 			if (data_csum || data_parity)
@@ -1177,6 +1195,7 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_file_write_entry *entry = NULL;
+	struct nova_file_write_entry *entryc, entry_copy;
 	struct nova_file_write_entry entry_data;
 	struct nova_inode_update update;
 	u32 time;
@@ -1208,12 +1227,14 @@ int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 
 again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
-					iblock, &entry, check_next, epoch_id,
-					&inplace, locked);
+					iblock, &entry, &entry_copy, check_next,
+					epoch_id, &inplace, locked);
+
+	entryc = (metadata_csum == 0) ? entry : &entry_copy;
 
 	if (entry) {
 		if (create == 0 || inplace) {
-			nvmm = get_nvmm(sb, sih, entry, iblock);
+			nvmm = get_nvmm(sb, sih, entryc, iblock);
 			nova_dbgv("%s: found pgoff %lu, block %lu\n",
 					__func__, iblock, nvmm);
 			goto out;

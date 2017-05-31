@@ -369,22 +369,32 @@ static void nova_rebuild_handle_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_inode_rebuild *reb,
 	struct nova_file_write_entry *entry)
 {
-	if (entry->num_pages != entry->invalid_pages) {
+	struct nova_file_write_entry *entryc, entry_copy;
+
+	if (metadata_csum == 0)
+		entryc = entry;
+	else {
+		entryc = &entry_copy;
+		if (!nova_verify_entry_csum(sb, entry, entryc))
+			return;
+	}
+
+	if (entryc->num_pages != entryc->invalid_pages) {
 		/*
 		 * The overlaped blocks are already freed.
 		 * Don't double free them, just re-assign the pointers.
 		 */
-		nova_assign_write_entry(sb, sih, entry, false);
+		nova_assign_write_entry(sb, sih, entry, entryc, false);
 	}
 
-	if (entry->trans_id >= sih->trans_id) {
+	if (entryc->trans_id >= sih->trans_id) {
 		nova_rebuild_file_time_and_size(sb, reb,
-					entry->mtime, entry->mtime,
-					entry->size);
-		reb->trans_id = entry->trans_id;
+					entryc->mtime, entryc->mtime,
+					entryc->size);
+		reb->trans_id = entryc->trans_id;
 	}
 
-	if (entry->updating) {
+	if (entryc->updating) {
 		nova_reset_data_csum_parity(sb, sih, entry);
 	}
 

@@ -173,6 +173,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	struct nova_inode_info_header *sih = &si->header;
 	struct nova_inode *pi;
 	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entryc, entry_copy;
 	struct nova_file_write_entry entry_data;
 	struct nova_inode_update update;
 	unsigned long start_blk, num_blocks, ent_blks = 0;
@@ -237,11 +238,13 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
-						start_blk, &entry, 1, epoch_id,
-						&inplace, 1);
+						start_blk, &entry, &entry_copy,
+						1, epoch_id, &inplace, 1);
+
+		entryc = (metadata_csum == 0) ? entry : &entry_copy;
 
 		if (entry && inplace) {
-			if (entry->size < new_size) {
+			if (entryc->size < new_size) {
 				/* Update existing entry */
 				nova_memunlock_range(sb, entry, CACHELINE_SIZE);
 				entry->size = new_size;
