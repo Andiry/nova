@@ -123,6 +123,9 @@ int nova_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	NOVA_START_TIMING(fsync_t, fsync_time);
 
+	if (datasync)
+		NOVA_STATS_ADD(fdatasync, 1);
+
 	/* No need to flush if the file is not mmaped */
 	if (!mapping_mapped(mapping))
 		goto persist;

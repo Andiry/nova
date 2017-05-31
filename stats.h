@@ -182,6 +182,7 @@ enum stats_category {
 	cow_overlap_mmap,
 	dax_new_blocks,
 	inplace_new_blocks,
+	fdatasync,
 
 	/* Sentinel */
 	STATS_NUM,

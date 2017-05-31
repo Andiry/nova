@@ -171,6 +171,8 @@ static int nova_seq_IO_show(struct seq_file *seq, void *v)
 			IOstats[dax_cow_during_snapshot],
 			IOstats[cow_overlap_mmap],
 			IOstats[mapping_updated_pages]);
+	seq_printf(seq, "fsync %llu, fdatasync %llu\n",
+			Countstats[fsync_t], IOstats[fdatasync]);
 
 	seq_printf(seq, "\n");
 
