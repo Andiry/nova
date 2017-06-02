@@ -165,7 +165,7 @@ static int nova_open(struct inode *inode, struct file *filp)
 }
 
 static long nova_fallocate(struct file *file, int mode, loff_t offset,
-			    loff_t len)
+	loff_t len)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
@@ -191,9 +191,10 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 	u64 epoch_id;
 	u32 time;
 
-	/* No fallocate for CoW */
-	if (inplace_data_updates == 0)
-		return -EOPNOTSUPP;
+	/*
+	 * Fallocate does not make much sence for CoW,
+	 * but we still support it for DAX-mmap purpose.
+	 */
 
 	/* We only support the FALLOC_FL_KEEP_SIZE mode */
 	if (mode & ~FALLOC_FL_KEEP_SIZE)
