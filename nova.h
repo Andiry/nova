@@ -862,20 +862,21 @@ static inline void nova_print_curr_epoch_id(struct super_block *sb)
 	return;
 }
 
-struct ptr_pair {
+struct journal_ptr_pair {
 	__le64 journal_head;
 	__le64 journal_tail;
 };
 
 static inline
-struct ptr_pair *nova_get_journal_pointers(struct super_block *sb, int cpu)
+struct journal_ptr_pair *nova_get_journal_pointers(struct super_block *sb,
+	int cpu)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
 	if (cpu >= sbi->cpus)
 		return NULL;
 
-	return (struct ptr_pair *)((char *)nova_get_block(sb,
+	return (struct journal_ptr_pair *)((char *)nova_get_block(sb,
 		NOVA_DEF_BLOCK_SIZE_4K * JOURNAL_START) + cpu * CACHELINE_SIZE);
 }
 

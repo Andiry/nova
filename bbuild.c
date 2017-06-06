@@ -1436,7 +1436,7 @@ int nova_failure_recovery(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct task_ring *ring;
 	struct nova_inode *pi;
-	struct ptr_pair *pair;
+	struct journal_ptr_pair *pair;
 	int ret;
 	int i;
 
