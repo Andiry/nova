@@ -18,20 +18,23 @@
 #include "nova.h"
 
 static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
-	void *entry, enum nova_entry_type type, int reassign,
+	void *entry, void *entryc, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
 {
-	struct nova_file_write_entry *fw_entry;
+	struct nova_file_write_entry *fw_entry, *fw_entryc;
 	int invalid = 0;
 
 	switch (type) {
 		case FILE_WRITE:
 			fw_entry = (struct nova_file_write_entry *)entry;
+			fw_entryc = (struct nova_file_write_entry *)entryc;
 			if (reassign)
 				fw_entry->reassigned = 1;
-			if (num_free)
+			if (num_free) {
 				fw_entry->invalid_pages += num_free;
-			if (fw_entry->invalid_pages == fw_entry->num_pages)
+				fw_entryc->invalid_pages += num_free;
+			}
+			if (fw_entryc->invalid_pages == fw_entryc->num_pages)
 				invalid = 1;
 			break;
 		case DIR_LOG:
@@ -72,12 +75,12 @@ static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 }
 
 static int nova_invalidate_reassign_logentry(struct super_block *sb,
-	void *entry, enum nova_entry_type type, int reassign,
+	void *entry, void *entryc, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
 {
 	nova_memunlock_range(sb, entry, CACHELINE_SIZE);
 
-	nova_execute_invalidate_reassign_logentry(sb, entry, type,
+	nova_execute_invalidate_reassign_logentry(sb, entry, entryc, type,
 						reassign, num_free);
 	nova_update_alter_entry(sb, entry);
 	nova_memlock_range(sb, entry, CACHELINE_SIZE);
@@ -88,26 +91,41 @@ static int nova_invalidate_reassign_logentry(struct super_block *sb,
 int nova_invalidate_logentry(struct super_block *sb, void *entry,
 	enum nova_entry_type type, unsigned int num_free)
 {
-	return nova_invalidate_reassign_logentry(sb, entry, type, 0, num_free);
+	/* entry passed to the callee is only used to store, i.e. no FILE_WRITE;
+	 * otherwise it should be replaced by a dram copy to avoid mcheck */
+	return nova_invalidate_reassign_logentry(sb, entry, entry, type, 0,
+								num_free);
 }
 
 int nova_reassign_logentry(struct super_block *sb, void *entry,
 	enum nova_entry_type type)
 {
-	return nova_invalidate_reassign_logentry(sb, entry, type, 1, 0);
+	/* entry passed to the callee is only used to store, i.e. no FILE_WRITE;
+	 * otherwise it should be replaced by a dram copy to avoid mcheck */
+	return nova_invalidate_reassign_logentry(sb, entry, entry, type, 1, 0);
 }
 
 static inline int nova_invalidate_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry, int reassign,
 	unsigned int num_free)
 {
+	struct nova_file_write_entry *entryc, entry_copy;
+
 	if (!entry)
 		return 0;
 
-	if (num_free == 0 && entry->reassigned == 1)
+	if (metadata_csum == 0)
+		entryc = entry;
+	else {
+		entryc = &entry_copy;
+		if (!nova_verify_entry_csum(sb, entry, entryc))
+			return -EIO;
+	}
+
+	if (num_free == 0 && entryc->reassigned == 1)
 		return 0;
 
-	return nova_invalidate_reassign_logentry(sb, entry, FILE_WRITE,
+	return nova_invalidate_reassign_logentry(sb, entry, entryc, FILE_WRITE,
 						reassign, num_free);
 }
 
@@ -117,7 +135,7 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 	unsigned long pgoff, unsigned int num_free,
 	bool delete_dead, u64 epoch_id)
 {
-	struct nova_file_write_entry entryd;
+	struct nova_file_write_entry *entryc, entry_copy;
 	unsigned long old_nvmm;
 	int ret;
 	timing_t free_time;
@@ -126,11 +144,16 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 		return 0;
 
 	NOVA_START_TIMING(free_old_t, free_time);
-	if (!nova_verify_entry_csum(sb, entry, &entryd)) {
-		nova_dbg("%s: nova entry checksum error\n", __func__);
-		return -EIO;
+
+	if (metadata_csum == 0)
+		entryc = entry;
+	else {
+		entryc = &entry_copy;
+		if (!nova_verify_entry_csum(sb, entry, entryc))
+			return -EIO;
 	}
-	old_nvmm = get_nvmm(sb, sih, &entryd, pgoff);
+
+	old_nvmm = get_nvmm(sb, sih, entryc, pgoff);
 
 	if (!delete_dead) {
 		ret = nova_append_data_to_snapshot(sb, entry, old_nvmm,
@@ -507,20 +530,25 @@ out:
 static int nova_invalidate_setattr_entry(struct super_block *sb,
 	u64 last_setattr)
 {
-	struct nova_setattr_logentry *old_entry, old_entryd;
+	struct nova_setattr_logentry *old_entry;
+	struct nova_setattr_logentry *old_entryc, old_entry_copy;
 	void *addr;
 	int ret;
 
 	addr = (void *)nova_get_block(sb, last_setattr);
 	old_entry = (struct nova_setattr_logentry *)addr;
-	if (!nova_verify_entry_csum(sb, old_entry, &old_entryd)) {
-		nova_dbg("%s: nova entry checksum error\n", __func__);
-		return -EIO;
+
+	if (metadata_csum == 0)
+		old_entryc = old_entry;
+	else {
+		old_entryc = &old_entry_copy;
+		if (!nova_verify_entry_csum(sb, old_entry, old_entryc))
+			return -EIO;
 	}
-	old_entry = &old_entryd;
+
 	/* Do not invalidate setsize entries */
-	if (!old_entry_freeable(sb, old_entry->epoch_id) ||
-			(old_entry->attr & ATTR_SIZE))
+	if (!old_entry_freeable(sb, old_entryc->epoch_id) ||
+			(old_entryc->attr & ATTR_SIZE))
 		return 0;
 
 	ret = nova_check_alter_entry(sb, last_setattr);
@@ -529,7 +557,6 @@ static int nova_invalidate_setattr_entry(struct super_block *sb,
 		return ret;
 	}
 
-	old_entry = (struct nova_setattr_logentry *)addr;
 	ret = nova_invalidate_logentry(sb, old_entry, SET_ATTR, 0);
 
 	return ret;
@@ -646,7 +673,8 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 int nova_invalidate_link_change_entry(struct super_block *sb,
 	u64 old_link_change)
 {
-	struct nova_link_change_entry *old_entry, old_entryd;
+	struct nova_link_change_entry *old_entry;
+	struct nova_link_change_entry *old_entryc, old_entry_copy;
 	void *addr;
 	int ret;
 
@@ -655,12 +683,16 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 
 	addr = (void *)nova_get_block(sb, old_link_change);
 	old_entry = (struct nova_link_change_entry *)addr;
-	if (!nova_verify_entry_csum(sb, old_entry, &old_entryd)) {
-		nova_dbg("%s: nova entry checksum error\n", __func__);
-		return -EIO;
+
+	if (metadata_csum == 0)
+		old_entryc = old_entry;
+	else {
+		old_entryc = &old_entry_copy;
+		if (!nova_verify_entry_csum(sb, old_entry, old_entryc))
+			return -EIO;
 	}
-	old_entry = &old_entryd;
-	if (!old_entry_freeable(sb, old_entry->epoch_id))
+
+	if (!old_entry_freeable(sb, old_entryc->epoch_id))
 		return 0;
 
 	ret = nova_check_alter_entry(sb, old_link_change);
@@ -669,7 +701,6 @@ int nova_invalidate_link_change_entry(struct super_block *sb,
 		return ret;
 	}
 
-	old_entry = (struct nova_link_change_entry *)addr;
 	ret = nova_invalidate_logentry(sb, old_entry, LINK_CHANGE, 0);
 
 	return ret;
@@ -757,14 +788,15 @@ out:
 int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
+	struct nova_file_write_entry *entryc,
 	bool free)
 {
 	struct nova_file_write_entry *old_entry;
 	struct nova_file_write_entry *start_old_entry = NULL;
 	void **pentry;
-	unsigned long start_pgoff = entry->pgoff;
+	unsigned long start_pgoff = entryc->pgoff;
 	unsigned long start_old_pgoff = 0;
-	unsigned int num = entry->num_pages;
+	unsigned int num = entryc->num_pages;
 	unsigned int num_free = 0;
 	unsigned long curr_pgoff;
 	int i;
@@ -778,16 +810,16 @@ int nova_assign_write_entry(struct super_block *sb,
 		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
 		if (pentry) {
 			old_entry = radix_tree_deref_slot(pentry);
-
 			if (old_entry != start_old_entry) {
 				if (start_old_entry && free)
 					nova_free_old_entry(sb, sih,
 							start_old_entry,
 							start_old_pgoff,
 							num_free, false,
-							entry->epoch_id);
+							entryc->epoch_id);
 				nova_invalidate_write_entry(sb,
 						start_old_entry, 1, 0);
+
 				start_old_entry = old_entry;
 				start_old_pgoff = curr_pgoff;
 				num_free = 1;
@@ -808,7 +840,7 @@ int nova_assign_write_entry(struct super_block *sb,
 	if (start_old_entry && free)
 		nova_free_old_entry(sb, sih, start_old_entry,
 					start_old_pgoff, num_free, false,
-					entry->epoch_id);
+					entryc->epoch_id);
 
 	nova_invalidate_write_entry(sb, start_old_entry, 1, 0);
 

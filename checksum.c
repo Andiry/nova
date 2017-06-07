@@ -18,7 +18,7 @@
 #include "nova.h"
 
 static int nova_get_entry_csum(struct super_block *sb, void *entry,
-	u32 *entry_csum, size_t *size, void *entryd)
+	u32 *entry_csum, size_t *size, void *entryc)
 {
 	struct nova_dentry fake_dentry, *dentry;
 	struct nova_file_write_entry fake_wentry, *wentry;
@@ -32,7 +32,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 	type = nova_get_entry_type(entry);
 	switch (type) {
 		case DIR_LOG:
-			dentry = (struct nova_dentry *) entryd;
+			dentry = (struct nova_dentry *) entryc;
 			if (!dentry) dentry = &fake_dentry;
 
 			ret = memcpy_from_pmem(dentry, entry,
@@ -46,7 +46,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 			*entry_csum = dentry->csum;
 			break;
 		case FILE_WRITE:
-			wentry = (struct nova_file_write_entry *) entryd;
+			wentry = (struct nova_file_write_entry *) entryc;
 			if (!wentry) wentry = &fake_wentry;
 
 			*size = sizeof(struct nova_file_write_entry);
@@ -56,7 +56,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 			*entry_csum = wentry->csum;
 			break;
 		case SET_ATTR:
-			sentry = (struct nova_setattr_logentry *) entryd;
+			sentry = (struct nova_setattr_logentry *) entryc;
 			if (!sentry) sentry = &fake_sentry;
 
 			*size = sizeof(struct nova_setattr_logentry);
@@ -66,7 +66,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 			*entry_csum = sentry->csum;
 			break;
 		case LINK_CHANGE:
-			lcentry = (struct nova_link_change_entry *) entryd;
+			lcentry = (struct nova_link_change_entry *) entryc;
 			if (!lcentry) lcentry = &fake_lcentry;
 
 			*size = sizeof(struct nova_link_change_entry);
@@ -76,7 +76,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 			*entry_csum = lcentry->csum;
 			break;
 		case MMAP_WRITE:
-			mmapentry = (struct nova_mmap_entry *) entryd;
+			mmapentry = (struct nova_mmap_entry *) entryc;
 			if (!mmapentry) mmapentry = &fake_mmapentry;
 
 			*size = sizeof(struct nova_mmap_entry);
@@ -86,7 +86,7 @@ static int nova_get_entry_csum(struct super_block *sb, void *entry,
 			*entry_csum = mmapentry->csum;
 			break;
 		case SNAPSHOT_INFO:
-			snentry = (struct nova_snapshot_info_entry *) entryd;
+			snentry = (struct nova_snapshot_info_entry *) entryc;
 			if (!snentry) snentry = &fake_snentry;
 
 			*size = sizeof(struct nova_snapshot_info_entry);
@@ -254,7 +254,7 @@ flush:
 }
 
 static bool is_entry_matched(struct super_block *sb, void *entry,
-	size_t *ret_size, void *entryd)
+	size_t *ret_size, void *entryc)
 {
 	u32 checksum;
 	u32 entry_csum;
@@ -262,7 +262,7 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 	bool match = false;
 	int ret;
 
-	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, entryd);
+	ret = nova_get_entry_csum(sb, entry, &entry_csum, &size, entryc);
 	if (ret) {
 		nova_err(sb, "unmatch entry %p\n", entry);
 		return match;
@@ -283,7 +283,7 @@ static bool is_entry_matched(struct super_block *sb, void *entry,
 }
 
 static bool nova_try_alter_entry(struct super_block *sb, void *entry,
-	bool original_match, void *entryd)
+	bool original_match, void *entryc)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	void *alter_entry;
@@ -295,7 +295,7 @@ static bool nova_try_alter_entry(struct super_block *sb, void *entry,
 	alter_curr = alter_log_entry(sb, curr);
 	alter_entry = (void *)nova_get_block(sb, alter_curr);
 
-	match = is_entry_matched(sb, alter_entry, &size, entryd);
+	match = is_entry_matched(sb, alter_entry, &size, entryc);
 
 	if (!match) {
 		nova_dbg("%s failed, original match %d\n",
@@ -338,7 +338,7 @@ int nova_update_alter_entry(struct super_block *sb, void *entry)
 }
 
 /* Verify the log entry checksum. */
-bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
+bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryc)
 {
 	size_t size;
 	bool match;
@@ -346,7 +346,10 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
 
 	NOVA_START_TIMING(verify_entry_csum_t, verify_time);
 
-	match = is_entry_matched(sb, entry, &size, entryd);
+	if (metadata_csum == 0)
+		return true;
+
+	match = is_entry_matched(sb, entry, &size, entryc);
 
 	if (replica_metadata == 0)
 		goto out;
@@ -357,8 +360,10 @@ bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd)
 				__func__, entry);
 	}
 
-	match = nova_try_alter_entry(sb, entry, match, entryd);
+	match = nova_try_alter_entry(sb, entry, match, entryc);
 out:
+	if (!match) nova_dbg("%s: unrecoverable entry error\n", __func__);
+
 	NOVA_END_TIMING(verify_entry_csum_t, verify_time);
 	return match;
 }

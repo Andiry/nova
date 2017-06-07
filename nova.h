@@ -1083,11 +1083,14 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 		- data->pgoff;
 }
 
+bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryc);
+
 static inline u64 nova_find_nvmm_block(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
 	unsigned long blocknr)
 {
 	unsigned long nvmm;
+	struct nova_file_write_entry *entryc, entry_copy;
 
 	if (!entry) {
 		entry = nova_get_write_entry(sb, sih, blocknr);
@@ -1095,7 +1098,15 @@ static inline u64 nova_find_nvmm_block(struct super_block *sb,
 			return 0;
 	}
 
-	nvmm = get_nvmm(sb, sih, entry, blocknr);
+	if (metadata_csum == 0)
+		entryc = entry;
+	else {
+		entryc = &entry_copy;
+		if (!nova_verify_entry_csum(sb, entry, entryc))
+			return 0;
+	}
+
+	nvmm = get_nvmm(sb, sih, entryc, blocknr);
 	return nvmm << PAGE_SHIFT;
 }
 
@@ -1637,7 +1648,6 @@ int nova_recovery(struct super_block *sb);
 
 /* checksum.c */
 void nova_update_entry_csum(void *entry);
-bool nova_verify_entry_csum(struct super_block *sb, void *entry, void *entryd);
 int nova_update_block_csum(struct super_block *sb,
 	struct nova_inode_info_header *sih, u8 *block, unsigned long blocknr,
 	size_t offset, size_t bytes, int zero);
@@ -1671,7 +1681,8 @@ int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 begin_tail);
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
-	struct nova_file_write_entry **ret_entry, int check_next, u64 epoch_id,
+	struct nova_file_write_entry **ret_entry,
+	struct nova_file_write_entry *ret_entryc, int check_next, u64 epoch_id,
 	int *inplace, int locked);
 ssize_t nova_dax_file_read(struct file *filp, char __user *buf, size_t len,
 			    loff_t *ppos);
@@ -1833,7 +1844,7 @@ int nova_append_snapshot_info_entry(struct super_block *sb,
 int nova_assign_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih,
 	struct nova_file_write_entry *entry,
-	bool free);
+	struct nova_file_write_entry *entryc, bool free);
 
 /* mprotect.c */
 extern int nova_dax_mem_protect(struct super_block *sb,
