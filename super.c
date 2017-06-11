@@ -367,6 +367,10 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	sbi->nova_sb->s_blocksize = cpu_to_le32(blocksize);
 	sbi->nova_sb->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
 	sbi->nova_sb->s_epoch_id = 0;
+	sbi->nova_sb->s_replica_metadata = replica_metadata;
+	sbi->nova_sb->s_metadata_csum = metadata_csum;
+	sbi->nova_sb->s_data_csum = data_csum;
+	sbi->nova_sb->s_data_parity = data_parity;
 	nova_update_super_crc(sb);
 
 	nova_sync_super(sb);
@@ -438,6 +442,39 @@ static int nova_check_super(struct super_block *sb,
 	return 0;
 }
 
+/* Check if we disable protection previously and enable it now */
+/* FIXME */
+static int nova_check_module_params(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (sbi->nova_sb->s_replica_metadata != replica_metadata) {
+		nova_dbg("%s replica metadata\n",
+			sbi->nova_sb->s_replica_metadata ? "Enable" : "Disable");
+		replica_metadata = sbi->nova_sb->s_replica_metadata;
+	}
+
+	if (sbi->nova_sb->s_metadata_csum != metadata_csum) {
+		nova_dbg("%s metadata checksum\n",
+			sbi->nova_sb->s_metadata_csum ? "Enable" : "Disable");
+		metadata_csum = sbi->nova_sb->s_metadata_csum;
+	}
+
+	if (sbi->nova_sb->s_data_csum != data_csum) {
+		nova_dbg("%s data checksum\n",
+			sbi->nova_sb->s_data_csum ? "Enable" : "Disable");
+		data_csum = sbi->nova_sb->s_data_csum;
+	}
+
+	if (sbi->nova_sb->s_data_parity != data_parity) {
+		nova_dbg("%s data parity\n",
+			sbi->nova_sb->s_data_parity ? "Enable" : "Disable");
+		data_parity = sbi->nova_sb->s_data_parity;
+	}
+
+	return 0;
+}
+
 static int nova_check_integrity(struct super_block *sb)
 {
 	struct nova_super_block *super = nova_get_super(sb);
@@ -460,6 +497,8 @@ static int nova_check_integrity(struct super_block *sb)
 	}
 
 	nova_sync_super(sb);
+
+	nova_check_module_params(sb);
 	return 0;
 }
 

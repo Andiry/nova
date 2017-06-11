@@ -149,6 +149,12 @@ struct nova_super_block {
 	 * changed. we use an 8 byte write to update both of them atomically */
 	__le32		s_mtime;		/* mount time */
 	__le32		s_wtime;		/* write time */
+
+	/* Metadata and data protections */
+	u8		s_replica_metadata;
+	u8		s_metadata_csum;
+	u8		s_data_csum;
+	u8		s_data_parity;
 } __attribute((__packed__));
 
 
