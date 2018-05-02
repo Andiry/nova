@@ -111,6 +111,8 @@ enum timing_category {
 	free_inode_t,
 	free_inode_log_t,
 	evict_inode_t,
+	insert_locked_t,
+	iget_locked_t,
 
 	/* Mmap */
 	mmap_title_t,

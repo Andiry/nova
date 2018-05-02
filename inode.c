@@ -469,6 +469,9 @@ struct inode *nova_iget_locked(struct super_block *sb, unsigned long ino)
 	struct inode *inode;
 	int cpuid = ino % sbi->cpus;
 	unsigned long internal_ino = ino / sbi->cpus;
+	timing_t iget_time;
+
+	NOVA_START_TIMING(iget_locked_t, iget_time);
 
 	inode_map = &sbi->inode_maps[cpuid];
 
@@ -478,6 +481,7 @@ struct inode *nova_iget_locked(struct super_block *sb, unsigned long ino)
 
 	if (inode) {
 		wait_on_inode(inode);
+		NOVA_END_TIMING(iget_locked_t, iget_time);
 		return inode;
 	}
 
@@ -498,6 +502,7 @@ struct inode *nova_iget_locked(struct super_block *sb, unsigned long ino)
 			/* Return the locked inode with I_NEW set, the
 			 * caller is responsible for filling in the contents
 			 */
+			NOVA_END_TIMING(iget_locked_t, iget_time);
 			return inode;
 		}
 
@@ -512,6 +517,7 @@ struct inode *nova_iget_locked(struct super_block *sb, unsigned long ino)
 		wait_on_inode(inode);
 	}
 
+	NOVA_END_TIMING(iget_locked_t, iget_time);
 	return inode;
 }
 
@@ -1071,6 +1077,9 @@ int nova_insert_inode_locked(struct inode *inode)
 	int cpuid = ino % sbi->cpus;
 	unsigned long internal_ino = ino / sbi->cpus;
 	struct inode *old = NULL;
+	timing_t insert_time;
+
+	NOVA_START_TIMING(insert_locked_t, insert_time);
 
 	inode_map = &sbi->inode_maps[cpuid];
 
@@ -1099,6 +1108,7 @@ int nova_insert_inode_locked(struct inode *inode)
 	}
 
 	spin_unlock(&inode_map->tree_lock);
+	NOVA_END_TIMING(insert_locked_t, insert_time);
 	return 0;
 }
 
