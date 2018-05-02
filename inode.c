@@ -554,8 +554,8 @@ static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 	}
 
 	*ino = new_ino * sbi->cpus + cpuid;
-	sbi->s_inodes_used_count++;
-	inode_map->allocated++;
+//	sbi->s_inodes_used_count++;
+//	inode_map->allocated++;
 
 	nova_dbg_verbose("Alloc ino %lu\n", *ino);
 	return 0;
@@ -630,7 +630,7 @@ err:
 	return ret;
 
 block_found:
-	sbi->s_inodes_used_count--;
+//	sbi->s_inodes_used_count--;
 	inode_map->freed++;
 	mutex_unlock(&inode_map->inode_table_mutex);
 	return ret;
@@ -900,14 +900,14 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct inode_map *inode_map;
 	unsigned long free_ino = 0;
-	int map_id;
+	int map_id = nova_get_cpuid(sb);
 	u64 ino = 0;
 	int ret;
 	timing_t new_inode_time;
 
 	NOVA_START_TIMING(new_nova_inode_t, new_inode_time);
-	map_id = sbi->map_id;
-	sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
+//	map_id = sbi->map_id;
+//	sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
 
 	inode_map = &sbi->inode_maps[map_id];
 
