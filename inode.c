@@ -493,6 +493,7 @@ struct inode *nova_iget_locked(struct super_block *sb, unsigned long ino)
 			spin_lock(&inode->i_lock);
 			inode->i_state = I_NEW;
 			spin_unlock(&inode->i_lock);
+			spin_unlock(&inode_map->tree_lock);
 
 			/* Return the locked inode with I_NEW set, the
 			 * caller is responsible for filling in the contents
@@ -521,7 +522,7 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 	u64 pi_addr;
 	int err;
 
-	inode = iget_locked(sb, ino);
+	inode = nova_iget_locked(sb, ino);
 	if (unlikely(!inode))
 		return ERR_PTR(-ENOMEM);
 	if (!(inode->i_state & I_NEW))
@@ -1082,8 +1083,7 @@ int nova_insert_inode_locked(struct inode *inode)
 			spin_lock(&inode->i_lock);
 			inode->i_state |= I_NEW;
 			spin_unlock(&inode->i_lock);
-			spin_unlock(&inode_map->tree_lock);
-			return 0;
+			break;
 		}
 
 		spin_lock(&old->i_lock);
@@ -1098,6 +1098,7 @@ int nova_insert_inode_locked(struct inode *inode)
 		iput(old);
 	}
 
+	spin_unlock(&inode_map->tree_lock);
 	return 0;
 }
 
@@ -1188,7 +1189,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	nova_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 	sih->i_flags = le32_to_cpu(pi->i_flags);
 
-	if (insert_inode_locked(inode) < 0) {
+	if (nova_insert_inode_locked(inode) < 0) {
 		nova_err(sb, "nova_new_inode failed ino %lx\n", inode->i_ino);
 		errval = -EINVAL;
 		goto fail1;
