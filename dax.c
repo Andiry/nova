@@ -925,11 +925,11 @@ static int nova_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 
 	if (ret == 0) {
 		iomap->type = IOMAP_HOLE;
-		iomap->addr = IOMAP_NULL_ADDR;
+		iomap->blkno = IOMAP_NULL_BLOCK;
 		iomap->length = 1 << blkbits;
 	} else {
 		iomap->type = IOMAP_MAPPED;
-		iomap->addr = (u64)bno << blkbits;
+		iomap->blkno = (sector_t)bno << (blkbits - 9);
 		iomap->length = (u64)ret << blkbits;
 		iomap->flags |= IOMAP_F_MERGED;
 	}
@@ -972,7 +972,7 @@ static int nova_dax_huge_fault(struct vm_fault *vmf,
 	if (vmf->flags & FAULT_FLAG_WRITE)
 		file_update_time(vmf->vma->vm_file);
 
-	ret = dax_iomap_fault(vmf, pe_size, NULL, NULL, &nova_iomap_ops);
+	ret = dax_iomap_fault(vmf, pe_size, &nova_iomap_ops);
 
 	NOVA_END_TIMING(pmd_fault_t, fault_time);
 	return ret;
