@@ -19,15 +19,17 @@
 #include <linux/compat.h>
 #include <linux/mount.h>
 #include "nova.h"
+#include "inode.h"
 
 long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode    *inode = mapping->host;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode *pi;
 	struct super_block *sb = inode->i_sb;
+	struct nova_inode_update update;
 	unsigned int flags;
-	u64 new_tail = 0;
 	int ret;
 
 	pi = nova_get_inode(sb, inode);
@@ -36,10 +38,12 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case FS_IOC_GETFLAGS:
-		flags = le32_to_cpu(pi->i_flags) & NOVA_FL_USER_VISIBLE;
+		flags = (sih->i_flags) & NOVA_FL_USER_VISIBLE;
 		return put_user(flags, (int __user *)arg);
 	case FS_IOC_SETFLAGS: {
 		unsigned int oldflags;
+		u64 old_linkc = 0;
+		u64 epoch_id;
 
 		ret = mnt_want_write_file(filp);
 		if (ret)
@@ -55,33 +59,38 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			goto flags_out;
 		}
 
-		mutex_lock(&inode->i_mutex);
+		inode_lock(inode);
+		sih_lock(sih);
 		oldflags = le32_to_cpu(pi->i_flags);
 
 		if ((flags ^ oldflags) &
 		    (FS_APPEND_FL | FS_IMMUTABLE_FL)) {
 			if (!capable(CAP_LINUX_IMMUTABLE)) {
-				mutex_unlock(&inode->i_mutex);
 				ret = -EPERM;
-				goto flags_out;
+				goto flags_out_unlock;
 			}
 		}
 
 		if (!S_ISDIR(inode->i_mode))
 			flags &= ~FS_DIRSYNC_FL;
 
+		epoch_id = nova_get_epoch_id(sb);
 		flags = flags & FS_FL_USER_MODIFIABLE;
 		flags |= oldflags & ~FS_FL_USER_MODIFIABLE;
-		inode->i_ctime = CURRENT_TIME_SEC;
+		inode->i_ctime = current_time(inode);
 		nova_set_inode_flags(inode, pi, flags);
+		sih->i_flags = flags;
 
-		nova_memunlock_inode(sb, pi);
-		ret = nova_append_link_change_entry(sb, pi, inode, 0,
-							&new_tail);
-		if (!ret)
-			nova_update_tail(pi, new_tail);
-		nova_memlock_inode(sb, pi);
-		mutex_unlock(&inode->i_mutex);
+		update.tail = 0;
+		ret = nova_append_link_change_entry(sb, pi, inode,
+					&update, &old_linkc, epoch_id);
+		if (!ret) {
+			nova_update_inode(sb, inode, pi, &update);
+			nova_invalidate_link_change_entry(sb, old_linkc);
+		}
+flags_out_unlock:
+		sih_unlock(sih);
+		inode_unlock(inode);
 flags_out:
 		mnt_drop_write_file(filp);
 		return ret;
@@ -89,7 +98,10 @@ flags_out:
 	case FS_IOC_GETVERSION:
 		return put_user(inode->i_generation, (int __user *)arg);
 	case FS_IOC_SETVERSION: {
+		u64 old_linkc = 0;
+		u64 epoch_id;
 		__u32 generation;
+
 		if (!inode_owner_or_capable(inode))
 			return -EPERM;
 		ret = mnt_want_write_file(filp);
@@ -99,17 +111,22 @@ flags_out:
 			ret = -EFAULT;
 			goto setversion_out;
 		}
-		mutex_lock(&inode->i_mutex);
-		inode->i_ctime = CURRENT_TIME_SEC;
+
+		epoch_id = nova_get_epoch_id(sb);
+		inode_lock(inode);
+		sih_lock(sih);
+		inode->i_ctime = current_time(inode);
 		inode->i_generation = generation;
 
-		nova_memunlock_inode(sb, pi);
-		ret = nova_append_link_change_entry(sb, pi, inode, 0,
-							&new_tail);
-		if (!ret)
-			nova_update_tail(pi, new_tail);
-		nova_memlock_inode(sb, pi);
-		mutex_unlock(&inode->i_mutex);
+		update.tail = 0;
+		ret = nova_append_link_change_entry(sb, pi, inode,
+					&update, &old_linkc, epoch_id);
+		if (!ret) {
+			nova_update_inode(sb, inode, pi, &update);
+			nova_invalidate_link_change_entry(sb, old_linkc);
+		}
+		sih_unlock(sih);
+		inode_unlock(inode);
 setversion_out:
 		mnt_drop_write_file(filp);
 		return ret;
@@ -119,7 +136,7 @@ setversion_out:
 		return 0;
 	}
 	case NOVA_CLEAR_STATS: {
-		nova_clear_stats();
+		nova_clear_stats(sb);
 		return 0;
 	}
 	case NOVA_PRINT_LOG: {

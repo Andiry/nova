@@ -36,28 +36,36 @@
 #include <linux/random.h>
 #include <linux/cred.h>
 #include <linux/list.h>
+#include <linux/dax.h>
 #include "nova.h"
+#include "journal.h"
+#include "super.h"
 
-int measure_timing = 0;
-int support_clwb = 0;
-int support_pcommit = 0;
+int measure_timing;
+int support_clwb;
 
-module_param(measure_timing, int, S_IRUGO);
+module_param(measure_timing, int, 0444);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
+
+module_param(nova_dbgmask, int, 0444);
+MODULE_PARM_DESC(nova_dbgmask, "Control debugging output");
 
 static struct super_operations nova_sops;
 static const struct export_operations nova_export_ops;
+
 static struct kmem_cache *nova_inode_cachep;
 static struct kmem_cache *nova_range_node_cachep;
+static struct kmem_cache *nova_file_write_item_cachep;
+
 
 /* FIXME: should the following variable be one per NOVA instance? */
-unsigned int nova_dbgmask = 0;
+unsigned int nova_dbgmask;
 
 void nova_error_mng(struct super_block *sb, const char *fmt, ...)
 {
 	va_list args;
 
-	printk("nova error: ");
+	printk(KERN_CRIT "nova error: ");
 	va_start(args, fmt);
 	vprintk(fmt, args);
 	va_end(args);
@@ -84,44 +92,51 @@ static void nova_set_blocksize(struct super_block *sb, unsigned long size)
 	sb->s_blocksize = (1 << bits);
 }
 
-static int nova_get_block_info(struct super_block *sb,
+static int nova_get_nvmm_info(struct super_block *sb,
 	struct nova_sb_info *sbi)
 {
 	void *virt_addr = NULL;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	pfn_t __pfn_t;
-#else
-	unsigned long pfn;
-#endif
 	long size;
+	struct dax_device *dax_dev;
+	int ret;
 
-	if (!sb->s_bdev->bd_disk->fops->direct_access) {
+	ret = bdev_dax_supported(sb, PAGE_SIZE);
+	nova_dbg_verbose("%s: dax_supported = %d; bdev->super=0x%p",
+			 __func__, ret, sb->s_bdev->bd_super);
+	if (ret) {
 		nova_err(sb, "device does not support DAX\n");
-		return -EINVAL;
+		return ret;
 	}
 
 	sbi->s_bdev = sb->s_bdev;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
-	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
-					0, &virt_addr, &__pfn_t);
-#else
-	size = sb->s_bdev->bd_disk->fops->direct_access(sb->s_bdev,
-					0, &virt_addr, &pfn);
-#endif
+	dax_dev = fs_dax_get_by_host(sb->s_bdev->bd_disk->disk_name);
+	if (!dax_dev) {
+		nova_err(sb, "Couldn't retrieve DAX device.\n");
+		return -EINVAL;
+	}
+	sbi->s_dax_dev = dax_dev;
 
+	size = dax_direct_access(sbi->s_dax_dev, 0, LONG_MAX/PAGE_SIZE,
+				 &virt_addr, &__pfn_t) * PAGE_SIZE;
 	if (size <= 0) {
 		nova_err(sb, "direct_access failed\n");
 		return -EINVAL;
 	}
 
 	sbi->virt_addr = virt_addr;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+
+	if (!sbi->virt_addr) {
+		nova_err(sb, "ioremap of the nova image failed(1)\n");
+		return -EINVAL;
+	}
+
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
-#else
-	sbi->phys_addr = pfn << PAGE_SHIFT;
-#endif
 	sbi->initsize = size;
+	sbi->replica_reserved_inodes_addr = virt_addr + size -
+			(sbi->tail_reserved_blocks << PAGE_SHIFT);
+	sbi->replica_sb_addr = virt_addr + size - PAGE_SIZE;
 
 	nova_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr %p, size %ld\n",
 		__func__, sbi->s_bdev->bd_disk->disk_name,
@@ -145,7 +160,7 @@ static loff_t nova_max_size(int bits)
 
 enum {
 	Opt_bpi, Opt_init, Opt_mode, Opt_uid,
-	Opt_gid, Opt_blocksize, Opt_wprotect,
+	Opt_gid, Opt_dax, Opt_data_cow,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
 	Opt_dbgmask, Opt_err
 };
@@ -156,7 +171,8 @@ static const match_table_t tokens = {
 	{ Opt_mode,	     "mode=%o"		  },
 	{ Opt_uid,	     "uid=%u"		  },
 	{ Opt_gid,	     "gid=%u"		  },
-	{ Opt_wprotect,	     "wprotect"		  },
+	{ Opt_dax,	     "dax"		  },
+	{ Opt_data_cow,	     "data_cow"		  },
 	{ Opt_err_cont,	     "errors=continue"	  },
 	{ Opt_err_panic,     "errors=panic"	  },
 	{ Opt_err_ro,	     "errors=remount-ro"  },
@@ -170,30 +186,33 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
 	int option;
+	kuid_t uid;
 
 	if (!options)
 		return 0;
 
 	while ((p = strsep(&options, ",")) != NULL) {
 		int token;
+
 		if (!*p)
 			continue;
 
 		token = match_token(p, tokens, args);
 		switch (token) {
 		case Opt_bpi:
-			if (remount)
-				goto bad_opt;
 			if (match_int(&args[0], &option))
 				goto bad_val;
+			if (remount && sbi->bpi)
+				goto bad_opt;
 			sbi->bpi = option;
 			break;
 		case Opt_uid:
-			if (remount)
-				goto bad_opt;
 			if (match_int(&args[0], &option))
 				goto bad_val;
-			sbi->uid = make_kuid(current_user_ns(), option);
+			uid = make_kuid(current_user_ns(), option);
+			if (remount && !uid_eq(sbi->uid, uid))
+				goto bad_opt;
+			sbi->uid = uid;
 			break;
 		case Opt_gid:
 			if (match_int(&args[0], &option))
@@ -225,12 +244,12 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 			clear_opt(sbi->s_mount_opt, ERRORS_PANIC);
 			set_opt(sbi->s_mount_opt, ERRORS_CONT);
 			break;
-		case Opt_wprotect:
-			if (remount)
-				goto bad_opt;
-			set_opt(sbi->s_mount_opt, PROTECT);
-			nova_info("NOVA: Enabling new Write Protection "
-				"(CR0.WP)\n");
+		case Opt_dax:
+			set_opt(sbi->s_mount_opt, DAX);
+			break;
+		case Opt_data_cow:
+			set_opt(sbi->s_mount_opt, DATA_COW);
+			nova_info("Enable copy-on-write updates\n");
 			break;
 		case Opt_dbgmask:
 			if (match_int(&args[0], &option))
@@ -246,94 +265,130 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 	return 0;
 
 bad_val:
-	printk(KERN_INFO "Bad value '%s' for mount option '%s'\n", args[0].from,
+	nova_info("Bad value '%s' for mount option '%s'\n", args[0].from,
 	       p);
 	return -EINVAL;
 bad_opt:
-	printk(KERN_INFO "Bad mount option: \"%s\"\n", p);
+	nova_info("Bad mount option: \"%s\"\n", p);
 	return -EINVAL;
 }
 
+
+/* Make sure we have enough space */
 static bool nova_check_size(struct super_block *sb, unsigned long size)
 {
-	struct nova_sb_info *sbi = NOVA_SB(sb);
-	unsigned long minimum_size, num_blocks;
+	unsigned long minimum_size;
 
-	/* space required for super block and root directory */
-	minimum_size = 2 << sb->s_blocksize_bits;
-
-	/* space required for inode table */
-	if (sbi->num_inodes > 0)
-		num_blocks = (sbi->num_inodes >>
-			(sb->s_blocksize_bits - NOVA_INODE_BITS)) + 1;
-	else
-		num_blocks = 1;
-	minimum_size += (num_blocks << sb->s_blocksize_bits);
+	/* space required for super block and root directory.*/
+	minimum_size = (HEAD_RESERVED_BLOCKS + TAIL_RESERVED_BLOCKS + 1)
+			  << sb->s_blocksize_bits;
 
 	if (size < minimum_size)
-	    return false;
+		return false;
 
 	return true;
 }
 
+static inline int nova_check_super_checksum(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u32 crc = 0;
+
+	// Check CRC but skip c_sum, which is the 4 bytes at the beginning
+	crc = nova_crc32c(~0, (__u8 *)sbi->nova_sb + sizeof(__le32),
+			sizeof(struct nova_super_block) - sizeof(__le32));
+
+	if (sbi->nova_sb->s_sum == cpu_to_le32(crc))
+		return 0;
+	else
+		return 1;
+}
+
+static inline void nova_sync_super(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_super_block *super = nova_get_super(sb);
+	struct nova_super_block *super_redund;
+
+	super_redund = nova_get_redund_super(sb);
+
+	memcpy_to_pmem_nocache((void *)super, (void *)sbi->nova_sb,
+		sizeof(struct nova_super_block));
+	PERSISTENT_BARRIER();
+
+	memcpy_to_pmem_nocache((void *)super_redund, (void *)sbi->nova_sb,
+		sizeof(struct nova_super_block));
+	PERSISTENT_BARRIER();
+}
+
+/* Update checksum for the DRAM copy */
+static inline void nova_update_super_crc(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u32 crc = 0;
+
+	sbi->nova_sb->s_wtime = cpu_to_le32(get_seconds());
+	sbi->nova_sb->s_sum = 0;
+	crc = nova_crc32c(~0, (__u8 *)sbi->nova_sb + sizeof(__le32),
+			sizeof(struct nova_super_block) - sizeof(__le32));
+	sbi->nova_sb->s_sum = cpu_to_le32(crc);
+}
+
+
+static inline void nova_update_mount_time(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u64 mnt_write_time;
+
+	mnt_write_time = (get_seconds() & 0xFFFFFFFF);
+	mnt_write_time = mnt_write_time | (mnt_write_time << 32);
+
+	sbi->nova_sb->s_mtime = cpu_to_le64(mnt_write_time);
+	nova_update_super_crc(sb);
+
+	nova_sync_super(sb);
+}
 
 static struct nova_inode *nova_init(struct super_block *sb,
 				      unsigned long size)
 {
 	unsigned long blocksize;
-	unsigned long reserved_space, reserved_blocks;
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u64 epoch_id;
 	timing_t init_time;
 
 	NOVA_START_TIMING(new_init_t, init_time);
+
 	nova_info("creating an empty nova of size %lu\n", size);
 	sbi->num_blocks = ((unsigned long)(size) >> PAGE_SHIFT);
 
-	if (!sbi->virt_addr) {
-		printk(KERN_ERR "ioremap of the nova image failed(1)\n");
-		return ERR_PTR(-EINVAL);
-	}
-
-	nova_dbg_verbose("nova: Default block size set to 4K\n");
-	blocksize = sbi->blocksize = NOVA_DEF_BLOCK_SIZE_4K;
-
-	nova_set_blocksize(sb, blocksize);
-	blocksize = sb->s_blocksize;
-
-	if (sbi->blocksize && sbi->blocksize != blocksize)
-		sbi->blocksize = blocksize;
+	nova_dbgv("nova: Default block size set to 4K\n");
+	sbi->blocksize = blocksize = NOVA_DEF_BLOCK_SIZE_4K;
+	nova_set_blocksize(sb, sbi->blocksize);
 
 	if (!nova_check_size(sb, size)) {
-		nova_dbg("Specified NOVA size too small 0x%lx.\n", size);
+		nova_warn("Specified NOVA size too small 0x%lx.\n", size);
+		NOVA_END_TIMING(new_init_t, init_time);
 		return ERR_PTR(-EINVAL);
 	}
 
-	/* Reserve space for 8 special inodes */
-	reserved_space = NOVA_SB_SIZE * 4;
-	reserved_blocks = (reserved_space + blocksize - 1) / blocksize;
-	if (reserved_blocks > sbi->reserved_blocks) {
-		nova_dbg("Reserved %lu blocks, require %lu blocks. "
-			"Increase reserved blocks number.\n",
-			sbi->reserved_blocks, reserved_blocks);
-		return ERR_PTR(-EINVAL);
-	}
-
-	nova_dbg_verbose("max file name len %d\n", (unsigned int)NOVA_NAME_LEN);
+	nova_dbgv("max file name len %d\n", (unsigned int)NOVA_NAME_LEN);
 
 	super = nova_get_super(sb);
 
 	/* clear out super-block and inode table */
-	memset_nt(super, 0, sbi->reserved_blocks * sbi->blocksize);
-	super->s_size = cpu_to_le64(size);
-	super->s_blocksize = cpu_to_le32(blocksize);
-	super->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
+	memset_nt(super, 0, sbi->head_reserved_blocks * sbi->blocksize);
+
+	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
+	pi->nova_ino = NOVA_BLOCKNODE_INO;
+	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
 
 	nova_init_blockmap(sb, 0);
 
 	if (nova_lite_journal_hard_init(sb) < 0) {
-		printk(KERN_ERR "Lite journal hard initialization failed\n");
+		nova_err(sb, "Lite journal hard initialization failed\n");
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -343,46 +398,38 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
-	pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
-	pi->nova_ino = NOVA_BLOCKNODE_INO;
-	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+	sbi->nova_sb->s_size = cpu_to_le64(size);
+	sbi->nova_sb->s_blocksize = cpu_to_le32(blocksize);
+	sbi->nova_sb->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
+	sbi->nova_sb->s_epoch_id = 0;
+	nova_update_super_crc(sb);
 
-	pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
-	pi->nova_ino = NOVA_INODELIST_INO;
-	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
+	nova_sync_super(sb);
 
-	nova_memunlock_range(sb, super, NOVA_SB_SIZE*2);
-	nova_sync_super(super);
-	nova_memlock_range(sb, super, NOVA_SB_SIZE*2);
-
-	nova_flush_buffer(super, NOVA_SB_SIZE, false);
-	nova_flush_buffer((char *)super + NOVA_SB_SIZE, sizeof(*super), false);
-
-	nova_dbg_verbose("Allocate root inode\n");
 	root_i = nova_get_inode_by_ino(sb, NOVA_ROOT_INO);
+	nova_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_i);
 
-	nova_memunlock_inode(sb, root_i);
 	root_i->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
 	root_i->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
 	root_i->i_gid = cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
 	root_i->i_links_count = cpu_to_le16(2);
 	root_i->i_blk_type = NOVA_BLOCK_TYPE_4K;
 	root_i->i_flags = 0;
-	root_i->i_blocks = cpu_to_le64(1);
 	root_i->i_size = cpu_to_le64(sb->s_blocksize);
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
-	root_i->nova_ino = NOVA_ROOT_INO;
+	root_i->nova_ino = cpu_to_le64(NOVA_ROOT_INO);
 	root_i->valid = 1;
-	/* nova_sync_inode(root_i); */
-	nova_memlock_inode(sb, root_i);
+
 	nova_flush_buffer(root_i, sizeof(*root_i), false);
 
+	epoch_id = nova_get_epoch_id(sb);
 	nova_append_dir_init_entries(sb, root_i, NOVA_ROOT_INO,
-					NOVA_ROOT_INO);
+					NOVA_ROOT_INO, epoch_id);
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
+	nova_info("NOVA initialization finish\n");
 	NOVA_END_TIMING(new_init_t, init_time);
 	return root_i;
 }
@@ -391,8 +438,10 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 {
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 	set_opt(sbi->s_mount_opt, ERRORS_CONT);
-	sbi->reserved_blocks = RESERVED_BLOCKS;
+	sbi->head_reserved_blocks = HEAD_RESERVED_BLOCKS;
+	sbi->tail_reserved_blocks = TAIL_RESERVED_BLOCKS;
 	sbi->cpus = num_online_cpus();
+	nova_info("%d cpus online\n", sbi->cpus);
 	sbi->map_id = 0;
 }
 
@@ -402,70 +451,58 @@ static void nova_root_check(struct super_block *sb, struct nova_inode *root_pi)
 		nova_warn("root is not a directory!\n");
 }
 
-int nova_check_integrity(struct super_block *sb,
-			  struct nova_super_block *super)
+/* Check super block magic and checksum */
+static int nova_check_super(struct super_block *sb,
+	struct nova_super_block *ps)
 {
-	struct nova_super_block *super_redund;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int rc;
 
-	super_redund =
-		(struct nova_super_block *)((char *)super + NOVA_SB_SIZE);
+	rc = memcpy_mcsafe(sbi->nova_sb, ps,
+				sizeof(struct nova_super_block));
+
+	if (rc < 0)
+		return rc;
+
+	if (le32_to_cpu(sbi->nova_sb->s_magic) != NOVA_SUPER_MAGIC)
+		return -EIO;
+
+	if (nova_check_super_checksum(sb))
+		return -EIO;
+
+	return 0;
+}
+
+static int nova_check_integrity(struct super_block *sb)
+{
+	struct nova_super_block *super = nova_get_super(sb);
+	struct nova_super_block *super_redund;
+	int rc;
+
+	super_redund = nova_get_redund_super(sb);
 
 	/* Do sanity checks on the superblock */
-	if (le32_to_cpu(super->s_magic) != NOVA_SUPER_MAGIC) {
-		if (le32_to_cpu(super_redund->s_magic) != NOVA_SUPER_MAGIC) {
-			printk(KERN_ERR "Can't find a valid nova partition\n");
-			goto out;
+	rc = nova_check_super(sb, super);
+	if (rc < 0) {
+		rc = nova_check_super(sb, super_redund);
+		if (rc < 0) {
+			nova_err(sb, "Can't find a valid nova partition\n");
+			return rc;
 		} else {
-			nova_warn
-				("Error in super block: try to repair it with "
-				"the redundant copy");
-			/* Try to auto-recover the super block */
-			if (sb)
-				nova_memunlock_super(sb, super);
-			memcpy(super, super_redund,
-				sizeof(struct nova_super_block));
-			if (sb)
-				nova_memlock_super(sb, super);
-			nova_flush_buffer(super, sizeof(*super), false);
-			nova_flush_buffer((char *)super + NOVA_SB_SIZE,
-				sizeof(*super), false);
-
+			nova_warn("Error in super block: try to repair it with the other copy\n");
+			memcpy_to_pmem_nocache((void *)super, (void *)super_redund,
+					sizeof(struct nova_super_block));
+			PERSISTENT_BARRIER();
 		}
 	}
 
-	/* Read the superblock */
-	if (nova_calc_checksum((u8 *)super, NOVA_SB_STATIC_SIZE(super))) {
-		if (nova_calc_checksum((u8 *)super_redund,
-					NOVA_SB_STATIC_SIZE(super_redund))) {
-			printk(KERN_ERR "checksum error in super block\n");
-			goto out;
-		} else {
-			nova_warn
-				("Error in super block: try to repair it with "
-				"the redundant copy");
-			/* Try to auto-recover the super block */
-			if (sb)
-				nova_memunlock_super(sb, super);
-			memcpy(super, super_redund,
-				sizeof(struct nova_super_block));
-			if (sb)
-				nova_memlock_super(sb, super);
-			nova_flush_buffer(super, sizeof(*super), false);
-			nova_flush_buffer((char *)super + NOVA_SB_SIZE,
-				sizeof(*super), false);
-		}
-	}
-
-	return 1;
-out:
 	return 0;
 }
 
 static int nova_fill_super(struct super_block *sb, void *data, int silent)
 {
-	struct nova_super_block *super;
-	struct nova_inode *root_pi;
 	struct nova_sb_info *sbi = NULL;
+	struct nova_inode *root_pi;
 	struct inode *root_i = NULL;
 	struct inode_map *inode_map;
 	unsigned long blocksize;
@@ -477,48 +514,58 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	NOVA_START_TIMING(mount_t, mount_time);
 
 	BUILD_BUG_ON(sizeof(struct nova_super_block) > NOVA_SB_SIZE);
-	BUILD_BUG_ON(sizeof(struct nova_inode) > NOVA_INODE_SIZE);
-	BUILD_BUG_ON(sizeof(struct nova_inode_log_page) != PAGE_SIZE);
 
 	sbi = kzalloc(sizeof(struct nova_sb_info), GFP_KERNEL);
-	if (!sbi)
+	if (!sbi) {
+		NOVA_END_TIMING(mount_t, mount_time);
 		return -ENOMEM;
+	}
+
+	sbi->nova_sb = kzalloc(sizeof(struct nova_super_block), GFP_KERNEL);
+	if (!sbi->nova_sb) {
+		kfree(sbi);
+		NOVA_END_TIMING(mount_t, mount_time);
+		return -ENOMEM;
+	}
+
 	sb->s_fs_info = sbi;
 	sbi->sb = sb;
 
 	set_default_opts(sbi);
 
 	/* Currently the log page supports 64 journal pointer pairs */
-	if (sbi->cpus > 64) {
-		nova_err(sb, "NOVA needs more log pointer pages "
-				"to support more than 64 cpus.\n");
+	if (sbi->cpus > MAX_CPUS) {
+		nova_err(sb, "NOVA needs more log pointer pages to support more than "
+			  __stringify(MAX_CPUS) " cpus.\n");
 		goto out;
 	}
 
-	if (nova_get_block_info(sb, sbi))
+	retval = nova_get_nvmm_info(sb, sbi);
+	if (retval) {
+		nova_err(sb, "%s: Failed to get nvmm info.",
+			 __func__);
 		goto out;
+	}
+
+	nova_dbg("measure timing %d\n", measure_timing);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
 
 	/* Init with default values */
-	sbi->shared_free_list.block_free_tree = RB_ROOT;
-	spin_lock_init(&sbi->shared_free_list.s_lock);
-	sbi->mode = (S_IRUGO | S_IXUGO | S_IWUSR);
+	sbi->mode = (0755);
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();
-	set_opt(sbi->s_mount_opt, DAX);
-	clear_opt(sbi->s_mount_opt, PROTECT);
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
 
-	sbi->inode_maps = kzalloc(sbi->cpus * sizeof(struct inode_map),
+	sbi->inode_maps = kcalloc(sbi->cpus, sizeof(struct inode_map),
 					GFP_KERNEL);
 	if (!sbi->inode_maps) {
 		retval = -ENOMEM;
+		nova_dbg("%s: Allocating inode maps failed.",
+			 __func__);
 		goto out;
 	}
-
-	nova_sysfs_init(sb);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
@@ -531,46 +578,53 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->zeroed_page = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!sbi->zeroed_page) {
 		retval = -ENOMEM;
+		nova_dbg("%s: sbi->zeroed_page failed.",
+			 __func__);
 		goto out;
 	}
 
-	if (nova_parse_options(data, sbi, 0))
+	retval = nova_parse_options(data, sbi, 0);
+	if (retval) {
+		nova_err(sb, "%s: Failed to parse nova command line options.",
+			 __func__);
 		goto out;
-
-	set_opt(sbi->s_mount_opt, MOUNTING);
+	}
 
 	if (nova_alloc_block_free_lists(sb)) {
 		retval = -ENOMEM;
+		nova_err(sb, "%s: Failed to allocate block free lists.",
+			 __func__);
 		goto out;
 	}
+
+	nova_procfs_init(sb);
 
 	/* Init a new nova instance */
 	if (sbi->s_mount_opt & NOVA_MOUNT_FORMAT) {
 		root_pi = nova_init(sb, sbi->initsize);
-		if (IS_ERR(root_pi))
+		if (IS_ERR(root_pi)) {
+			nova_err(sb, "%s: root_pi error.",
+				 __func__);
+
 			goto out;
-		super = nova_get_super(sb);
+		}
 		goto setup_sb;
 	}
 
-	nova_dbg_verbose("checking physical address 0x%016llx for nova image\n",
-		  (u64)sbi->phys_addr);
-
-	super = nova_get_super(sb);
-
-	if (nova_check_integrity(sb, super) == 0) {
+	if (nova_check_integrity(sb) < 0) {
+		retval = -EINVAL;
 		nova_dbg("Memory contains invalid nova %x:%x\n",
-				le32_to_cpu(super->s_magic), NOVA_SUPER_MAGIC);
+			le32_to_cpu(sbi->nova_sb->s_magic), NOVA_SUPER_MAGIC);
 		goto out;
 	}
 
 	if (nova_lite_journal_soft_init(sb)) {
 		retval = -EINVAL;
-		printk(KERN_ERR "Lite journal initialization failed\n");
+		nova_err(sb, "Lite journal initialization failed\n");
 		goto out;
 	}
 
-	blocksize = le32_to_cpu(super->s_blocksize);
+	blocksize = le32_to_cpu(sbi->nova_sb->s_blocksize);
 	nova_set_blocksize(sb, blocksize);
 
 	nova_dbg_verbose("blocksize %lu\n", blocksize);
@@ -583,78 +637,62 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* Set it all up.. */
 setup_sb:
-	sb->s_magic = le32_to_cpu(super->s_magic);
+	sb->s_magic = le32_to_cpu(sbi->nova_sb->s_magic);
 	sb->s_op = &nova_sops;
 	sb->s_maxbytes = nova_max_size(sb->s_blocksize_bits);
-	sb->s_time_gran = 1;
+	sb->s_time_gran = 1000000000; // 1 second.
 	sb->s_export_op = &nova_export_ops;
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
-	/* If the FS was not formatted on this mount, scan the meta-data after
-	 * truncate list has been processed */
 	if ((sbi->s_mount_opt & NOVA_MOUNT_FORMAT) == 0)
 		nova_recovery(sb);
 
 	root_i = nova_iget(sb, NOVA_ROOT_INO);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);
+		nova_err(sb, "%s: failed to get root inode",
+			 __func__);
+
 		goto out;
 	}
 
 	sb->s_root = d_make_root(root_i);
 	if (!sb->s_root) {
-		printk(KERN_ERR "get nova root inode failed\n");
+		nova_err(sb, "get nova root inode failed\n");
 		retval = -ENOMEM;
 		goto out;
 	}
 
-	if (!(sb->s_flags & MS_RDONLY)) {
-		u64 mnt_write_time;
-		/* update mount time and write time atomically. */
-		mnt_write_time = (get_seconds() & 0xFFFFFFFF);
-		mnt_write_time = mnt_write_time | (mnt_write_time << 32);
+	if (!(sb->s_flags & MS_RDONLY))
+		nova_update_mount_time(sb);
 
-		nova_memunlock_range(sb, &super->s_mtime, 8);
-		nova_memcpy_atomic(&super->s_mtime, &mnt_write_time, 8);
-		nova_memlock_range(sb, &super->s_mtime, 8);
-
-		nova_flush_buffer(&super->s_mtime, 8, false);
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
-	}
-
-	clear_opt(sbi->s_mount_opt, MOUNTING);
 	retval = 0;
-
 	NOVA_END_TIMING(mount_t, mount_time);
 	return retval;
+
 out:
-	if (sbi->zeroed_page) {
-		kfree(sbi->zeroed_page);
-		sbi->zeroed_page = NULL;
-	}
+	kfree(sbi->zeroed_page);
+	sbi->zeroed_page = NULL;
 
-	if (sbi->free_lists) {
-		kfree(sbi->free_lists);
-		sbi->free_lists = NULL;
-	}
+	nova_delete_free_lists(sb);
 
-	if (sbi->journal_locks) {
-		kfree(sbi->journal_locks);
-		sbi->journal_locks = NULL;
-	}
+	kfree(sbi->journal_locks);
+	sbi->journal_locks = NULL;
 
-	if (sbi->inode_maps) {
-		kfree(sbi->inode_maps);
-		sbi->inode_maps = NULL;
-	}
+	kfree(sbi->inode_maps);
+	sbi->inode_maps = NULL;
 
+	nova_procfs_exit(sb);
+
+	kfree(sbi->nova_sb);
 	kfree(sbi);
+	nova_dbg("%s failed: return %d\n", __func__, retval);
+	NOVA_END_TIMING(mount_t, mount_time);
 	return retval;
 }
 
-int nova_statfs(struct dentry *d, struct kstatfs *buf)
+static int nova_statfs(struct dentry *d, struct kstatfs *buf)
 {
 	struct super_block *sb = d->d_sb;
 	struct nova_sb_info *sbi = (struct nova_sb_info *)sb->s_fs_info;
@@ -676,16 +714,7 @@ static int nova_show_options(struct seq_file *seq, struct dentry *root)
 {
 	struct nova_sb_info *sbi = NOVA_SB(root->d_sb);
 
-	seq_printf(seq, ",physaddr=0x%016llx", (u64)sbi->phys_addr);
-	if (sbi->initsize)
-		seq_printf(seq, ",init=%luk", sbi->initsize >> 10);
-	if (sbi->blocksize)
-		seq_printf(seq, ",bs=%lu", sbi->blocksize);
-	if (sbi->bpi)
-		seq_printf(seq, ",bpi=%lu", sbi->bpi);
-	if (sbi->num_inodes)
-		seq_printf(seq, ",N=%lu", sbi->num_inodes);
-	if (sbi->mode != (S_IRWXUGO | S_ISVTX))
+	if (sbi->mode != (0777 | S_ISVTX))
 		seq_printf(seq, ",mode=%03o", sbi->mode);
 	if (uid_valid(sbi->uid))
 		seq_printf(seq, ",uid=%u", from_kuid(&init_user_ns, sbi->uid));
@@ -695,20 +724,16 @@ static int nova_show_options(struct seq_file *seq, struct dentry *root)
 		seq_puts(seq, ",errors=remount-ro");
 	if (test_opt(root->d_sb, ERRORS_PANIC))
 		seq_puts(seq, ",errors=panic");
-	/* memory protection disabled by default */
-	if (test_opt(root->d_sb, PROTECT))
-		seq_puts(seq, ",wprotect");
 	if (test_opt(root->d_sb, DAX))
 		seq_puts(seq, ",dax");
 
 	return 0;
 }
 
-int nova_remount(struct super_block *sb, int *mntflags, char *data)
+static int nova_remount(struct super_block *sb, int *mntflags, char *data)
 {
 	unsigned long old_sb_flags;
 	unsigned long old_mount_opt;
-	struct nova_super_block *ps;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	int ret = -EINVAL;
 
@@ -721,23 +746,11 @@ int nova_remount(struct super_block *sb, int *mntflags, char *data)
 		goto restore_opt;
 
 	sb->s_flags = (sb->s_flags & ~MS_POSIXACL) |
-		      ((sbi->s_mount_opt & NOVA_MOUNT_POSIX_ACL) ? MS_POSIXACL : 0);
+		      ((sbi->s_mount_opt & NOVA_MOUNT_POSIX_ACL) ?
+		       MS_POSIXACL : 0);
 
-	if ((*mntflags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
-		u64 mnt_write_time;
-		ps = nova_get_super(sb);
-		/* update mount time and write time atomically. */
-		mnt_write_time = (get_seconds() & 0xFFFFFFFF);
-		mnt_write_time = mnt_write_time | (mnt_write_time << 32);
-
-		nova_memunlock_range(sb, &ps->s_mtime, 8);
-		nova_memcpy_atomic(&ps->s_mtime, &mnt_write_time, 8);
-		nova_memlock_range(sb, &ps->s_mtime, 8);
-
-		nova_flush_buffer(&ps->s_mtime, 8, false);
-		PERSISTENT_MARK();
-		PERSISTENT_BARRIER();
-	}
+	if ((*mntflags & MS_RDONLY) != (sb->s_flags & MS_RDONLY))
+		nova_update_mount_time(sb);
 
 	mutex_unlock(&sbi->s_lock);
 	ret = 0;
@@ -756,8 +769,6 @@ static void nova_put_super(struct super_block *sb)
 	struct inode_map *inode_map;
 	int i;
 
-	/* It's unmount time, so unmap the nova memory */
-//	nova_print_free_lists(sb);
 	if (sbi->virt_addr) {
 		nova_save_inode_list_to_log(sb);
 		/* Save everything before blocknode mapping! */
@@ -769,7 +780,6 @@ static void nova_put_super(struct super_block *sb)
 
 	kfree(sbi->zeroed_page);
 	nova_dbgmask = 0;
-	kfree(sbi->free_lists);
 	kfree(sbi->journal_locks);
 
 	for (i = 0; i < sbi->cpus; i++) {
@@ -778,46 +788,51 @@ static void nova_put_super(struct super_block *sb)
 			i, inode_map->allocated, inode_map->freed);
 	}
 
+	nova_procfs_exit(sb);
+
 	kfree(sbi->inode_maps);
-
-	nova_sysfs_exit(sb);
-
+	kfree(sbi->nova_sb);
 	kfree(sbi);
 	sb->s_fs_info = NULL;
 }
 
-inline void nova_free_range_node(struct nova_range_node *node)
+void nova_free_range_node(struct nova_range_node *node)
 {
 	kmem_cache_free(nova_range_node_cachep, node);
 }
 
-inline void nova_free_blocknode(struct super_block *sb,
-	struct nova_range_node *node)
+void nova_free_inode_node(struct nova_range_node *node)
 {
 	nova_free_range_node(node);
 }
 
-inline void nova_free_inode_node(struct super_block *sb,
-	struct nova_range_node *node)
+void nova_free_dir_node(struct nova_range_node *node)
 {
 	nova_free_range_node(node);
 }
 
-static inline
+void nova_free_file_write_item(struct nova_file_write_item *item)
+{
+	kmem_cache_free(nova_file_write_item_cachep, item);
+}
+
+struct nova_file_write_item *
+nova_alloc_file_write_item(struct super_block *sb)
+{
+	return kmem_cache_alloc(nova_file_write_item_cachep, GFP_NOFS);
+}
+
 struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 {
-	struct nova_range_node *p;
-	p = (struct nova_range_node *)
-		kmem_cache_alloc(nova_range_node_cachep, GFP_NOFS);
-	return p;
+	return kmem_cache_zalloc(nova_range_node_cachep, GFP_NOFS);
 }
 
-inline struct nova_range_node *nova_alloc_blocknode(struct super_block *sb)
+struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
 {
 	return nova_alloc_range_node(sb);
 }
 
-inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
+struct nova_range_node *nova_alloc_dir_node(struct super_block *sb)
 {
 	return nova_alloc_range_node(sb);
 }
@@ -829,8 +844,6 @@ static struct inode *nova_alloc_inode(struct super_block *sb)
 	vi = kmem_cache_alloc(nova_inode_cachep, GFP_NOFS);
 	if (!vi)
 		return NULL;
-
-	vi->vfs_inode.i_version = 1;
 
 	return &vi->vfs_inode;
 }
@@ -857,18 +870,28 @@ static void init_once(void *foo)
 	inode_init_once(&vi->vfs_inode);
 }
 
-
 static int __init init_rangenode_cache(void)
 {
 	nova_range_node_cachep = kmem_cache_create("nova_range_node_cache",
 					sizeof(struct nova_range_node),
 					0, (SLAB_RECLAIM_ACCOUNT |
-                                        SLAB_MEM_SPREAD), NULL);
+					SLAB_MEM_SPREAD), NULL);
 	if (nova_range_node_cachep == NULL)
 		return -ENOMEM;
 	return 0;
 }
 
+static int __init init_file_write_item_cache(void)
+{
+	nova_file_write_item_cachep = kmem_cache_create(
+					"nova_file_write_item_cache",
+					sizeof(struct nova_file_write_item),
+					0, (SLAB_RECLAIM_ACCOUNT |
+					SLAB_MEM_SPREAD), NULL);
+	if (nova_file_write_item_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
 
 static int __init init_inodecache(void)
 {
@@ -895,6 +918,12 @@ static void destroy_rangenode_cache(void)
 {
 	kmem_cache_destroy(nova_range_node_cachep);
 }
+
+static void destroy_file_write_item_cache(void)
+{
+	kmem_cache_destroy(nova_file_write_item_cachep);
+}
+
 
 /*
  * the super block writes are all done "on the fly", so the
@@ -978,61 +1007,57 @@ static int __init init_nova_fs(void)
 	timing_t init_time;
 
 	NOVA_START_TIMING(init_t, init_time);
-	nova_dbg("%s: %d cpus online\n", __func__, num_online_cpus());
-	if (arch_has_pcommit())
-		support_pcommit = 1;
 
 	if (arch_has_clwb())
 		support_clwb = 1;
 
-	nova_info("Arch new instructions support: PCOMMIT %s, CLWB %s\n",
-			support_pcommit ? "YES" : "NO",
+	nova_info("Arch new instructions support: CLWB %s\n",
 			support_clwb ? "YES" : "NO");
 
 	nova_proc_root = proc_mkdir(proc_dirname, NULL);
 
-	nova_dbgv("Data structure size: inode %lu, log_page %lu, "
-		"file_write_entry %lu, dir_entry(max) %d, "
-		"setattr_entry %lu, link_change_entry %lu\n",
-		sizeof(struct nova_inode),
-		sizeof(struct nova_inode_log_page),
-		sizeof(struct nova_file_write_entry),
-		NOVA_DIR_LOG_REC_LEN(NOVA_NAME_LEN),
-		sizeof(struct nova_setattr_logentry),
-		sizeof(struct nova_link_change_entry));
-
 	rc = init_rangenode_cache();
 	if (rc)
-		return rc;
+		goto out;
 
 	rc = init_inodecache();
 	if (rc)
 		goto out1;
 
-	rc = register_filesystem(&nova_fs_type);
+	rc = init_file_write_item_cache();
 	if (rc)
 		goto out2;
 
+	rc = register_filesystem(&nova_fs_type);
+	if (rc)
+		goto out3;
+
+out:
 	NOVA_END_TIMING(init_t, init_time);
-	return 0;
+	return rc;
+
+out3:
+	destroy_file_write_item_cache();
 
 out2:
 	destroy_inodecache();
+
 out1:
 	destroy_rangenode_cache();
-	return rc;
+	goto out;
 }
 
 static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
 	remove_proc_entry(proc_dirname, NULL);
+	destroy_file_write_item_cache();
 	destroy_inodecache();
 	destroy_rangenode_cache();
 }
 
 MODULE_AUTHOR("Andiry Xu <jix024@cs.ucsd.edu>");
-MODULE_DESCRIPTION("NOVA: A Persistent Memory File System");
+MODULE_DESCRIPTION("NOVA: NOn-Volatile memory Accelerated File System");
 MODULE_LICENSE("GPL");
 
 module_init(init_nova_fs)

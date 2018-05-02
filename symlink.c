@@ -22,48 +22,73 @@
 #include <linux/namei.h>
 #include <linux/version.h>
 #include "nova.h"
+#include "inode.h"
 
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, u64 log_block,
-	unsigned long name_blocknr, const char *symname, int len)
+	struct inode *inode, const char *symname, int len, u64 epoch_id)
 {
-	struct nova_file_write_entry *entry;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_file_write_item entry_item;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
+	struct nova_inode_update update;
+	unsigned long name_blocknr = 0;
+	int allocated;
 	u64 block;
-	u32 time;
 	char *blockp;
+	u32 time;
+	int ret;
+
+	update.tail = sih->log_tail;
+
+	allocated = nova_new_data_blocks(sb, sih, &name_blocknr, 0, 1,
+				 ALLOC_INIT_ZERO, ANY_CPU, ALLOC_FROM_TAIL);
+	if (allocated != 1 || name_blocknr == 0) {
+		ret = allocated;
+		return ret;
+	}
 
 	/* First copy name to name block */
 	block = nova_get_block_off(sb, name_blocknr, NOVA_BLOCK_TYPE_4K);
 	blockp = (char *)nova_get_block(sb, block);
 
-	nova_memunlock_block(sb, blockp);
 	memcpy_to_pmem_nocache(blockp, symname, len);
 	blockp[len] = '\0';
-	nova_memlock_block(sb, blockp);
 
-	/* Apply a write entry to the start of log page */
-	block = log_block;
-	entry = (struct nova_file_write_entry *)nova_get_block(sb, block);
+	/* Apply a write entry to the log page */
+	time = current_time(inode).tv_sec;
+	nova_init_file_write_item(sb, sih, &entry_item, epoch_id, 0, 1,
+					name_blocknr, time, len + 1);
 
-	entry->pgoff = 0;
-	entry->num_pages = cpu_to_le32(1);
-	entry->invalid_pages = 0;
-	entry->block = cpu_to_le64(nova_get_block_off(sb, name_blocknr,
-							NOVA_BLOCK_TYPE_4K));
-	time = CURRENT_TIME_SEC.tv_sec;
-	entry->mtime = cpu_to_le32(time);
-	/* Set entry type after set block */
-	nova_set_entry_type(entry, FILE_WRITE);
-	entry->size = cpu_to_le64(len + 1);
-	nova_flush_buffer(entry, CACHELINE_SIZE, 0);
+	sih_lock(sih);
+	ret = nova_append_file_write_entry(sb, pi, inode, &entry_item, &update);
+	if (ret) {
+		nova_dbg("%s: append file write entry failed %d\n",
+					__func__, ret);
+		nova_free_data_blocks(sb, sih, name_blocknr, 1);
+		return ret;
+	}
 
-	sih->log_pages = 1;
-	pi->log_head = block;
-	nova_update_tail(pi, block + sizeof(struct nova_file_write_entry));
+	nova_update_inode(sb, inode, pi, &update);
+	sih->trans_id++;
+	sih_unlock(sih);
 
 	return 0;
+}
+
+/* FIXME: Temporary workaround */
+static int nova_readlink_copy(char __user *buffer, int buflen, const char *link)
+{
+	int len = PTR_ERR(link);
+
+	if (IS_ERR(link))
+		goto out;
+
+	len = strlen(link);
+	if (len > (unsigned int) buflen)
+		len = buflen;
+	if (copy_to_user(buffer, link, len))
+		len = -EFAULT;
+out:
+	return len;
 }
 
 static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
@@ -71,44 +96,35 @@ static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 	struct nova_file_write_entry *entry;
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	char *blockp;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb,
-							pi->log_head);
+							sih->log_head);
+
 	blockp = (char *)nova_get_block(sb, BLOCK_OFF(entry->block));
 
-	return readlink_copy(buffer, buflen, blockp);
+	return nova_readlink_copy(buffer, buflen, blockp);
 }
 
-static const char *nova_get_link(struct dentry *dentry, struct inode *inode, void **cookie)
+static const char *nova_get_link(struct dentry *dentry, struct inode *inode,
+	struct delayed_call *done)
 {
 	struct nova_file_write_entry *entry;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	char *blockp;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb,
-							pi->log_head);
+							sih->log_head);
+
 	blockp = (char *)nova_get_block(sb, BLOCK_OFF(entry->block));
 
 	return blockp;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
-static const char *nova_follow_link(struct dentry *dentry, void **cookie)
-{
-	struct inode *inode = dentry->d_inode;
-	return nova_get_link(dentry, inode, cookie);
-}
-#endif
-
 const struct inode_operations nova_symlink_inode_operations = {
 	.readlink	= nova_readlink,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	.get_link	= nova_get_link,
-#else
-	.follow_link	= nova_follow_link,
-#endif
 	.setattr	= nova_notify_change,
 };

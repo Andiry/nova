@@ -1,40 +1,56 @@
-/*
- * NOVA journal header
- *
- * Copyright 2015-2016 Regents of the University of California,
- * UCSD Non-Volatile Systems Lab, Andiry Xu <jix024@cs.ucsd.edu>
- * Copyright 2012-2013 Intel Corporation
- * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 
- * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
- */
-#ifndef __NOVA_JOURNAL_H__
-#define __NOVA_JOURNAL_H__
-#include <linux/slab.h>
+#ifndef __JOURNAL_H
+#define __JOURNAL_H
 
-/* Lite journal */
+#include <linux/types.h>
+#include <linux/fs.h>
+#include "nova.h"
+#include "super.h"
+
+
+/* ======================= Lite journal ========================= */
+
+#define NOVA_MAX_JOURNAL_LENGTH 128
+
+#define	JOURNAL_INODE	1
+#define	JOURNAL_ENTRY	2
+
+/* Lightweight journal entry */
 struct nova_lite_journal_entry {
-	/* The highest byte of addr is type */
-	u64 addrs[4];
-	u64 values[4];
+	__le64 type;       // JOURNAL_INODE or JOURNAL_ENTRY
+	__le64 data1;
+	__le64 data2;
+	__le32 padding;
+	__le32 csum;
+} __attribute((__packed__));
+
+/* Head and tail pointers into a circular queue of journal entries.  There's
+ * one of these per CPU.
+ */
+struct journal_ptr_pair {
+	__le64 journal_head;
+	__le64 journal_tail;
 };
 
+static inline
+struct journal_ptr_pair *nova_get_journal_pointers(struct super_block *sb,
+	int cpu)
+{
+	return (struct journal_ptr_pair *)((char *)nova_get_block(sb,
+		NOVA_DEF_BLOCK_SIZE_4K * JOURNAL_START) + cpu * CACHELINE_SIZE);
+}
+
+
+u64 nova_create_inode_transaction(struct super_block *sb,
+	struct inode *inode, struct inode *dir, int cpu,
+	int new_inode, int invalidate);
+u64 nova_create_rename_transaction(struct super_block *sb,
+	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
+	struct inode *new_dir, struct nova_dentry *father_entry,
+	int invalidate_new_inode, int cpu);
+u64 nova_create_logentry_transaction(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int cpu);
+void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
 int nova_lite_journal_soft_init(struct super_block *sb);
 int nova_lite_journal_hard_init(struct super_block *sb);
-u64 nova_create_lite_transaction(struct super_block *sb,
-	struct nova_lite_journal_entry *dram_entry1,
-	struct nova_lite_journal_entry *dram_entry2,
-	int entries, int cpu);
-void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
-#endif    /* __NOVA_JOURNAL_H__ */
+
+#endif
