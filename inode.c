@@ -387,6 +387,133 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 	return 0;
 }
 
+static void wait_on_freeing_inode(struct inode *inode)
+{
+	wait_queue_head_t *wq;
+	DEFINE_WAIT_BIT(wait, &inode->i_state, __I_NEW);
+	wq = bit_waitqueue(&inode->i_state, __I_NEW);
+	prepare_to_wait(wq, &wait.wq_entry, TASK_UNINTERRUPTIBLE);
+	spin_unlock(&inode->i_lock);
+	schedule();
+	finish_wait(wq, &wait.wq_entry);
+}
+
+static struct inode *nova_find_inode_fast(struct super_block *sb,
+	struct inode_map *inode_map, unsigned long internal_ino)
+{
+	struct inode *inode = NULL;
+	void **inodep;
+
+repeat:
+	inode = NULL;
+	inodep = radix_tree_lookup_slot(&inode_map->tree, internal_ino);
+	if (inodep) {
+		inode = radix_tree_deref_slot(inodep);
+		if (unlikely(!inode))
+			return NULL;
+
+		if (radix_tree_exception(inode)) {
+			if (radix_tree_deref_retry(inode))
+				goto repeat;
+
+			/* FIXME: What to do here? */
+			return NULL;
+		}
+
+		spin_lock(&inode->i_lock);
+		if (inode->i_state & (I_FREEING | I_WILL_FREE)) {
+			wait_on_freeing_inode(inode);
+			goto repeat;
+		}
+
+		atomic_inc(&inode->i_count);
+		spin_unlock(&inode->i_lock);
+		return inode;
+	}
+
+	return NULL;
+}
+
+static struct inode *alloc_inode(struct super_block *sb)
+{
+	struct inode *inode;
+
+	inode = sb->s_op->alloc_inode(sb);
+
+	if (!inode)
+		return NULL;
+
+	if (unlikely(inode_init_always(sb, inode))) {
+		sb->s_op->destroy_inode(inode);
+		return NULL;
+	}
+
+	inode->i_state = 0;
+	INIT_LIST_HEAD(&inode->i_sb_list);
+
+	return inode;
+}
+
+
+static void destroy_inode(struct inode *inode)
+{
+	BUG_ON(!list_empty(&inode->i_lru));
+	__destroy_inode(inode);
+	inode->i_sb->s_op->destroy_inode(inode);
+}
+
+struct inode *nova_iget_locked(struct super_block *sb, unsigned long ino)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_map *inode_map;
+	struct inode *inode;
+	int cpuid = ino % sbi->cpus;
+	unsigned long internal_ino = ino / sbi->cpus;
+
+	inode_map = &sbi->inode_maps[cpuid];
+
+	rcu_read_lock();
+	inode = nova_find_inode_fast(sb, inode_map, internal_ino);
+	rcu_read_unlock();
+
+	if (inode) {
+		wait_on_inode(inode);
+		return inode;
+	}
+
+	inode = alloc_inode(sb);
+	if (inode) {
+		struct inode *old;
+
+		spin_lock(&inode_map->tree_lock);
+		/* We released the lock, so.. */
+		old = nova_find_inode_fast(sb, inode_map, internal_ino);
+		if (!old) {
+			inode->i_ino = ino;
+			spin_lock(&inode->i_lock);
+			inode->i_state = I_NEW;
+			spin_unlock(&inode->i_lock);
+
+			/* Return the locked inode with I_NEW set, the
+			 * caller is responsible for filling in the contents
+			 */
+			return inode;
+		}
+
+		/*
+		 * Uhhuh, somebody else created the same inode under
+		 * us. Use the old inode instead of the one we just
+		 * allocated.
+		 */
+		spin_unlock(&inode_map->tree_lock);
+		destroy_inode(inode);
+		inode = old;
+		wait_on_inode(inode);
+	}
+
+	return inode;
+}
+
 struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 {
 	struct nova_inode_info *si;
@@ -932,26 +1059,6 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 
 	NOVA_END_TIMING(new_nova_inode_t, new_inode_time);
 	return ino;
-}
-
-static struct inode *alloc_inode(struct super_block *sb)
-{
-	struct inode *inode;
-
-	inode = sb->s_op->alloc_inode(sb);
-
-	if (!inode)
-		return NULL;
-
-	if (unlikely(inode_init_always(sb, inode))) {
-		sb->s_op->destroy_inode(inode);
-		return NULL;
-	}
-
-	inode->i_state = 0;
-	INIT_LIST_HEAD(&inode->i_sb_list);
-
-	return inode;
 }
 
 int nova_insert_inode_locked(struct inode *inode)
