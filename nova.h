@@ -315,8 +315,9 @@ struct nova_range_node {
 
 struct inode_map {
 	struct mutex		inode_table_mutex;
-	struct radix_tree_root	tree;
 	struct rb_root		inode_inuse_tree;
+	spinlock_t		tree_lock;
+	struct radix_tree_root	tree;
 	unsigned long		num_range_node_inode;
 	struct nova_range_node *first_inode_range;
 	int			allocated;

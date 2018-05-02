@@ -954,6 +954,46 @@ static struct inode *alloc_inode(struct super_block *sb)
 	return inode;
 }
 
+int nova_insert_inode_locked(struct inode *inode)
+{
+	struct super_block *sb = inode->i_sb;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_map *inode_map;
+	ino_t ino = inode->i_ino;
+	int cpuid = ino % sbi->cpus;
+	unsigned long internal_ino = ino / sbi->cpus;
+	struct inode *old = NULL;
+
+	inode_map = &sbi->inode_maps[cpuid];
+
+	spin_lock(&inode_map->tree_lock);
+
+	while (1) {
+		old = radix_tree_lookup(&inode_map->tree, internal_ino);
+
+		if (likely(!old)) {
+			spin_lock(&inode->i_lock);
+			inode->i_state |= I_NEW;
+			spin_unlock(&inode->i_lock);
+			spin_unlock(&inode_map->tree_lock);
+			return 0;
+		}
+
+		spin_lock(&old->i_lock);
+		if (old->i_state & (I_FREEING|I_WILL_FREE)) {
+			spin_unlock(&old->i_lock);
+			continue;
+		}
+
+		atomic_inc(&old->i_count);
+		spin_unlock(&old->i_lock);
+		wait_on_inode(old);
+		iput(old);
+	}
+
+	return 0;
+}
+
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id)
