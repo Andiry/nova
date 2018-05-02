@@ -934,6 +934,26 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 	return ino;
 }
 
+static struct inode *alloc_inode(struct super_block *sb)
+{
+	struct inode *inode;
+
+	inode = sb->s_op->alloc_inode(sb);
+
+	if (!inode)
+		return NULL;
+
+	if (unlikely(inode_init_always(sb, inode))) {
+		sb->s_op->destroy_inode(inode);
+		return NULL;
+	}
+
+	inode->i_state = 0;
+	INIT_LIST_HEAD(&inode->i_sb_list);
+
+	return inode;
+}
+
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id)
@@ -950,7 +970,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	NOVA_START_TIMING(new_vfs_inode_t, new_inode_time);
 	sb = dir->i_sb;
 	sbi = (struct nova_sb_info *)sb->s_fs_info;
-	inode = new_inode(sb);
+	inode = alloc_inode(sb);
 	if (!inode) {
 		errval = -ENOMEM;
 		goto fail2;
