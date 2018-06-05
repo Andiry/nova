@@ -570,9 +570,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
 		mutex_init(&inode_map->inode_table_mutex);
-		spin_lock_init(&inode_map->tree_lock);
 		inode_map->inode_inuse_tree = RB_ROOT;
-		INIT_RADIX_TREE(&inode_map->tree, GFP_ATOMIC);
 	}
 
 	mutex_init(&sbi->s_lock);
