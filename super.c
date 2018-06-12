@@ -822,6 +822,12 @@ nova_alloc_file_write_item(struct super_block *sb)
 	return kmem_cache_alloc(nova_file_write_item_cachep, GFP_NOFS);
 }
 
+/* Use ATOMIC version when holding free list spinlock */
+struct nova_range_node *nova_alloc_range_node_atomic(struct super_block *sb)
+{
+	return kmem_cache_zalloc(nova_range_node_cachep, GFP_ATOMIC);
+}
+
 struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 {
 	return kmem_cache_zalloc(nova_range_node_cachep, GFP_NOFS);

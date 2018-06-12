@@ -74,6 +74,11 @@ static void nova_init_free_list(struct super_block *sb,
 		free_list->block_end -= sbi->tail_reserved_blocks;
 }
 
+struct nova_range_node *nova_alloc_blocknode_atomic(struct super_block *sb)
+{
+	return nova_alloc_range_node_atomic(sb);
+}
+
 struct nova_range_node *nova_alloc_blocknode(struct super_block *sb)
 {
 	return nova_alloc_range_node(sb);
