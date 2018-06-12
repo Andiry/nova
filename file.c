@@ -738,19 +738,20 @@ static int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 
 const struct file_operations nova_dax_file_operations = {
-	.llseek		= nova_llseek,
-	.read		= nova_dax_file_read,
-	.write		= nova_dax_file_write,
-	.read_iter	= nova_dax_read_iter,
-	.write_iter	= nova_dax_write_iter,
-	.mmap		= nova_dax_file_mmap,
-	.open		= nova_open,
-	.fsync		= nova_fsync,
-	.flush		= nova_flush,
-	.unlocked_ioctl	= nova_ioctl,
-	.fallocate	= nova_fallocate,
+	.llseek			= nova_llseek,
+	.read			= nova_dax_file_read,
+	.write			= nova_dax_file_write,
+	.read_iter		= nova_dax_read_iter,
+	.write_iter		= nova_dax_write_iter,
+	.mmap			= nova_dax_file_mmap,
+	.get_unmapped_area	= thp_get_unmapped_area,
+	.open			= nova_open,
+	.fsync			= nova_fsync,
+	.flush			= nova_flush,
+	.unlocked_ioctl		= nova_ioctl,
+	.fallocate		= nova_fallocate,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl	= nova_compat_ioctl,
+	.compat_ioctl		= nova_compat_ioctl,
 #endif
 };
 
