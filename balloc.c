@@ -484,6 +484,112 @@ static int not_enough_blocks(struct free_list *free_list,
 	return 0;
 }
 
+#define	PAGES_PER_2MB	512
+#define	PAGES_PER_2MB_MASK	(512 - 1)
+#define	IS_DATABLOCKS_2MB_ALIGNED(numblocks, atype) \
+	(!(num_blocks & PAGES_PER_2MB_MASK) && (atype == DATA))
+
+static int nova_alloc_superpage(struct super_block *sb,
+	struct free_list *free_list, enum nova_alloc_direction from_tail,
+	unsigned long num_blocks, unsigned long *new_blocknr)
+{
+	struct rb_root *tree;
+	struct nova_range_node *curr, *next = NULL, *prev = NULL, *node = NULL;
+	struct rb_node *temp, *next_node, *prev_node;
+	unsigned int left_margin;
+	unsigned int right_margin;
+	unsigned long curr_blocks;
+	unsigned long range_high;
+	unsigned long step = 0;
+	int reuse_curr = 0;
+	int found_superpage = 0;
+
+	tree = &(free_list->block_free_tree);
+	if (from_tail == ALLOC_FROM_HEAD)
+		temp = &(free_list->first_node->node);
+	else
+		temp = &(free_list->last_node->node);
+
+	while (temp) {
+		step++;
+		curr = container_of(temp, struct nova_range_node, node);
+
+		curr_blocks = curr->range_high - curr->range_low + 1;
+		if (curr_blocks < num_blocks)
+			goto next;
+
+		left_margin = PAGES_PER_2MB - (curr->range_low
+						& PAGES_PER_2MB_MASK);
+		if (curr_blocks <= left_margin ||
+				curr_blocks - left_margin < num_blocks)
+			goto next;
+
+		right_margin = curr_blocks - left_margin - num_blocks;
+		range_high = curr->range_high;
+		*new_blocknr = curr->range_low + left_margin;
+
+		if (left_margin) {
+			curr->range_high = (curr->range_low + PAGES_PER_2MB)
+						& ~PAGES_PER_2MB_MASK;
+			curr->range_high--;
+			reuse_curr = 1;
+		}
+
+		if (right_margin) {
+			if (reuse_curr == 0) {
+				curr->range_low += left_margin + num_blocks;
+				reuse_curr = 1;
+			} else {
+				node = nova_alloc_blocknode_atomic(sb);
+				if (node == NULL) return -ENOMEM;
+
+				node->range_low = curr->range_low + left_margin
+								+ num_blocks;
+				node->range_high = range_high;
+				nova_insert_blocktree(tree, node);
+				free_list->num_blocknode++;
+				if (curr == free_list->last_node)
+					free_list->last_node = node;
+			}
+		}
+
+		if (reuse_curr == 0) {
+			/* Allocate the whole blocknode */
+			if (curr == free_list->first_node) {
+				next_node = rb_next(temp);
+				if (next_node)
+					next = container_of(next_node,
+						struct nova_range_node, node);
+				free_list->first_node = next;
+			}
+
+			if (curr == free_list->last_node) {
+				prev_node = rb_prev(temp);
+				if (prev_node)
+					prev = container_of(prev_node,
+						struct nova_range_node, node);
+				free_list->last_node = prev;
+			}
+
+			rb_erase(&curr->node, tree);
+			free_list->num_blocknode--;
+			nova_free_blocknode(curr);
+		}
+
+		found_superpage = 1;
+		break;
+
+next:
+		if (from_tail == ALLOC_FROM_HEAD)
+			temp = rb_next(temp);
+		else
+			temp = rb_prev(temp);
+	}
+
+	NOVA_STATS_ADD(alloc_steps, step);
+	return found_superpage;
+}
+
 /* Return how many blocks allocated */
 static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	struct free_list *free_list, unsigned short btype,
@@ -496,6 +602,7 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	unsigned long curr_blocks;
 	bool found = 0;
 	unsigned long step = 0;
+	int found_superpage = 0;
 
 	if (!free_list->first_node || free_list->num_free_blocks == 0) {
 		nova_dbgv("%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
@@ -508,6 +615,14 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 		nova_dbgv("%s: Can't alloc.  not_enough_blocks() == true",
 			  __func__);
 		return -ENOSPC;
+	}
+
+	/* Try superpage allocation */
+	if (IS_DATABLOCKS_2MB_ALIGNED(num_blocks, atype)) {
+		found_superpage = nova_alloc_superpage(sb, free_list,
+					from_tail, num_blocks, new_blocknr);
+		if (found_superpage == 1)
+			goto out;
 	}
 
 	tree = &(free_list->block_free_tree);
@@ -571,14 +686,16 @@ next:
 			temp = rb_prev(temp);
 	}
 
+out:
 	if (free_list->num_free_blocks < num_blocks) {
-		nova_dbg("%s: free list %d has %lu free blocks, but allocated %lu blocks?\n",
+		nova_dbg("%s: free list %d has %lu free blocks, "
+				"but allocated %lu blocks?\n",
 				__func__, free_list->index,
 				free_list->num_free_blocks, num_blocks);
 		return -ENOSPC;
 	}
 
-	if (found == 1)
+	if (found == 1 || found_superpage == 1)
 		free_list->num_free_blocks -= num_blocks;
 	else {
 		nova_dbgv("%s: Can't alloc.  found = %d", __func__, found);
