@@ -819,6 +819,8 @@ again:
 	}
 
 	if (create == 0) {
+		/* Put hole length in *bno */
+		*bno = num_blocks;
 		num_blocks = 0;
 		goto out1;
 	}
@@ -919,7 +921,8 @@ static int nova_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	if (ret == 0) {
 		iomap->type = IOMAP_HOLE;
 		iomap->addr = IOMAP_NULL_ADDR;
-		iomap->length = 1 << blkbits;
+		/* Hole length in bno */
+		iomap->length = (u64)bno << blkbits;
 	} else {
 		iomap->type = IOMAP_MAPPED;
 		iomap->addr = (u64)bno << blkbits;
