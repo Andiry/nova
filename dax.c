@@ -296,8 +296,7 @@ static unsigned long get_entry_info(struct nova_file_write_entry *entry,
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
 	struct nova_file_write_entry **ret_entry,
-	int check_next, u64 epoch_id,
-	int *inplace)
+	u64 epoch_id, int *inplace)
 {
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_entry *entry;
@@ -316,7 +315,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		*ret_entry = entry;
 		ent_blks = get_entry_info(entry, start_blk, num_blocks,
 						inplace, epoch_id);
-	} else if (check_next) {
+	} else {
 		/* Possible Hole */
 		entry = nova_find_next_entry(sb, sih, start_blk);
 		if (entry) {
@@ -338,10 +337,8 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		}
 	}
 
-	if (entry && ent_blks == 0) {
-		nova_dbg("%s: %d\n", __func__, check_next);
+	if (entry && ent_blks == 0)
 		dump_stack();
-	}
 
 	NOVA_END_TIMING(check_entry_t, check_time);
 	return ent_blks;
@@ -432,7 +429,7 @@ again:
 
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
 						start_blk, &entry,
-						1, epoch_id, &inplace);
+						epoch_id, &inplace);
 
 		if (!entry && ent_blks == num_blocks) {
 			/* Hole */
@@ -599,7 +596,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 //		sih_lock_shared(sih);
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
 						start_blk, &entry,
-						1, epoch_id, &inplace);
+						epoch_id, &inplace);
 //		sih_unlock_shared(sih);
 
 		if (entry && inplace) {
@@ -789,7 +786,6 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	int inplace = 0;
 	int allocated = 0;
 	int locked = 0;
-	int check_next;
 	int ret = 0;
 	timing_t get_block_time;
 
@@ -805,13 +801,11 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 
 	epoch_id = nova_get_epoch_id(sb);
 
-	check_next = 0;
 //	sih_lock_shared(sih);
 
 again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
-					iblock, &entry, check_next,
-					epoch_id, &inplace);
+					iblock, &entry, epoch_id, &inplace);
 
 	if (entry) {
 		if (create == 0 || inplace) {
@@ -834,7 +828,6 @@ again:
 //		sih_lock(sih);
 		locked = 1;
 		/* Check again incase someone has done it for us */
-		check_next = 1;
 		goto again;
 	}
 
