@@ -577,6 +577,9 @@ static int nova_alloc_superpage(struct super_block *sb,
 		}
 
 		found_superpage = 1;
+		nova_dbgv("%s: Allocate superpage %lu blocks from %lu\n",
+				__func__, num_blocks, *new_blocknr);
+
 		break;
 
 next:
