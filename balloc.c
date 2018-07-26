@@ -493,12 +493,31 @@ static int not_enough_blocks(struct free_list *free_list,
 #define	PAGES_PER_2MB	512
 #define	PAGES_PER_2MB_MASK	(512 - 1)
 
+/* Both offset and blocks are aligned */
 static inline bool alloc_request_is_superpage_aligned(unsigned long start_blk,
 	unsigned long num_blocks, enum alloc_type atype)
 {
 	return (atype == DATA) &&
 		!(start_blk & PAGES_PER_2MB_MASK) &&
 		!(num_blocks & PAGES_PER_2MB_MASK);
+}
+
+/* Try to allocate aligned superpage */
+static inline unsigned long get_avail_blocks(struct nova_range_node *curr)
+{
+	unsigned long curr_blocks = curr->range_high - curr->range_low + 1;
+	unsigned int left_margin;
+
+	if (curr_blocks < PAGES_PER_2MB)
+		return 0;
+
+	left_margin = PAGES_PER_2MB - (curr->range_low
+						& PAGES_PER_2MB_MASK);
+	if (curr_blocks <= left_margin ||
+				curr_blocks - left_margin < PAGES_PER_2MB)
+		return 0;
+
+	return (curr_blocks - left_margin) & ~PAGES_PER_2MB_MASK;
 }
 
 static unsigned long nova_alloc_superpage(struct super_block *sb,
@@ -512,6 +531,7 @@ static unsigned long nova_alloc_superpage(struct super_block *sb,
 	unsigned int right_margin;
 	unsigned long curr_blocks;
 	unsigned long range_high;
+	unsigned long avail_blocks;
 	unsigned long step = 0;
 	int reuse_curr = 0;
 	unsigned long allocated = 0;
@@ -525,16 +545,18 @@ static unsigned long nova_alloc_superpage(struct super_block *sb,
 	while (temp) {
 		step++;
 		curr = container_of(temp, struct nova_range_node, node);
+		avail_blocks = get_avail_blocks(curr);
+
+		if (avail_blocks < PAGES_PER_2MB)
+			goto next;
+
+		if (num_blocks > avail_blocks)
+			num_blocks = avail_blocks;
 
 		curr_blocks = curr->range_high - curr->range_low + 1;
-		if (curr_blocks < num_blocks)
-			goto next;
 
 		left_margin = PAGES_PER_2MB - (curr->range_low
 						& PAGES_PER_2MB_MASK);
-		if (curr_blocks <= left_margin ||
-				curr_blocks - left_margin < num_blocks)
-			goto next;
 
 		right_margin = curr_blocks - left_margin - num_blocks;
 		range_high = curr->range_high;
