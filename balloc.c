@@ -475,7 +475,8 @@ static int not_enough_blocks(struct free_list *free_list,
 	struct nova_range_node *last = free_list->last_node;
 
 	if (free_list->num_free_blocks < num_blocks || !first || !last) {
-		nova_dbgv("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
+		nova_dbgv("%s: num_free_blocks=%ld; num_blocks=%ld; "
+			  "first=0x%p; last=0x%p",
 			  __func__, free_list->num_free_blocks, num_blocks,
 			  first, last);
 		return 1;
@@ -608,7 +609,8 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	int found_superpage = 0;
 
 	if (!free_list->first_node || free_list->num_free_blocks == 0) {
-		nova_dbgv("%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
+		nova_dbgv("%s: Can't alloc. free_list->first_node=0x%p "
+			  "free_list->num_free_blocks = %lu",
 			  __func__, free_list->first_node,
 			  free_list->num_free_blocks);
 		return -ENOSPC;
