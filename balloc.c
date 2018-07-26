@@ -492,8 +492,14 @@ static int not_enough_blocks(struct free_list *free_list,
 
 #define	PAGES_PER_2MB	512
 #define	PAGES_PER_2MB_MASK	(512 - 1)
-#define	IS_DATABLOCKS_2MB_ALIGNED(numblocks, atype) \
-	(!(num_blocks & PAGES_PER_2MB_MASK) && (atype == DATA))
+
+static inline bool alloc_request_is_superpage_aligned(unsigned long start_blk,
+	unsigned long num_blocks, enum alloc_type atype)
+{
+	return (atype == DATA) &&
+		!(start_blk & PAGES_PER_2MB_MASK) &&
+		!(num_blocks & PAGES_PER_2MB_MASK);
+}
 
 static int nova_alloc_superpage(struct super_block *sb,
 	struct free_list *free_list, enum nova_alloc_direction from_tail,
@@ -602,8 +608,9 @@ next:
 /* Return how many blocks allocated */
 static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	struct free_list *free_list, unsigned short btype,
-	enum alloc_type atype, unsigned long num_blocks,
-	unsigned long *new_blocknr, enum nova_alloc_direction from_tail)
+	enum alloc_type atype, unsigned long start_blk,
+	unsigned long num_blocks, unsigned long *new_blocknr,
+	enum nova_alloc_direction from_tail)
 {
 	struct rb_root *tree;
 	struct nova_range_node *curr, *next = NULL, *prev = NULL;
@@ -628,7 +635,7 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	}
 
 	/* Try superpage allocation */
-	if (IS_DATABLOCKS_2MB_ALIGNED(num_blocks, atype)) {
+	if (alloc_request_is_superpage_aligned(start_blk, num_blocks, atype)) {
 		found_superpage = nova_alloc_superpage(sb, free_list,
 					from_tail, num_blocks, new_blocknr);
 		if (found_superpage == 1)
@@ -738,8 +745,9 @@ static int nova_get_candidate_free_list(struct super_block *sb)
 }
 
 static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int zero,
-	enum alloc_type atype, int cpuid, enum nova_alloc_direction from_tail)
+	unsigned long start_blk, unsigned int num, unsigned short btype,
+	int zero, enum alloc_type atype, int cpuid,
+	enum nova_alloc_direction from_tail)
 {
 	struct free_list *free_list;
 	void *bp;
@@ -780,7 +788,7 @@ retry:
 	}
 alloc:
 	ret_blocks = nova_alloc_blocks_in_free_list(sb, free_list, btype, atype,
-					num_blocks, &new_blocknr, from_tail);
+				start_blk, num_blocks, &new_blocknr, from_tail);
 
 	if (ret_blocks > 0) {
 		if (atype == LOG) {
@@ -825,7 +833,7 @@ int nova_new_data_blocks(struct super_block *sb,
 	timing_t alloc_time;
 
 	NOVA_START_TIMING(new_data_blocks_t, alloc_time);
-	allocated = nova_new_blocks(sb, blocknr, num,
+	allocated = nova_new_blocks(sb, blocknr, start_blk, num,
 			    sih->i_blk_type, zero, DATA, cpu, from_tail);
 	NOVA_END_TIMING(new_data_blocks_t, alloc_time);
 	if (allocated < 0) {
@@ -855,7 +863,7 @@ inline int nova_new_log_blocks(struct super_block *sb,
 	timing_t alloc_time;
 
 	NOVA_START_TIMING(new_log_blocks_t, alloc_time);
-	allocated = nova_new_blocks(sb, blocknr, num,
+	allocated = nova_new_blocks(sb, blocknr, 0, num,
 			    sih->i_blk_type, zero, LOG, cpu, from_tail);
 	NOVA_END_TIMING(new_log_blocks_t, alloc_time);
 	if (allocated < 0) {
