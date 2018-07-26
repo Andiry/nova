@@ -499,7 +499,7 @@ static inline bool alloc_request_is_superpage_aligned(unsigned long start_blk,
 {
 	return (atype == DATA) &&
 		!(start_blk & PAGES_PER_2MB_MASK) &&
-		!(num_blocks & PAGES_PER_2MB_MASK);
+		(num_blocks >= PAGES_PER_2MB);
 }
 
 /* Try to allocate aligned superpage */
