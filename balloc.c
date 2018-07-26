@@ -501,7 +501,7 @@ static inline bool alloc_request_is_superpage_aligned(unsigned long start_blk,
 		!(num_blocks & PAGES_PER_2MB_MASK);
 }
 
-static int nova_alloc_superpage(struct super_block *sb,
+static unsigned long nova_alloc_superpage(struct super_block *sb,
 	struct free_list *free_list, enum nova_alloc_direction from_tail,
 	unsigned long num_blocks, unsigned long *new_blocknr)
 {
@@ -514,7 +514,7 @@ static int nova_alloc_superpage(struct super_block *sb,
 	unsigned long range_high;
 	unsigned long step = 0;
 	int reuse_curr = 0;
-	int found_superpage = 0;
+	unsigned long allocated = 0;
 
 	tree = &(free_list->block_free_tree);
 	if (from_tail == ALLOC_FROM_HEAD)
@@ -588,7 +588,7 @@ static int nova_alloc_superpage(struct super_block *sb,
 			nova_free_blocknode(curr);
 		}
 
-		found_superpage = 1;
+		allocated = num_blocks;
 		nova_dbgv("%s: Allocate superpage %lu blocks from %lu\n",
 				__func__, num_blocks, *new_blocknr);
 
@@ -602,7 +602,7 @@ next:
 	}
 
 	NOVA_STATS_ADD(alloc_steps, step);
-	return found_superpage;
+	return allocated;
 }
 
 /* Return how many blocks allocated */
@@ -616,9 +616,9 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 	struct nova_range_node *curr, *next = NULL, *prev = NULL;
 	struct rb_node *temp, *next_node, *prev_node;
 	unsigned long curr_blocks;
+	unsigned long allocated;
 	bool found = 0;
 	unsigned long step = 0;
-	int found_superpage = 0;
 
 	if (!free_list->first_node || free_list->num_free_blocks == 0) {
 		nova_dbgv("%s: Can't alloc. free_list->first_node=0x%p "
@@ -636,10 +636,13 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 
 	/* Try superpage allocation */
 	if (alloc_request_is_superpage_aligned(start_blk, num_blocks, atype)) {
-		found_superpage = nova_alloc_superpage(sb, free_list,
+		allocated = nova_alloc_superpage(sb, free_list,
 					from_tail, num_blocks, new_blocknr);
-		if (found_superpage == 1)
+		if (allocated) {
+			num_blocks = allocated;
+			found = 1;
 			goto out;
+		}
 	}
 
 	tree = &(free_list->block_free_tree);
@@ -712,7 +715,7 @@ out:
 		return -ENOSPC;
 	}
 
-	if (found == 1 || found_superpage == 1)
+	if (found == 1)
 		free_list->num_free_blocks -= num_blocks;
 	else {
 		nova_dbgv("%s: Can't alloc.  found = %d", __func__, found);
