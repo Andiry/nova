@@ -536,6 +536,8 @@ static unsigned long nova_alloc_superpage(struct super_block *sb,
 	int reuse_curr = 0;
 	unsigned long allocated = 0;
 
+	num_blocks &= ~PAGES_PER_2MB_MASK;
+
 	tree = &(free_list->block_free_tree);
 	if (from_tail == ALLOC_FROM_HEAD)
 		temp = &(free_list->first_node->node);
